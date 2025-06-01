@@ -1,8 +1,11 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useNavigation } from '@react-navigation/native'; // Add this import
 import styles from './../styles/HomePage.styles'; 
 
 const HomePage = () => {
+  const navigation = useNavigation(); // Add this line
+
   return (
     <ScrollView style={styles.container}>
       {/* Header */}
@@ -11,9 +14,12 @@ const HomePage = () => {
           <Text style={styles.appTitle}>BibleSnap</Text>
           <Text style={styles.greeting}>Good morning, Sarah</Text>
         </View>
-        <View style={styles.profileCircle}>
+        <TouchableOpacity
+          style={styles.profileCircle}
+          onPress={() => navigation.navigate('Profile')}
+        >
           <Text style={styles.profileInitial}>S</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Stats */}
@@ -49,9 +55,21 @@ const HomePage = () => {
       {/* Quick Actions */}
       <Text style={styles.sectionTitle}>Quick Actions</Text>
       <View style={styles.quickActionsRow}>
-        <View style={styles.quickActionItem}><Text style={styles.quickActionText}>Pray</Text></View>
-        <View style={styles.quickActionItem}><Text style={styles.quickActionText}>Read</Text></View>
-        <View style={styles.quickActionItem}><Text style={styles.quickActionText}>Listen</Text></View>
+        <TouchableOpacity
+          style={styles.quickActionItem}
+          onPress={() => navigation.navigate('BookContent')}
+        >
+          <Text style={styles.quickActionText}>Pray</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickActionItem}
+          onPress={() => navigation.navigate('Journal')}
+        >
+          <Text style={styles.quickActionText}>Read</Text>
+        </TouchableOpacity>
+        <View style={styles.quickActionItem}>
+          <Text style={styles.quickActionText}>Listen</Text>
+        </View>
       </View>
 
       {/* Today's Challenge */}

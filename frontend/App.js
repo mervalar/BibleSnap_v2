@@ -17,10 +17,21 @@ const Stack = createStackNavigator();
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="BookContent" >
-        <Stack.Screen name="Landing" component={LandingPage} />
-        <Stack.Screen name="Home" component={HomePage} />
-        <Stack.Screen name="Auth" component={Auth} />
+      <Stack.Navigator initialRouteName="Landing" >
+        <Stack.Screen 
+          name="Landing" 
+          component={LandingPage} 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="Home" 
+          component={HomePage} 
+        />
+        <Stack.Screen 
+          name="Auth" 
+          component={Auth} 
+          options={{ headerShown: false }} 
+        />
         <Stack.Screen name="BibleStudy" component={BibleStudy} />
         <Stack.Screen name="Journal" component={Journal} />
         <Stack.Screen name="BookContent" component={BookContent} />

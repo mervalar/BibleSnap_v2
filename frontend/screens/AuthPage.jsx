@@ -10,7 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import styles from './../styles/Auth.styles';
-const LoginScreen = () => {
+const LoginScreen = ({navigation}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,8 +29,7 @@ const LoginScreen = () => {
   };
 
   const handleGoogleLogin = () => {
-    console.log('Google login pressed');
-    // Add your Google login logic here
+   navigation.navigate('Home');
   };
 
   const handleForgotPassword = () => {
