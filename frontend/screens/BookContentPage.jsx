@@ -22,42 +22,21 @@ const BookContent = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Audio Player Section */}
-      <View style={styles.audioSection}>
-        <View style={styles.audioPlayer}>
-          <View style={styles.playButton}>
-            <Text style={styles.playIcon}>▶</Text>
-          </View>
-          <View style={styles.audioInfo}>
-            <Text style={styles.audioTitle}>John Chapter 3</Text>
-            <Text style={styles.audioTime}>12:30 / 25:45</Text>
-          </View>
-          <View style={styles.audioControls}>
-            <TouchableOpacity>
-              <Text style={styles.controlIcon}>⏮</Text>
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Text style={styles.controlIcon}>⏭</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-        {/* Audio Control Icons */}
-        <View style={styles.rightControls}>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.icon}>A</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.icon}>🔖</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.icon}>📝</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Top Controls */}
+      <View style={styles.topControls}>
+        <TouchableOpacity style={styles.iconButton}>
+          <Text style={styles.icon}>A</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.iconButton}>
+          <Text style={styles.icon}>🔖</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.iconButton}>
+          <Text style={styles.icon}>📝</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Content */}
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         <View style={styles.verse}>
           <Text style={styles.verseNumber}>1</Text>
           <Text style={styles.verseText}>
@@ -86,6 +65,39 @@ const BookContent = () => {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Bottom Audio Player */}
+      <View style={styles.audioPlayerContainer}>
+        {/* Progress Bar */}
+        <View style={styles.progressContainer}>
+          <Text style={styles.timeText}>1:20</Text>
+          <View style={styles.progressBarContainer}>
+            <View style={styles.progressBar}>
+              <View style={styles.progressFill} />
+              <View style={styles.progressThumb} />
+            </View>
+          </View>
+          <Text style={styles.timeText}>3:50</Text>
+        </View>
+
+        {/* Audio Controls */}
+        <View style={styles.audioControls}>
+          <TouchableOpacity style={styles.controlButton}>
+            <Text style={styles.controlIcon}>⏮</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.playButton}>
+            <Text style={styles.playIcon}>▶</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.controlButton}>
+            <Text style={styles.controlIcon}>⏭</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Audio Info */}
+        <Text style={styles.audioTitle}>John Chapter 3</Text>
+      </View>
     </SafeAreaView>
   );
 };
@@ -124,59 +136,14 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#333',
   },
-  audioSection: {
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  audioPlayer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#AE796D',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  playButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#A07553',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  playIcon: {
-    color: 'white',
-    fontSize: 16,
-    marginLeft: 2,
-  },
-  audioInfo: {
-    flex: 1,
-  },
-  audioTitle: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  audioTime: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 14,
-  },
-  audioControls: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  controlIcon: {
-    color: 'white',
-    fontSize: 18,
-  },
-  rightControls: {
+  topControls: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
     gap: 16,
   },
   iconButton: {
@@ -189,8 +156,11 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: 'white',
+  },
+  contentContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,
+    paddingBottom: 20,
   },
   verse: {
     flexDirection: 'row',
@@ -210,6 +180,113 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: '#333',
     flex: 1,
+  },
+  audioPlayerContainer: {
+    backgroundColor: '#9E795D',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  timeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '500',
+    minWidth: 28,
+  },
+  progressBarContainer: {
+    flex: 1,
+    paddingHorizontal: 8,
+  },
+  progressBar: {
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 1.5,
+    position: 'relative',
+  },
+  progressFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    height: '100%',
+    width: '35%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 1.5,
+  },
+  progressThumb: {
+    position: 'absolute',
+    left: '33%',
+    top: -3,
+    width: 9,
+    height: 9,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 4.5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  audioControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 24,
+  },
+  controlButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  controlIcon: {
+    color: '#FFFFFF',
+    fontSize: 18,
+  },
+  playButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  playIcon: {
+    color: '#9E795D',
+    fontSize: 18,
+    marginLeft: 2,
+  },
+  audioTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+    opacity: 0.9,
   },
 });
 
