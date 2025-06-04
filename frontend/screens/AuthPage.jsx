@@ -18,14 +18,49 @@ const LoginScreen = ({navigation}) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [activeTab, setActiveTab] = useState('Login');
 
-  const handleLogin = () => {
-    console.log('Login pressed');
-    // Add your login logic here
+  const handleLogin = async () => {
+    try {
+      const response = await fetch('http://10.17.71.194:8000/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        // Login successful, navigate or store token
+        navigation.navigate('Home');
+      } else {
+        alert(data.message || 'Login failed');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
   };
 
-  const handleRegister = () => {
-    console.log('Register pressed');
-    // Add your registration logic here
+  const handleRegister = async () => {
+    try {
+      const response = await fetch('http://10.17.71.194:8000/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: fullName, 
+          email,
+          password,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        // Registration successful, navigate or store token
+        navigation.navigate('Home');
+      } else {
+        alert(data.message || 'Registration failed');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
   };
 
   const handleGoogleLogin = () => {
