@@ -20,7 +20,7 @@ const LoginScreen = ({navigation}) => {
 
   const handleLogin = async () => {
     try {
-      const response = await fetch('http://10.17.71.194:8000/api/login', {
+      const response = await fetch('http://localhost/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -41,22 +41,31 @@ const LoginScreen = ({navigation}) => {
   };
 
   const handleRegister = async () => {
+    if (password !== confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
     try {
-      const response = await fetch('http://10.17.71.194:8000/api/register', {
+      const response = await fetch('http://localhost:8000/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: fullName, 
+          name: fullName, 
           email,
           password,
+          password_confirmation: confirmPassword,
         }),
       });
       const data = await response.json();
       if (response.ok) {
-        // Registration successful, navigate or store token
         navigation.navigate('Home');
       } else {
-        alert(data.message || 'Registration failed');
+        if (data.errors) {
+          console.log(data.errors);
+          
+        } else {
+          alert(data.message || 'Registration failed');
+        }
       }
     } catch (error) {
       alert('Error: ' + error.message);

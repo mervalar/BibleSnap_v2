@@ -1,9 +1,21 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
 const HomePage = () => {
   const navigation = useNavigation();
+  const [verse, setVerse] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('https://beta.ourmanna.com/api/v1/get?format=json')
+      .then(res => res.json())
+      .then(data => {
+        setVerse(data.verse.details);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -25,10 +37,18 @@ const HomePage = () => {
         {/* Verse of the Day Card */}
         <View style={styles.verseCard}>
           <Text style={styles.verseLabel}>VERSE OF THE DAY</Text>
-          <Text style={styles.verseText}>
-            "For I know the plans I have for you," declares the LORD, "plans to prosper you and not to harm you, plans to give you hope and a future."
-          </Text>
-          <Text style={styles.verseRef}>Jeremiah 29:11</Text>
+          {loading ? (
+            <ActivityIndicator color="#A07553" />
+          ) : verse ? (
+            <>
+              <Text style={styles.verseText}>
+                "{verse.text}"
+              </Text>
+              <Text style={styles.verseRef}>{verse.reference}</Text>
+            </>
+          ) : (
+            <Text style={styles.verseText}>Could not load verse.</Text>
+          )}
           
           <View style={styles.verseActions}>
             <TouchableOpacity style={styles.actionButton}>
@@ -44,20 +64,24 @@ const HomePage = () => {
 
         {/* Quick Actions */}
         <View style={styles.quickActionsContainer}>
-          <TouchableOpacity style={[styles.quickActionCard, styles.prayerCard]}>
+          <TouchableOpacity style={[styles.quickActionCard, styles.prayerCard]}
+            onPress={() => navigation.navigate('BibleStudy')}
+          >
             <Text style={styles.quickActionIcon}>🔥</Text>
             <Text style={styles.quickActionTitle}>Daily Prayer</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={[styles.quickActionCard, styles.studyCard]}
-            onPress={() => navigation.navigate('BookContent')}
+            onPress={() => navigation.navigate('BooksList')}
           >
             <Text style={styles.quickActionIcon}>📚</Text>
             <Text style={styles.quickActionTitle}>Bible Study</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={[styles.quickActionCard, styles.assistantCard]}>
+          <TouchableOpacity style={[styles.quickActionCard, styles.assistantCard]}
+           onPress={() => navigation.navigate('Journal')}
+           >
             <Text style={styles.quickActionIcon}>👑</Text>
             <Text style={styles.quickActionTitle}>AI Assistant</Text>
           </TouchableOpacity>
@@ -111,6 +135,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 50,
+    paddingBottom: 20, // Added bottom padding
   },
   header: {
     flexDirection: 'row',
@@ -155,8 +180,8 @@ const styles = StyleSheet.create({
   verseCard: {
     backgroundColor: '#DDBBA1',
     borderRadius: 16,
-    padding: 16,
-    flex: 0.35,
+    padding: 20,
+    flex: 0.3,
   },
   verseLabel: {
     color: '#9E795D',
@@ -282,7 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DDBBA1',
     borderRadius: 16,
     padding: 16,
-    flex: 0.2,
+    flex: 0.12,
   },
   challengeTitle: {
     color: '#333',
@@ -293,7 +318,7 @@ const styles = StyleSheet.create({
   challengeDesc: {
     color: '#9E795D',
     fontSize: 12,
-    marginBottom: 12,
+    marginBottom: 20,
     flex: 1,
   },
   progressContainer: {
