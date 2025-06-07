@@ -12,7 +12,7 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation,useRoute } from '@react-navigation/native';
 
 // Icon components (you can replace these with react-native-vector-icons)
 const ChevronLeft = ({ size = 24, color = '#000' }) => (
@@ -60,6 +60,15 @@ const BibleStudyPage = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationAnim] = useState(new Animated.Value(0));
+  const route = useRoute();
+  const { stark, onProgressUpdate } = route.params || {};
+
+  useEffect(() => {
+    if (onProgressUpdate) {
+      const percent = Math.round((completedSteps.size / steps.length) * 100);
+      onProgressUpdate(percent);
+    }
+  }, [completedSteps]);
 
   // Define the study steps
   const steps = [
@@ -242,7 +251,7 @@ const BibleStudyPage = () => {
             <ChevronLeft size={24} color="#9E795D" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>{studyData.title}</Text>
+            <Text style={styles.headerTitle}>{stark.title}</Text>
             <Text style={styles.headerSubtitle}>
               Lesson {studyData.lesson} of {studyData.totalLessons} • {studyData.category}
             </Text>
@@ -287,7 +296,7 @@ const BibleStudyPage = () => {
               <Book size={20} color="#9E795D" />
             </View>
             <View>
-              <Text style={styles.starkTitle}>{studyData.stark.title}</Text>
+              <Text style={styles.starkTitle}>{stark.title}</Text>
               <Text style={styles.starkSubtitle}>Today's Stark</Text>
             </View>
           </View>
@@ -299,8 +308,8 @@ const BibleStudyPage = () => {
             <View style={styles.verseContent}>
               <Book size={24} color="#EEDED2" />
               <View style={styles.verseTextContainer}>
-                <Text style={styles.verseReference}>{studyData.stark.mainVerse.reference}</Text>
-                <Text style={styles.verseText}>"{studyData.stark.mainVerse.text}"</Text>
+                <Text style={styles.verseReference}>{stark.main_verse}</Text>
+                <Text style={styles.verseText}>"{stark.explanation}"</Text>
               </View>
             </View>
           </View>
@@ -313,7 +322,7 @@ const BibleStudyPage = () => {
               <Lightbulb size={20} color="#9E795D" />
               <Text style={styles.cardTitle}>Explanation</Text>
             </View>
-            <Text style={styles.cardText}>{studyData.stark.explanation}</Text>
+            <Text style={styles.cardText}>{stark.explanation}</Text>
           </View>
         </SectionCard>
 
@@ -343,7 +352,7 @@ const BibleStudyPage = () => {
               <Lightbulb size={20} color="#9E795D" />
               <Text style={[styles.cardTitle, styles.knowledgeTitle]}>Did You Know?</Text>
             </View>
-            <Text style={styles.knowledgeText}>{studyData.stark.didYouKnow}</Text>
+            <Text style={styles.knowledgeText}>{stark.did_you_know}</Text>
           </View>
         </SectionCard>
 
@@ -358,7 +367,7 @@ const BibleStudyPage = () => {
               <CheckCircle size={20} color="green" />
               <Text style={[styles.cardTitle, styles.activityTitle]}>Activity of the Day</Text>
             </View>
-            <Text style={styles.activityText}>{studyData.stark.activity}</Text>
+            <Text style={styles.activityText}>{stark.activity}</Text>
           </View>
         </SectionCard>
 

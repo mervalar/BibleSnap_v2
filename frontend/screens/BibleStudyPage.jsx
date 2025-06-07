@@ -1,13 +1,72 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  FlatList
 } from 'react-native';
+import { fetchCategories } from '../api/categoryService';
+import { fetchStarks } from '../api/starksService';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BibleStudyApp = ({ navigation }) => {
+
+  const [categories, setCategories] = useState([]);
+  const [starks, setStarks] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [progressMap, setProgressMap] = useState({}); 
+  const [openedStarks, setOpenedStarks] = useState([]); // Track opened starks
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      const fetchedCategories = await fetchCategories();
+      setCategories(fetchedCategories);
+    };
+    loadCategories();
+  }, []);
+
+  useEffect(() => {
+    const loadStarks = async () => {
+      const fetchedStarks = await fetchStarks();
+      setStarks(fetchedStarks);
+    };
+    loadStarks();
+  }, []);
+
+  // Load progress from storage on mount
+  useEffect(() => {
+    AsyncStorage.getItem('bibleProgress').then(data => {
+      if (data) setProgressMap(JSON.parse(data));
+    });
+  }, []);
+
+  // Save progress to storage whenever it changes
+  useEffect(() => {
+    AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
+  }, [progressMap]);
+
+  // Load opened starks from storage on mount
+  useEffect(() => {
+    AsyncStorage.getItem('openedStarks').then(data => {
+      if (data) setOpenedStarks(JSON.parse(data));
+    });
+  }, []);
+
+  // Save opened starks to storage whenever it changes
+  useEffect(() => {
+    AsyncStorage.setItem('openedStarks', JSON.stringify(openedStarks));
+  }, [openedStarks]);
+
+  const filteredStarks =
+    selectedCategory === 'all'
+      ? starks
+      : starks.filter(
+          (item) => item.category && item.category.id === selectedCategory
+        );
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -23,186 +82,146 @@ const BibleStudyApp = ({ navigation }) => {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Filter Tabs */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity style={styles.activeFilter}>
-            <Text style={styles.activeFilterText}>All</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginVertical: 20, marginLeft: 4 }}
+          contentContainerStyle={{ alignItems: 'center', gap: 12 }}
+        >
+          <TouchableOpacity
+            style={
+              selectedCategory === 'all'
+                ? styles.activeFilter
+                : styles.inactiveFilter
+            }
+            onPress={() => setSelectedCategory('all')}
+          >
+            <Text
+              style={
+                selectedCategory === 'all'
+                  ? styles.activeFilterText
+                  : styles.inactiveFilterText
+              }
+            >
+              All
+            </Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>Topical</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>Character</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>Book Study</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>Devotional</Text>
-          </TouchableOpacity>
-        </View>
+          {categories.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={
+                selectedCategory === item.id
+                  ? styles.activeFilter
+                  : styles.inactiveFilter
+              }
+              onPress={() => setSelectedCategory(item.id)}
+            >
+              <Text
+                style={
+                  selectedCategory === item.id
+                    ? styles.activeFilterText
+                    : styles.inactiveFilterText
+                }
+              >
+                {item.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         {/* In Progress Studies Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>In Progress</Text>
-          <TouchableOpacity 
-            onPress={() => navigation.navigate("BibleStudyContent")}
-          >
+          <Text style={styles.sectionTitle}>Bible study</Text>
+          <TouchableOpacity>
             <Text style={styles.viewAllButton}>View All</Text>
           </TouchableOpacity>
         </View>
 
         {/* In Progress Bible Study Entries */}
         <View style={styles.entriesContainer}>
-          {/* Topical Study */}
-          <View style={styles.entryCard}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>📚</Text>
-                <Text style={styles.categoryText}>Topical</Text>
+          {filteredStarks.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.entryCard}
+              onPress={() => {
+                if (!openedStarks.includes(item.id)) {
+                  setOpenedStarks(prev => [...prev, item.id]);
+                }
+                navigation.navigate('BibleStudyContent', {
+                  stark: item,
+                  onProgressUpdate: (percent) => {
+                    setProgressMap((prev) => ({ ...prev, [item.id]: percent }));
+                  }
+                });
+              }}
+            >
+              <View style={styles.entryHeader}>
+                <View style={styles.categoryContainer}>
+                  <Text style={styles.categoryIcon}>📚</Text>
+                  <Text style={styles.categoryText}>{item.category?.name || 'Topical'}</Text>
+                </View>
+                <Text style={styles.entryDate}>{item.date || 'Unknown date'}</Text>
               </View>
-              <Text style={styles.entryDate}>June 05, 2025</Text>
-            </View>
-            
-            <Text style={styles.entryTitle}>Faith in Times of Trouble</Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>Hebrews 11:1</Text>
-              </View>
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressText}>3/5 lessons</Text>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, {width: '60%'}]} />
+              <Text style={styles.entryTitle}>{item.title}</Text>
+              <View style={styles.entryFooter}>
+                <View style={styles.verseContainer}>
+                  <Text style={styles.verseIcon}>📖</Text>
+                  <Text style={styles.verseText}>{item.main_verse || 'Verse'}</Text>
+                </View>
+                <View style={styles.progressContainer}>
+                  <Text style={styles.progressText}>
+                    {item.progressText || '0/0 lessons'}
+                  </Text>
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { width: item.progressPercent || '0%' },
+                      ]}
+                    />
+                  </View>
+                </View>
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity style={styles.actionButton}>
+                    <Text style={styles.actionButtonText}>✏️</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionButton}>
+                    <Text style={styles.actionButtonText}>🗑️</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Character Study */}
-          <View style={styles.entryCard}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>👤</Text>
-                <Text style={styles.categoryText}>Character</Text>
-              </View>
-              <Text style={styles.entryDate}>June 03, 2025</Text>
-            </View>
-            
-            <Text style={styles.entryTitle}>The Life of David</Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>1 Samuel 16:7</Text>
-              </View>
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressText}>7/10 lessons</Text>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, {width: '70%'}]} />
-                </View>
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Book Study */}
-          <View style={styles.entryCard}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>📜</Text>
-                <Text style={styles.categoryText}>Book Study</Text>
-              </View>
-              <Text style={styles.entryDate}>June 01, 2025</Text>
-            </View>
-            
-            <Text style={styles.entryTitle}>Philippians: Joy in Christ</Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>Philippians 4:4</Text>
-              </View>
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressText}>2/4 chapters</Text>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, {width: '50%'}]} />
-                </View>
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Devotional Study */}
-          <View style={styles.entryCard}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>💝</Text>
-                <Text style={styles.categoryText}>Devotional</Text>
-              </View>
-              <Text style={styles.entryDate}>May 30, 2025</Text>
-            </View>
-            
-            <Text style={styles.entryTitle}>Daily Bread: God's Provision</Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>Matthew 6:11</Text>
-              </View>
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressText}>15/21 days</Text>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, {width: '71%'}]} />
-                </View>
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Recent & Completed Section */}
+        {/* Recent Studies Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent & Completed</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAllButton}>View All</Text>
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>Recent</Text>
+        </View>
+        <View style={styles.entriesContainer}>
+          {starks
+            .filter(item => openedStarks.includes(item.id))
+            .slice(-3) // show last 3 opened
+            .reverse() // most recent first
+            .map((item) => (
+              <View key={item.id} style={styles.entryCard}>
+                <Text style={styles.entryTitle}>{item.title}</Text>
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${progressMap[item.id] || 0}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.progressText}>
+                  {progressMap[item.id] ? `${progressMap[item.id]}%` : '0%'}
+                </Text>
+              </View>
+            ))}
         </View>
 
-        {/* Recent & Completed Studies */}
+        {/* Completed Studies */}
         <View style={styles.entriesContainer}>
           <View style={styles.entryCard}>
             <View style={styles.entryHeader}>
@@ -219,39 +238,6 @@ const BibleStudyApp = ({ navigation }) => {
               <View style={styles.verseContainer}>
                 <Text style={styles.verseIcon}>📖</Text>
                 <Text style={styles.verseText}>Matthew 17:21</Text>
-              </View>
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressText}>Completed</Text>
-                <View style={styles.completedBadge}>
-                  <Text style={styles.completedBadgeText}>✓</Text>
-                </View>
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.entryCard}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>👤</Text>
-                <Text style={styles.categoryText}>Character</Text>
-              </View>
-              <Text style={styles.entryDate}>May 25, 2025</Text>
-            </View>
-            
-            <Text style={styles.entryTitle}>Women of Faith</Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>Proverbs 31:25</Text>
               </View>
               <View style={styles.progressContainer}>
                 <Text style={styles.progressText}>Completed</Text>

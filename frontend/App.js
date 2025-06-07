@@ -20,7 +20,7 @@ const Stack = createStackNavigator();
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Landing" >
+      <Stack.Navigator initialRouteName="BibleStudy" >
         <Stack.Screen 
           name="Landing" 
           component={LandingPage} 

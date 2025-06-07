@@ -16,4 +16,10 @@ class starks extends Model
         'activity',
         'date',
     ];
+
+    // Define the relationship with the Category model
+    public function category()
+    {
+        return $this->belongsTo(\App\Models\category::class, 'category_id');
+        }
 }
