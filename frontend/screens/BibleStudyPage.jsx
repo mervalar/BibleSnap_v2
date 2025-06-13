@@ -204,7 +204,19 @@ const BibleStudyApp = ({ navigation }) => {
             .slice(-3) // show last 3 opened
             .reverse() // most recent first
             .map((item) => (
-              <View key={item.id} style={styles.entryCard}>
+              <TouchableOpacity
+                key={item.id}
+                style={styles.entryCard}
+                onPress={() => {
+                  navigation.navigate('BibleStudyContent', {
+                    stark: item,
+                    progress: progressMap[item.id] || 0, // Pass progress here
+                    onProgressUpdate: (percent) => {
+                      setProgressMap((prev) => ({ ...prev, [item.id]: percent }));
+                    }
+                  });
+                }}
+              >
                 <Text style={styles.entryTitle}>{item.title}</Text>
                 <View style={styles.progressBar}>
                   <View
@@ -217,45 +229,10 @@ const BibleStudyApp = ({ navigation }) => {
                 <Text style={styles.progressText}>
                   {progressMap[item.id] ? `${progressMap[item.id]}%` : '0%'}
                 </Text>
-              </View>
+              </TouchableOpacity>
             ))}
         </View>
 
-        {/* Completed Studies */}
-        <View style={styles.entriesContainer}>
-          <View style={styles.entryCard}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>📚</Text>
-                <Text style={styles.categoryText}>Topical</Text>
-              </View>
-              <Text style={styles.entryDate}>May 28, 2025</Text>
-            </View>
-            
-            <Text style={styles.entryTitle}>Prayer and Fasting</Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>Matthew 17:21</Text>
-              </View>
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressText}>Completed</Text>
-                <View style={styles.completedBadge}>
-                  <Text style={styles.completedBadgeText}>✓</Text>
-                </View>
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
       </ScrollView>
     </View>
   );

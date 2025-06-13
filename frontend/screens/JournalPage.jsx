@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState,useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,28 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
+import UserNoteModal from '../components/JournalModal'; 
+import { fetchNoteCategories } from '../api/noteCategories';
 
 const JournalApp = () => {
+    const [modalVisible, setModalVisible] = useState(false);
+      const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState('All');
+
+    const handleSaveNote = (noteData) => {
+    setModalVisible(false);
+  };
+
+  useEffect(() => {
+    const getCategories = async () => {
+      const data=await fetchNoteCategories();
+      setCategories(data);
+    };
+    getCategories();
+  }, []);
+
+
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -17,34 +37,37 @@ const JournalApp = () => {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Journals</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
           <Text style={styles.addButtonText}>+</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Filter Tabs */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity style={styles.activeFilter}>
-            <Text style={styles.activeFilterText}>All</Text>
+      {/* Filter Tabs */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterContainer}
+        contentContainerStyle={{ alignItems: 'center' }}
+      >
+        <TouchableOpacity
+          style={activeCategory === 'All' ? styles.activeFilter : styles.inactiveFilter}
+          onPress={() => setActiveCategory('All')}
+        >
+          <Text style={activeCategory === 'All' ? styles.activeFilterText : styles.inactiveFilterText}>All</Text>
+        </TouchableOpacity>
+        {categories.map((cat) => (
+          <TouchableOpacity
+            key={cat.id || cat.name}
+            style={activeCategory === cat.name ? styles.activeFilter : styles.inactiveFilter}
+            onPress={() => setActiveCategory(cat.name)}
+          >
+            <Text style={activeCategory === cat.name ? styles.activeFilterText : styles.inactiveFilterText}>
+              {cat.name}
+            </Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>Gratitude</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>Prayer</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>Reflection</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>Discovery</Text>
-          </TouchableOpacity>
-        </View>
+        ))}
+      </ScrollView>
 
         {/* Journal Entries */}
         <View style={styles.entriesContainer}>
@@ -173,6 +196,11 @@ const JournalApp = () => {
           </View>
         </View>
       </ScrollView>
+      <UserNoteModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onSave={handleSaveNote}
+      />
     </SafeAreaView>
   );
 };

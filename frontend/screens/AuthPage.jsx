@@ -1,285 +1,70 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Image,
-  SafeAreaView,
-  ScrollView,
-} from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, TouchableOpacity, SafeAreaView } from 'react-native';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from './../styles/Auth.styles';
-const LoginScreen = ({navigation}) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
-  const [activeTab, setActiveTab] = useState('Login');
 
-  const handleLogin = async () => {
+WebBrowser.maybeCompleteAuthSession();
+
+const AuthPage = ({ navigation }) => {
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: 'YOUR_ANDROID_CLIENT_ID',
+    iosClientId: '379163976655-pf88omn95qf7d92upgcghhu8slh91dqj.apps.googleusercontent.com',
+    expoClientId: '379163976655-1n874fq7bm965lkovca6d283g3oa40ip.apps.googleusercontent.com',
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { authentication } = response;
+      fetchUserInfo(authentication.accessToken);
+    }
+  }, [response]);
+
+  const fetchUserInfo = async (token) => {
     try {
-      const response = await fetch('http://localhost/api/login', {
+      const res = await fetch('https://www.googleapis.com/userinfo/v2/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const user = await res.json();
+
+      // Send this to your Laravel backend to log in or register user
+      const response = await fetch('http://localhost:8000/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email,
-          password,
+          email: user.email,
+          name: user.name,
         }),
       });
+
       const data = await response.json();
-      if (response.ok) {
-        // Login successful, navigate or store token
+      if (data.success) {
+        await AsyncStorage.setItem('userId', data.user.id.toString());
         navigation.navigate('Home');
       } else {
         alert(data.message || 'Login failed');
       }
     } catch (error) {
-      alert('Error: ' + error.message);
+      console.error(error);
+      alert('Google login failed');
     }
   };
-
-  const handleRegister = async () => {
-    if (password !== confirmPassword) {
-      alert('Passwords do not match');
-      return;
-    }
-    try {
-      const response = await fetch('http://localhost:8000/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: fullName, 
-          email,
-          password,
-          password_confirmation: confirmPassword,
-        }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        navigation.navigate('Home');
-      } else {
-        if (data.errors) {
-          console.log(data.errors);
-          
-        } else {
-          alert(data.message || 'Registration failed');
-        }
-      }
-    } catch (error) {
-      alert('Error: ' + error.message);
-    }
-  };
-
-  const handleGoogleLogin = () => {
-   navigation.navigate('Home');
-  };
-
-  const handleForgotPassword = () => {
-    console.log('Forgot password pressed');
-    // Add your forgot password logic here
-  };
-
-  const handleCreateAccount = () => {
-    setActiveTab('Register');
-  };
-
-  const handleSwitchToLogin = () => {
-    setActiveTab('Login');
-  };
-
-  const renderLoginForm = () => (
-    <>
-      {/* Email Input */}
-      <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Email</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="you@email.com"
-          placeholderTextColor={styles.placeholderColor.color}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-      </View>
-
-      {/* Password Input */}
-      <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Password</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Password"
-          placeholderTextColor={styles.placeholderColor.color}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={true}
-        />
-      </View>
-
-      {/* Remember Me and Forgot Password */}
-      <View style={styles.optionsContainer}>
-        <TouchableOpacity
-          style={styles.checkboxContainer}
-          onPress={() => setRememberMe(!rememberMe)}
-        >
-          <View style={[styles.checkbox, rememberMe && styles.checkedBox]}>
-            {rememberMe && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-          <Text style={styles.checkboxLabel}>Remember me</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={handleForgotPassword}>
-          <Text style={styles.forgotPassword}>Forgot Password?</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Login Button */}
-      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-        <Text style={styles.loginButtonText}>Login</Text>
-      </TouchableOpacity>
-
-      {/* Divider */}
-      <Text style={styles.divider}>or</Text>
-
-      {/* Google Login Button */}
-      <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin}>
-        <Text style={styles.googleButtonText}>G Continue with Google</Text>
-      </TouchableOpacity>
-
-      {/* Create Account Link */}
-      <View style={styles.createAccountContainer}>
-        <Text style={styles.createAccountText}>New here? </Text>
-        <TouchableOpacity onPress={handleCreateAccount}>
-          <Text style={styles.createAccountLink}>Create Account</Text>
-        </TouchableOpacity>
-      </View>
-    </>
-  );
-
-  const renderRegisterForm = () => (
-    <>
-      {/* Full Name Input */}
-      <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Full Name</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Your full name"
-          placeholderTextColor={styles.placeholderColor.color}
-          value={fullName}
-          onChangeText={setFullName}
-          autoCapitalize="words"
-        />
-      </View>
-
-      {/* Email Input */}
-      <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Email</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="you@email.com"
-          placeholderTextColor={styles.placeholderColor.color}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-      </View>
-
-      {/* Password Input */}
-      <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Password</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Password"
-          placeholderTextColor={styles.placeholderColor.color}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={true}
-        />
-      </View>
-
-      {/* Confirm Password Input */}
-      <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Confirm Password</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Confirm your password"
-          placeholderTextColor={styles.placeholderColor.color}
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry={true}
-        />
-      </View>
-
-      {/* Register Button */}
-      <TouchableOpacity style={styles.loginButton} onPress={handleRegister}>
-        <Text style={styles.loginButtonText}>Create Account</Text>
-      </TouchableOpacity>
-
-      {/* Divider */}
-      <Text style={styles.divider}>or</Text>
-
-      {/* Google Register Button */}
-      <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin}>
-        <Text style={styles.googleButtonText}>G Continue with Google</Text>
-      </TouchableOpacity>
-
-      {/* Switch to Login Link */}
-      <View style={styles.createAccountContainer}>
-        <Text style={styles.createAccountText}>Already have an account? </Text>
-        <TouchableOpacity onPress={handleSwitchToLogin}>
-          <Text style={styles.createAccountLink}>Login</Text>
-        </TouchableOpacity>
-      </View>
-    </>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Logo Section */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>Bible</Text>
-          </View>
-        </View>
-
-        {/* Title */}
+      <View style={styles.logoContainer}>
         <Text style={styles.title}>BibleSnap</Text>
-        <Text style={styles.subtitle}>
-          Grow your faith. Track your journey. Stay inspired every day.
-        </Text>
-
-        {/* Tab Navigation */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'Login' && styles.activeTab]}
-            onPress={() => setActiveTab('Login')}
-          >
-            <Text style={[styles.tabText, activeTab === 'Login' && styles.activeTabText]}>
-              Login
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'Register' && styles.activeTab]}
-            onPress={() => setActiveTab('Register')}
-          >
-            <Text style={[styles.tabText, activeTab === 'Register' && styles.activeTabText]}>
-              Register
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Form Section */}
-        <View style={styles.formContainer}>
-          {activeTab === 'Login' ? renderLoginForm() : renderRegisterForm()}
-        </View>
-      </ScrollView>
+        <Text style={styles.subtitle}>Grow your faith. Stay inspired.</Text>
+        <TouchableOpacity
+          style={styles.googleButton}
+          onPress={() => promptAsync()}
+        >
+          <Text style={styles.googleButtonText}>G Continue with Google</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
 
-
-export default LoginScreen;
+export default AuthPage;

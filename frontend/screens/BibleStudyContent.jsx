@@ -327,19 +327,22 @@ const BibleStudyPage = () => {
         </SectionCard>
 
         {/* Related Verses */}
-        <SectionCard stepId="related" isUnlocked={isStepUnlocked(2)}>
-          <View style={styles.cardContent}>
+      <SectionCard stepId="related" isUnlocked={isStepUnlocked(2)}>
+        <View style={styles.cardContent}>
             <Text style={styles.cardTitle}>Related Verses</Text>
             <View style={styles.versesContainer}>
-              {studyData.stark.relatedVerses.map((verse, index) => (
-                <View key={index} style={styles.relatedVerse}>
-                  <Text style={styles.relatedVerseReference}>{verse.reference}</Text>
-                  <Text style={styles.relatedVerseText}>"{verse.text}"</Text>
-                </View>
-              ))}
+                {(stark.related_verses && Array.isArray(stark.related_verses)) ? 
+                    stark.related_verses.map((verse, index) => (
+                        <View key={index} style={styles.relatedVerse}>
+                            <Text style={styles.relatedVerseReference}>{verse.reference}</Text>
+                            <Text style={styles.relatedVerseText}>"{verse.text}"</Text>
+                        </View>
+                    )) : 
+                    <Text>No related verses available</Text>
+                }
             </View>
-          </View>
-        </SectionCard>
+        </View>
+    </SectionCard>
 
         {/* Did You Know */}
         <SectionCard 

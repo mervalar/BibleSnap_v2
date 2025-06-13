@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import  AuthModal from '../components/AuthModal'; 
+
 
 const HomePage = () => {
   const navigation = useNavigation();
   const [verse, setVerse] = useState(null);
   const [loading, setLoading] = useState(true);
-
+  const [user, setUser] = useState(null); // null when not logged in, object with user data when logged in
+  const [isConnected, setIsConnected] = useState(false); // Track connection status
+  const [showAuthModal, setShowAuthModal] = useState(false);
   useEffect(() => {
     fetch('https://beta.ourmanna.com/api/v1/get?format=json')
       .then(res => res.json())
@@ -15,21 +19,69 @@ const HomePage = () => {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    // Check if user is logged in (replace this with your actual auth logic)
+    checkUserAuth();
   }, []);
+
+  const checkUserAuth = () => {
+    // Replace this with your actual authentication check
+    // For example, check AsyncStorage, make API call, etc.
+    const userData = null; // This should come from your auth system
+    
+    if (userData) {
+      setUser(userData);
+      setIsConnected(true);
+    } else {
+      setUser(null);
+      setIsConnected(false);
+    }
+  };
+
+  const handleLogin = () => {
+    // Show the AuthModal instead of navigating
+    setShowAuthModal(true);
+  };
+
+  const handleRegister = () => {
+    setShowAuthModal(true);
+  };
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.profileSection}>
-          <View style={styles.profileCircle}>
-            <Text style={styles.profileInitial}>S</Text>
-          </View>
-          <Text style={styles.greeting}>Hello, Sarah</Text>
+          {isConnected && (
+            <>
+              <View style={styles.profileCircle}>
+                <Text 
+                  style={styles.profileInitial}
+                  onPress={() => navigation.navigate('Profile')}
+                >
+                  {user?.name?.charAt(0).toUpperCase() || 'U'}
+                </Text>
+              </View>
+              <Text style={styles.greeting}>Hello, {user?.name || 'User'}</Text>
+            </>
+          )}
+          {!isConnected && (
+            <Text style={styles.greeting}>Welcome to BibleSnap</Text>
+          )}
         </View>
-        <TouchableOpacity style={styles.bellIcon}>
-          <Text style={styles.bellText}>🔔</Text>
-        </TouchableOpacity>
+        
+        {/* Show bell icon when connected, login/register buttons when not */}
+        {isConnected ? (
+          <TouchableOpacity style={styles.bellIcon}>
+            <Text style={styles.bellText}>🔔</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.authButtons}>
+            <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+              <Text style={styles.loginText}>Sign up</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Main Content */}
@@ -65,18 +117,18 @@ const HomePage = () => {
         {/* Quick Actions */}
         <View style={styles.quickActionsContainer}>
           <TouchableOpacity style={[styles.quickActionCard, styles.prayerCard]}
-            onPress={() => navigation.navigate('BibleStudy')}
+            onPress={() => navigation.navigate('BooksList')}
           >
             <Text style={styles.quickActionIcon}>🔥</Text>
-            <Text style={styles.quickActionTitle}>Daily Prayer</Text>
+            <Text style={styles.quickActionTitle}>Read Bible</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={[styles.quickActionCard, styles.studyCard]}
-            onPress={() => navigation.navigate('BooksList')}
+            onPress={() => navigation.navigate('Journal')}
           >
             <Text style={styles.quickActionIcon}>📚</Text>
-            <Text style={styles.quickActionTitle}>Bible Study</Text>
+            <Text style={styles.quickActionTitle}>Journal</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={[styles.quickActionCard, styles.assistantCard]}
@@ -125,6 +177,12 @@ const HomePage = () => {
           </View>
         </View>
       </View>
+      <AuthModal
+              visible={showAuthModal}
+              onClose={() => setShowAuthModal(false)}
+              navigation={navigation}
+            />
+     
     </View>
   );
 };
@@ -135,7 +193,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 50,
-    paddingBottom: 20, // Added bottom padding
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
@@ -172,6 +230,35 @@ const styles = StyleSheet.create({
   },
   bellText: {
     fontSize: 18,
+  },
+  // New styles for auth buttons
+  authButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  loginButton: {
+    backgroundColor: '#A07553',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  loginText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  registerButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#A07553',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  registerText: {
+    color: '#A07553',
+    fontWeight: '600',
+    fontSize: 14,
   },
   mainContent: {
     flex: 1,
