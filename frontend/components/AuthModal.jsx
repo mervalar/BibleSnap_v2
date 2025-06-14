@@ -9,22 +9,29 @@ import {
   Dimensions,
   Animated,
   TouchableWithoutFeedback,
-  TextInput
+  TextInput,
+  ActivityIndicator
 } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const { height: screenHeight } = Dimensions.get('window');
 
+// Configure your API base URL
+const API_BASE_URL = 'http://localhost:8000/api';
+
 export default function AuthModal({ visible, onClose, navigation }) {
   const slideAnimation = React.useRef(new Animated.Value(screenHeight)).current;
-  const [currentView, setCurrentView] = useState('main'); // 'main', 'login', 'signup', 'confirm'
+  const [currentView, setCurrentView] = useState('main');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Create redirect URI for Google OAuth
   const redirectUri = AuthSession.makeRedirectUri({
@@ -32,7 +39,6 @@ export default function AuthModal({ visible, onClose, navigation }) {
     useProxy: true,
   });
 
-  // Debug: Log the redirect URI
   console.log('Redirect URI being used:', redirectUri);
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
@@ -40,7 +46,7 @@ export default function AuthModal({ visible, onClose, navigation }) {
       clientId: '379163976655-1n874fq7bm965lkovca6d283g3oa40ip.apps.googleusercontent.com',
       scopes: ['openid', 'profile', 'email'],
       redirectUri: redirectUri,
-      responseType: AuthSession.ResponseType.Code,
+      responseType: AuthSession.ResponseType.IdToken,
       additionalParameters: {},
       extraParams: {
         access_type: 'offline',
@@ -73,30 +79,143 @@ export default function AuthModal({ visible, onClose, navigation }) {
   // Handle Google OAuth response
   useEffect(() => {
     if (response?.type === 'success') {
-      const { code } = response.params;
-      console.log('Authentication successful! Code:', code);
-      Alert.alert('Success', 'Google authentication successful!');
-      handleClose(); // Close modal on success
-      // Exchange code for tokens here
+      const { id_token, access_token } = response.params;
+      console.log('Authentication successful! Token:', id_token);
+      handleGoogleCallback(id_token || access_token);
     } else if (response?.type === 'error') {
       console.error('Auth error:', response.error);
-      console.error('Error description:', response.params);
       Alert.alert(
         'Authentication Error', 
-        `${response.error?.message || 'Authentication failed'}\n\nError: ${response.error?.error}\nDescription: ${response.error?.error_description}`
+        response.error?.error_description || 'Authentication failed'
       );
+      setLoading(false);
     } else if (response?.type === 'cancel') {
       console.log('Authentication cancelled by user');
-      Alert.alert('Cancelled', 'Authentication was cancelled');
+      setLoading(false);
     }
   }, [response]);
+
+  // API call functions
+  const apiCall = async (endpoint, method = 'POST', data = null) => {
+    try {
+      const config = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      };
+
+      if (data) {
+        config.body = JSON.stringify(data);
+      }
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'API request failed');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('API Error:', error);
+      throw error;
+    }
+  };
+
+  const testConnection = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/test`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+      
+      console.log('Connection test response:', response.status);
+      const data = await response.json();
+      console.log('Connection test data:', data);
+    } catch (error) {
+      console.error('Connection test failed:', error);
+    }
+  };
+
+  // Enhanced authentication success handler
+  const handleAuthSuccess = async (userData, token = null) => {
+    try {
+      // Store user data
+      await AsyncStorage.setItem('user', JSON.stringify(userData));
+      await AsyncStorage.setItem('isAuthenticated', 'true');
+      
+      // Store token if provided
+      if (token) {
+        await AsyncStorage.setItem('token', token);
+        console.log('Token stored:', token);
+      }
+      
+      console.log('User data stored:', userData);
+      
+      // Show success message
+      Alert.alert('Success', 'Authentication successful!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            handleClose();
+          }
+        }
+      ]);
+      
+    } catch (error) {
+      console.error('Error storing user data:', error);
+      Alert.alert('Error', 'Failed to save user data');
+    }
+  };
+
+  const handleGoogleCallback = async (token) => {
+    try {
+      setLoading(true);
+      
+      // Decode the JWT token to get user info
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const payload = JSON.parse(jsonPayload);
+      
+      // Call your Laravel endpoint that matches your route
+      const result = await apiCall('/auth', 'POST', {
+        email: payload.email,
+        name: payload.name
+      });
+
+      if (result.success) {
+        // Handle successful authentication
+        await handleAuthSuccess(result.user, result.token || token);
+      } else {
+        Alert.alert('Error', result.message || 'Authentication failed');
+      }
+    } catch (error) {
+      console.error('Google callback error:', error);
+      Alert.alert('Error', error.message || 'Google authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const resetForm = () => {
     setEmail('');
     setPassword('');
     setConfirmPassword('');
+    setName('');
     setConfirmationCode('');
     setCurrentView('main');
+    setLoading(false);
   };
 
   const handleClose = () => {
@@ -104,19 +223,35 @@ export default function AuthModal({ visible, onClose, navigation }) {
     onClose();
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-    // Implement login logic here
-    Alert.alert('Login', `Logging in with: ${email}`);
-    // Add your login API call here
-    handleClose();
+
+    try {
+      setLoading(true);
+      
+      const result = await apiCall('/login', 'POST', {
+        email: email.trim().toLowerCase(),
+        password: password
+      });
+
+      if (result.success) {
+        // Handle successful login
+        await handleAuthSuccess(result.user, result.token);
+      } else {
+        Alert.alert('Error', result.message || 'Login failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSignUp = () => {
-    if (!email || !password || !confirmPassword) {
+  const handleSignUp = async () => {
+    if (!name || !email || !password || !confirmPassword) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -124,42 +259,86 @@ export default function AuthModal({ visible, onClose, navigation }) {
       Alert.alert('Error', 'Passwords do not match');
       return;
     }
-    // Implement signup logic here
-    Alert.alert('Success', 'Account created! Please check your email for confirmation.');
-    setCurrentView('confirm');
-  };
-
-  const handleConfirmAccount = () => {
-    if (!confirmationCode) {
-      Alert.alert('Error', 'Please enter confirmation code');
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long');
       return;
     }
-    // Implement confirmation logic here
-    Alert.alert('Success', 'Account confirmed successfully!');
-    handleClose();
+
+    try {
+      setLoading(true);
+      
+      const result = await apiCall('/register', 'POST', {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password: password,
+        password_confirmation: confirmPassword
+      });
+
+      if (result.success) {
+        // Handle successful registration
+        await handleAuthSuccess(result.user, result.token);
+      } else {
+        // Handle validation errors
+        if (result.errors) {
+          const errorMessages = Object.values(result.errors).flat().join('\n');
+          Alert.alert('Validation Error', errorMessages);
+        } else {
+          Alert.alert('Error', result.message || 'Registration failed');
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleForgotPassword = () => {
+  const handleForgotPassword = async () => {
     if (!email) {
       Alert.alert('Error', 'Please enter your email first');
       return;
     }
-    // Implement forgot password logic here
-    Alert.alert('Reset Password', `Password reset link sent to: ${email}`);
+
+    try {
+      setLoading(true);
+      
+      const result = await apiCall('/auth/forgot-password', 'POST', {
+        email: email.trim().toLowerCase()
+      });
+
+      if (result.success) {
+        Alert.alert('Success', `Password reset link sent to: ${email}`);
+      } else {
+        Alert.alert('Error', result.message || 'Failed to send reset link');
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Failed to send reset link');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogleAuth = async () => {
+    if (!request) {
+      Alert.alert('Error', 'Google authentication not ready');
+      return;
+    }
+
     try {
+      setLoading(true);
       console.log('Starting Google authentication...');
       const result = await promptAsync();
       console.log('Auth result:', result);
       
       if (result?.type === 'cancel') {
         Alert.alert('Cancelled', 'Authentication was cancelled');
+        setLoading(false);
       }
+      // Success and error cases are handled in the useEffect
     } catch (error) {
       console.error('Auth error:', error);
       Alert.alert('Error', `Authentication failed: ${error.message}`);
+      setLoading(false);
     }
   };
 
@@ -174,13 +353,21 @@ export default function AuthModal({ visible, onClose, navigation }) {
 
       {/* Google Login Button */}
       <TouchableOpacity
-        disabled={!request}
+        disabled={!request || loading}
         onPress={handleGoogleAuth}
-        style={[styles.authButton, styles.googleButton]}
+        style={[
+          styles.authButton, 
+          styles.googleButton,
+          (!request || loading) && styles.disabledButton
+        ]}
       >
-        <Text style={styles.googleIcon}>G</Text>
+        {loading ? (
+          <ActivityIndicator size="small" color="#4285F4" style={{ marginRight: 12 }} />
+        ) : (
+          <Text style={styles.googleIcon}>G</Text>
+        )}
         <Text style={styles.googleButtonText}>
-          {!request ? 'Loading...' : 'Continue with Google'}
+          {loading ? 'Authenticating...' : !request ? 'Loading...' : 'Continue with Google'}
         </Text>
       </TouchableOpacity>
 
@@ -198,11 +385,17 @@ export default function AuthModal({ visible, onClose, navigation }) {
         onChangeText={setEmail}
         keyboardType="email-address"
         autoCapitalize="none"
+        editable={!loading}
       />
 
       <TouchableOpacity
-        style={[styles.authButton, styles.continueButton]}
+        style={[
+          styles.authButton, 
+          styles.continueButton,
+          loading && styles.disabledButton
+        ]}
         onPress={() => setCurrentView('signup')}
+        disabled={loading}
       >
         <Text style={styles.continueButtonText}>Continue with email</Text>
       </TouchableOpacity>
@@ -210,8 +403,11 @@ export default function AuthModal({ visible, onClose, navigation }) {
       <TouchableOpacity
         style={styles.loginLink}
         onPress={() => setCurrentView('login')}
+        disabled={loading}
       >
-        <Text style={styles.loginLinkText}>Already have an account? Log in</Text>
+        <Text style={[styles.loginLinkText, loading && styles.disabledText]}>
+          Already have an account? Log in
+        </Text>
       </TouchableOpacity>
 
       <Text style={styles.privacyText}>
@@ -234,6 +430,7 @@ export default function AuthModal({ visible, onClose, navigation }) {
         onChangeText={setEmail}
         keyboardType="email-address"
         autoCapitalize="none"
+        editable={!loading}
       />
       
       <TextInput
@@ -243,27 +440,43 @@ export default function AuthModal({ visible, onClose, navigation }) {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        editable={!loading}
       />
       
       <TouchableOpacity
         style={styles.forgotPassword}
         onPress={handleForgotPassword}
+        disabled={loading}
       >
-        <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+        <Text style={[styles.forgotPasswordText, loading && styles.disabledText]}>
+          Forgot password?
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.authButton, styles.primaryButton]}
+        style={[
+          styles.authButton, 
+          styles.primaryButton,
+          loading && styles.disabledButton
+        ]}
         onPress={handleLogin}
+        disabled={loading}
       >
-        <Text style={styles.primaryButtonText}>Log in</Text>
+        {loading ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Text style={styles.primaryButtonText}>Log in</Text>
+        )}
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => setCurrentView('main')}
+        disabled={loading}
       >
-        <Text style={styles.backButtonText}>← Back</Text>
+        <Text style={[styles.backButtonText, loading && styles.disabledText]}>
+          ← Back
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -275,21 +488,33 @@ export default function AuthModal({ visible, onClose, navigation }) {
       
       <TextInput
         style={styles.input}
+        placeholder="Full Name"
+        placeholderTextColor="#9CA3AF"
+        value={name}
+        onChangeText={setName}
+        autoCapitalize="words"
+        editable={!loading}
+      />
+      
+      <TextInput
+        style={styles.input}
         placeholder="Email"
         placeholderTextColor="#9CA3AF"
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
         autoCapitalize="none"
+        editable={!loading}
       />
       
       <TextInput
         style={styles.input}
-        placeholder="Password"
+        placeholder="Password (min 6 characters)"
         placeholderTextColor="#9CA3AF"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        editable={!loading}
       />
       
       <TextInput
@@ -299,52 +524,33 @@ export default function AuthModal({ visible, onClose, navigation }) {
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         secureTextEntry
+        editable={!loading}
       />
 
       <TouchableOpacity
-        style={[styles.authButton, styles.primaryButton]}
+        style={[
+          styles.authButton, 
+          styles.primaryButton,
+          loading && styles.disabledButton
+        ]}
         onPress={handleSignUp}
+        disabled={loading}
       >
-        <Text style={styles.primaryButtonText}>Create account</Text>
+        {loading ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Text style={styles.primaryButtonText}>Create account</Text>
+        )}
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => setCurrentView('main')}
+        disabled={loading}
       >
-        <Text style={styles.backButtonText}>← Back</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderConfirmView = () => (
-    <View style={styles.content}>
-      <Text style={styles.title}>Check your email</Text>
-      <Text style={styles.subtitle}>
-        We've sent a confirmation code to {email}
-      </Text>
-      
-      <TextInput
-        style={styles.input}
-        placeholder="Enter confirmation code"
-        placeholderTextColor="#9CA3AF"
-        value={confirmationCode}
-        onChangeText={setConfirmationCode}
-        keyboardType="numeric"
-      />
-
-      <TouchableOpacity
-        style={[styles.authButton, styles.primaryButton]}
-        onPress={handleConfirmAccount}
-      >
-        <Text style={styles.primaryButtonText}>Verify account</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => setCurrentView('main')}
-      >
-        <Text style={styles.backButtonText}>← Back to start</Text>
+        <Text style={[styles.backButtonText, loading && styles.disabledText]}>
+          ← Back
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -355,8 +561,6 @@ export default function AuthModal({ visible, onClose, navigation }) {
         return renderLoginView();
       case 'signup':
         return renderSignUpView();
-      case 'confirm':
-        return renderConfirmView();
       default:
         return renderMainView();
     }
@@ -369,7 +573,7 @@ export default function AuthModal({ visible, onClose, navigation }) {
       animationType="none"
       onRequestClose={handleClose}
     >
-      <TouchableWithoutFeedback onPress={handleClose}>
+      <TouchableWithoutFeedback onPress={!loading ? handleClose : null}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <Animated.View 
@@ -382,8 +586,14 @@ export default function AuthModal({ visible, onClose, navigation }) {
             >
               <View style={styles.handleBar} />
               
-              <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-                <Text style={styles.closeButtonText}>×</Text>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={handleClose}
+                disabled={loading}
+              >
+                <Text style={[styles.closeButtonText, loading && styles.disabledText]}>
+                  ×
+                </Text>
               </TouchableOpacity>
 
               {getCurrentView()}
@@ -598,5 +808,11 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 14,
     fontWeight: '500',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  disabledText: {
+    opacity: 0.6,
   },
 });

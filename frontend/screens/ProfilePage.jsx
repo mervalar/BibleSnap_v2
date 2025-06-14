@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,26 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Image,
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  Button,
+  Alert, // Added this import
 } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart } from 'react-native-chart-kit';
 
 const ProfilePage = () => {
+  const navigation = useNavigation();
+  const [user, setUser] = useState(null);
+  const [userToken, setUserToken] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [updateLoading, setUpdateLoading] = useState(false); // Added loading state for update
+
   // Chart data for growth rate
   const chartData = {
     labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -40,26 +56,208 @@ const ProfilePage = () => {
     },
   };
 
+  // Fetch user data from AsyncStorage
+  const fetchUserData = async () => {
+    try {
+      setLoading(true);
+      
+      const isAuthenticated = await AsyncStorage.getItem('isAuthenticated');
+      const userData = await AsyncStorage.getItem('user');
+      const token = await AsyncStorage.getItem('token');
+      
+      if (isAuthenticated === 'true' && userData) {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+        setUserToken(token);
+        console.log('User data loaded:', parsedUser);
+      } else {
+        // If no user data, navigate back to home or show login
+        console.log('No user data found');
+        navigation.goBack();
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch user data when component mounts
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  // Re-fetch user data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserData();
+    }, [])
+  );
+
+  const handleLogout = async () => {
+    try {
+      // Clear all stored data
+      await AsyncStorage.multiRemove(['user', 'isAuthenticated', 'token']);
+      console.log('User logged out from profile');
+      // Navigate back to home page
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      });
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editName.trim() || !editEmail.trim()) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    try {
+      setUpdateLoading(true);
+      
+      console.log('Updating profile with:', { name: editName, email: editEmail });
+      console.log('Using token:', userToken);
+
+      const response = await fetch('http://localhost:8000/api/user/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`,
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ 
+          name: editName.trim(), 
+          email: editEmail.trim() 
+        }),
+      });
+
+      const responseData = await response.json();
+      console.log('Update response:', responseData);
+
+      if (response.ok && responseData.success) {
+        // Update AsyncStorage with new user data
+        await AsyncStorage.setItem('user', JSON.stringify(responseData.user));
+        setUser(responseData.user);
+        setModalVisible(false);
+        Alert.alert('Success', 'Profile updated successfully!');
+      } else {
+        const errorMessage = responseData.message || 'Failed to update profile';
+        console.error('Update failed:', responseData);
+        Alert.alert('Error', errorMessage);
+      }
+    } catch (error) {
+      console.error('Update error:', error);
+      Alert.alert('Error', 'Network error. Please check your connection.');
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
+  // Show loading state while fetching user data
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#AE796D" />
+        <Text style={styles.loadingText}>Loading profile...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Show message if no user data
+  if (!user) {
+    return (
+      <SafeAreaView style={[styles.container, styles.loadingContainer]}>
+        <Text style={styles.errorText}>No user data found</Text>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         {/* Profile Info */}
         <View style={styles.profileSection}>
           <View style={styles.profileImageContainer}>
-            <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1494790108755-2616b332c95a?w=150&h=150&fit=crop&crop=face',
-              }}
-              style={styles.profileImage}
-            />
+            <View style={styles.profileImagePlaceholder}>
+              <Text style={styles.profileInitial}>
+                {user.name?.charAt(0).toUpperCase() || 'U'}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.profileName}>Sarah Williams</Text>
-          <Text style={styles.profileEmail}>sarah.w@gmail.com</Text>
+          <Text style={styles.profileName}>{user.name || 'User'}</Text>
+          <Text style={styles.profileEmail}>{user.email || 'No email'}</Text>
           
-          <TouchableOpacity style={styles.editButton}>
+          {/* Debug info - remove in production */}
+          {userToken && (
+            <Text style={styles.debugText}>
+              Token: {userToken.substring(0, 20)}...
+            </Text>
+          )}
+          
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => {
+              setEditName(user.name || '');
+              setEditEmail(user.email || '');
+              setModalVisible(true);
+            }}
+          >
             <Text style={styles.editButtonText}>✏️ Edit Profile</Text>
           </TouchableOpacity>
         </View>
+
+        <Modal visible={modalVisible} animationType="slide" transparent>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <TextInput
+                placeholder="Name"
+                value={editName}
+                onChangeText={setEditName}
+                style={styles.input}
+                editable={!updateLoading}
+              />
+              <TextInput
+                placeholder="Email"
+                value={editEmail}
+                onChangeText={setEditEmail}
+                style={styles.input}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                editable={!updateLoading}
+              />
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity
+                  style={[styles.saveButton, updateLoading && styles.disabledButton]}
+                  onPress={handleSaveEdit}
+                  disabled={updateLoading}
+                >
+                  {updateLoading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setModalVisible(false)}
+                  disabled={updateLoading}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Stats */}
         <View style={styles.statsContainer}>
@@ -171,7 +369,7 @@ const ProfilePage = () => {
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
             <View style={styles.menuIcon}>
               <Text style={styles.iconText}>🚪</Text>
             </View>
@@ -188,6 +386,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#AE796D',
+    fontSize: 16,
+  },
+  errorText: {
+    color: '#ff4444',
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  backButton: {
+    backgroundColor: '#AE796D',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  backButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
+    marginBottom: 10,
+  },
   scrollView: {
     flex: 1,
   },
@@ -198,16 +427,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 15,
     backgroundColor: '#FFFFFF',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backArrow: {
-    fontSize: 20,
-    color: '#000',
   },
   headerTitle: {
     fontSize: 18,
@@ -237,6 +456,19 @@ const styles = StyleSheet.create({
     borderColor: '#AE796D',
     padding: 2,
     marginBottom: 15,
+  },
+  profileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 37,
+    backgroundColor: '#AE796D',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInitial: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
   profileImage: {
     width: '100%',
@@ -397,6 +629,59 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#A07553',
     fontWeight: '500',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    margin: 20,
+    padding: 20,
+    borderRadius: 10,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  input: {
+    borderBottomWidth: 1,
+    borderColor: '#ccc',
+    marginBottom: 15,
+    padding: 8,
+    fontSize: 16,
+  },
+  buttonContainer: {
+    marginTop: 20,
+  },
+  saveButton: {
+    backgroundColor: '#AE796D',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });
 

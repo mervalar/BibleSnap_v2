@@ -1,17 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import  AuthModal from '../components/AuthModal'; 
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import AuthModal from '../components/AuthModal';
 
 
 const HomePage = () => {
   const navigation = useNavigation();
   const [verse, setVerse] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null); // null when not logged in, object with user data when logged in
-  const [isConnected, setIsConnected] = useState(false); // Track connection status
+  const [user, setUser] = useState(null);
+  const [userToken, setUserToken] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+
   useEffect(() => {
+    // Load verse of the day
     fetch('https://beta.ourmanna.com/api/v1/get?format=json')
       .then(res => res.json())
       .then(data => {
@@ -20,26 +25,49 @@ const HomePage = () => {
       })
       .catch(() => setLoading(false));
 
-    // Check if user is logged in (replace this with your actual auth logic)
+    // Check authentication on component mount
     checkUserAuth();
   }, []);
 
-  const checkUserAuth = () => {
-    // Replace this with your actual authentication check
-    // For example, check AsyncStorage, make API call, etc.
-    const userData = null; // This should come from your auth system
-    
-    if (userData) {
-      setUser(userData);
-      setIsConnected(true);
-    } else {
+  // Re-check authentication when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      checkUserAuth();
+    }, [])
+  );
+
+  const checkUserAuth = async () => {
+    try {
+      setAuthLoading(true);
+      
+      // Check if user is authenticated
+      const isAuthenticated = await AsyncStorage.getItem('isAuthenticated');
+      const userData = await AsyncStorage.getItem('user');
+      const token = await AsyncStorage.getItem('token'); // Add token storage
+      
+      if (isAuthenticated === 'true' && userData) {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+        setUserToken(token);
+        setIsConnected(true);
+        console.log('User authenticated:', parsedUser);
+        console.log('User token:', token);
+      } else {
+        setUser(null);
+        setUserToken(null);
+        setIsConnected(false);
+      }
+    } catch (error) {
+      console.error('Error checking authentication:', error);
       setUser(null);
+      setUserToken(null);
       setIsConnected(false);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
   const handleLogin = () => {
-    // Show the AuthModal instead of navigating
     setShowAuthModal(true);
   };
 
@@ -47,34 +75,70 @@ const HomePage = () => {
     setShowAuthModal(true);
   };
 
+  const handleAuthModalClose = () => {
+    setShowAuthModal(false);
+    // Re-check authentication after modal closes
+    checkUserAuth();
+  };
+
+  const handleLogout = async () => {
+    try {
+      // Clear all stored data
+      await AsyncStorage.multiRemove(['user', 'isAuthenticated', 'token']);
+      setUser(null);
+      setUserToken(null);
+      setIsConnected(false);
+      console.log('User logged out');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#A07553" />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.profileSection}>
-          {isConnected && (
+          {isConnected && user ? (
             <>
-              <View style={styles.profileCircle}>
-                <Text 
-                  style={styles.profileInitial}
-                  onPress={() => navigation.navigate('Profile')}
-                >
-                  {user?.name?.charAt(0).toUpperCase() || 'U'}
+              <TouchableOpacity 
+                style={styles.profileCircle}
+                onPress={() => navigation.navigate('Profile')}
+              >
+                <Text style={styles.profileInitial}>
+                  {user.name?.charAt(0).toUpperCase() || 'U'}
                 </Text>
+              </TouchableOpacity>
+              <View>
+                <Text style={styles.greeting}>Hello, {user.name || 'User'}</Text>
+                <Text style={styles.email}>{user.email}</Text>
               </View>
-              <Text style={styles.greeting}>Hello, {user?.name || 'User'}</Text>
             </>
-          )}
-          {!isConnected && (
+          ) : (
             <Text style={styles.greeting}>Welcome to BibleSnap</Text>
           )}
         </View>
         
-        {/* Show bell icon when connected, login/register buttons when not */}
+        {/* Show bell icon and logout when connected, login/register buttons when not */}
         {isConnected ? (
-          <TouchableOpacity style={styles.bellIcon}>
-            <Text style={styles.bellText}>🔔</Text>
-          </TouchableOpacity>
+          <View style={styles.connectedActions}>
+            <TouchableOpacity style={styles.bellIcon}>
+              <Text style={styles.bellText}>🔔</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <View style={styles.authButtons}>
             <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
@@ -83,6 +147,13 @@ const HomePage = () => {
           </View>
         )}
       </View>
+
+      {/* User Info Debug (Remove in production) */}
+      {isConnected && userToken && (
+        <View style={styles.debugInfo}>
+          <Text style={styles.debugText}>Token: {userToken?.substring(0, 20)}...</Text>
+        </View>
+      )}
 
       {/* Main Content */}
       <View style={styles.mainContent}>
@@ -166,7 +237,7 @@ const HomePage = () => {
         </View>
 
         {/* Today's Challenge */}
-        <View style={styles.challengeCard}>
+        <TouchableOpacity style={styles.challengeCard} onPress={() => navigation.navigate('BibleStudy')}>
           <Text style={styles.challengeTitle}>Today's Challenge</Text>
           <Text style={styles.challengeDesc}>Share God's love with someone today</Text>
           <View style={styles.progressContainer}>
@@ -175,14 +246,18 @@ const HomePage = () => {
             </View>
             <Text style={styles.progressText}>75%</Text>
           </View>
-        </View>
+      </TouchableOpacity>
       </View>
+
+      {/* Auth Modal */}
       <AuthModal
-              visible={showAuthModal}
-              onClose={() => setShowAuthModal(false)}
-              navigation={navigation}
-            />
-     
+        visible={showAuthModal}
+        onClose={handleAuthModalClose}
+        navigation={navigation}
+          onAuthenticated={() => {
+          setShowAuthModal(false);
+        }}
+      />
     </View>
   );
 };
@@ -194,6 +269,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 20,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#A07553',
+    fontSize: 16,
   },
   header: {
     flexDirection: 'row',
@@ -225,13 +309,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  email: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  connectedActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   bellIcon: {
     padding: 6,
   },
   bellText: {
     fontSize: 18,
   },
-  // New styles for auth buttons
+  logoutButton: {
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  logoutText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 12,
+  },
   authButtons: {
     flexDirection: 'row',
     gap: 8,
@@ -247,18 +351,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  registerButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#A07553',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+  debugInfo: {
+    backgroundColor: '#f0f0f0',
+    padding: 8,
+    marginBottom: 10,
+    borderRadius: 8,
   },
-  registerText: {
-    color: '#A07553',
-    fontWeight: '600',
-    fontSize: 14,
+  debugText: {
+    fontSize: 12,
+    color: '#666',
   },
   mainContent: {
     flex: 1,

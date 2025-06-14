@@ -11,6 +11,7 @@ export const fetchNoteCategories = async () => {
     return [];
   }
 }
+
 // export const createNoteCategory = async (categoryData) => {
 //   try {
 //     const response = await fetch(`http://localhost:8000/api/note_categories`, {

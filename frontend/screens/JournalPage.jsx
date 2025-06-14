@@ -1,4 +1,4 @@
-import React, { useState,useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,28 +6,173 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import UserNoteModal from '../components/JournalModal'; 
 import { fetchNoteCategories } from '../api/noteCategories';
+import { fetchJournals } from '../api/journalApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Color table for category colors (same as in modal)
+const COLOR_TABLE = [
+  '#E91E63', '#2196F3', '#FF9800', '#4CAF50', '#9C27B0', 
+  '#F44336', '#00BCD4', '#8BC34A', '#FF5722', '#3F51B5',
+  '#FFEB3B', '#795548', '#607D8B', '#FFC107', '#009688'
+];
 
 const JournalApp = () => {
-    const [modalVisible, setModalVisible] = useState(false);
-      const [categories, setCategories] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [journals, setJournals] = useState([]);
+  const [editingJournal, setEditingJournal] = useState(null);
 
-    const handleSaveNote = (noteData) => {
+  // Function to get category color by ID or name
+  const getCategoryColor = (categoryIdentifier) => {
+    const categoryIndex = categories.findIndex(cat => 
+      cat.id === categoryIdentifier || 
+      cat.name === categoryIdentifier ||
+      cat.id.toString() === categoryIdentifier?.toString()
+    );
+    return categoryIndex >= 0 ? COLOR_TABLE[categoryIndex % COLOR_TABLE.length] : '#AE796D';
+  };
+
+  // Function to get category data by ID or name
+  const getCategoryData = (categoryIdentifier) => {
+    return categories.find(cat => 
+      cat.id === categoryIdentifier || 
+      cat.name === categoryIdentifier ||
+      cat.id.toString() === categoryIdentifier?.toString()
+    );
+  };
+
+  // Function to get category name from ID or return name if already a name
+  const getCategoryName = (categoryIdentifier) => {
+    const category = getCategoryData(categoryIdentifier);
+    return category ? category.name : categoryIdentifier;
+  };
+
+  const handleSaveNote = (noteData) => {
+    // Ensure we store the category name consistently
+    const processedNoteData = {
+      ...noteData,
+      category: getCategoryName(noteData.category || noteData.note_categorie_id),
+    };
+
+    if (editingJournal) {
+      // Update existing journal
+      setJournals(journals.map(journal => 
+        journal.id === editingJournal.id ? { ...journal, ...processedNoteData } : journal
+      ));
+      setEditingJournal(null);
+    } else {
+      // Add new journal
+      setJournals([processedNoteData, ...journals]);
+    }
     setModalVisible(false);
+  };
+
+  const handleEditJournal = (journal) => {
+    setEditingJournal(journal);
+    setModalVisible(true);
+  };
+
+  const handleDeleteJournal = (journalId) => {
+    Alert.alert(
+      'Delete Journal',
+      'Are you sure you want to delete this journal entry?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setJournals(journals.filter(journal => journal.id !== journalId));
+          },
+        },
+      ],
+    );
+  };
+
+  const handleAddNew = () => {
+    setEditingJournal(null);
+    setModalVisible(true);
+  };
+
+  // Enhanced category filter handler
+  const handleCategoryFilter = (categoryName) => {
+    console.log('Filtering by category:', categoryName);
+    console.log('Available journals:', journals.map(j => ({ 
+      id: j.id, 
+      category: j.category,
+      categoryName: getCategoryName(j.category || j.note_categorie_id)
+    })));
+    setActiveCategory(categoryName);
   };
 
   useEffect(() => {
     const getCategories = async () => {
-      const data=await fetchNoteCategories();
+      const data = await fetchNoteCategories();
+      console.log('Loaded categories:', data);
       setCategories(data);
     };
     getCategories();
   }, []);
 
+  useEffect(() => {
+    const getJournals = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('user');
+        if (!userData) {
+          console.warn('No user data found');
+          return;
+        }
 
+        const parsedUser = JSON.parse(userData);
+        const userId = parsedUser.id; 
+
+        const data = await fetchJournals(userId);
+        console.log('Loaded journals:', data);
+        
+        // Process journals to ensure consistent category naming
+        const processedJournals = data.map(journal => ({
+          ...journal,
+          category: getCategoryName(journal.category || journal.note_categorie_id)
+        }));
+        
+        setJournals(processedJournals);
+      } catch (error) {
+        console.error('Error loading journals:', error);
+      }
+    };
+
+    // Only fetch journals after categories are loaded
+    if (categories.length > 0) {
+      getJournals();
+    }
+  }, [categories]);
+
+  // Enhanced filter journals based on active category
+  const filteredJournals = journals.filter(journal => {
+    if (activeCategory === 'All') return true;
+    
+    // Get the journal's category name
+    const journalCategoryName = getCategoryName(journal.category || journal.note_categorie_id);
+    
+    // Compare with active category
+    return journalCategoryName === activeCategory;
+  });
+
+  console.log('Active category:', activeCategory);
+  console.log('Filtered journals count:', filteredJournals.length);
+  console.log('Filtered journals:', filteredJournals.map(j => ({ 
+    id: j.id, 
+    title: j.title,
+    category: getCategoryName(j.category || j.note_categorie_id)
+  })));
 
   return (
     <SafeAreaView style={styles.container}>
@@ -37,169 +182,101 @@ const JournalApp = () => {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Journals</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity style={styles.addButton} onPress={handleAddNew}>
           <Text style={styles.addButtonText}>+</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-      {/* Filter Tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterContainer}
-        contentContainerStyle={{ alignItems: 'center' }}
-      >
-        <TouchableOpacity
-          style={activeCategory === 'All' ? styles.activeFilter : styles.inactiveFilter}
-          onPress={() => setActiveCategory('All')}
+        {/* Filter Tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterContainer}
+          contentContainerStyle={{ alignItems: 'center' }}
         >
-          <Text style={activeCategory === 'All' ? styles.activeFilterText : styles.inactiveFilterText}>All</Text>
-        </TouchableOpacity>
-        {categories.map((cat) => (
           <TouchableOpacity
-            key={cat.id || cat.name}
-            style={activeCategory === cat.name ? styles.activeFilter : styles.inactiveFilter}
-            onPress={() => setActiveCategory(cat.name)}
+            style={activeCategory === 'All' ? styles.activeFilter : styles.inactiveFilter}
+            onPress={() => handleCategoryFilter('All')}
           >
-            <Text style={activeCategory === cat.name ? styles.activeFilterText : styles.inactiveFilterText}>
-              {cat.name}
-            </Text>
+            <Text style={activeCategory === 'All' ? styles.activeFilterText : styles.inactiveFilterText}>All</Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+          {categories.map((cat) => (
+            <TouchableOpacity
+              key={cat.id || cat.name}
+              style={activeCategory === cat.name ? styles.activeFilter : styles.inactiveFilter}
+              onPress={() => handleCategoryFilter(cat.name)}
+            >
+              <Text style={activeCategory === cat.name ? styles.activeFilterText : styles.inactiveFilterText}>
+                {cat.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         {/* Journal Entries */}
         <View style={styles.entriesContainer}>
-          {/* Gratitude Entry */}
-          <View style={[styles.entryCard, styles.gratitudeCard]}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>💝</Text>
-                <Text style={styles.categoryText}>Gratitude</Text>
-              </View>
-              <Text style={styles.entryDate}>May 28, 2025</Text>
+          {filteredJournals.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                {activeCategory === 'All' 
+                  ? 'No journals found. Start writing your first entry!' 
+                  : `No journals found in "${activeCategory}" category.`
+                }
+              </Text>
             </View>
-            
-            <Text style={styles.entryTitle}>Thankful for today's answered prayer!</Text>
-            <Text style={styles.entryContent}>
-              This morning, God reminded me of his faithfulness in...
-            </Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>Psalms 118:24</Text>
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Prayer Entry */}
-          <View style={[styles.entryCard, styles.prayerCard]}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>🙏</Text>
-                <Text style={styles.categoryText}>Prayer</Text>
-              </View>
-              <Text style={styles.entryDate}>May 27, 2025</Text>
-            </View>
-            
-            <Text style={styles.entryTitle}>Praying for wisdom at work</Text>
-            <Text style={styles.entryContent}>
-              Asked God for guidance during a tough meeting, and...
-            </Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>James 1:5</Text>
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Reflection Entry */}
-          <View style={[styles.entryCard, styles.reflectionCard]}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>💭</Text>
-                <Text style={styles.categoryText}>Reflection</Text>
-              </View>
-              <Text style={styles.entryDate}>May 26, 2025</Text>
-            </View>
-            
-            <Text style={styles.entryTitle}>Learning to trust in hard times</Text>
-            <Text style={styles.entryContent}>
-              Difficulties are opportunities to grow stronger in faith...
-            </Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>Romans 5:3</Text>
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Discovery Entry */}
-          <View style={[styles.entryCard, styles.discoveryCard]}>
-            <View style={styles.entryHeader}>
-              <View style={styles.categoryContainer}>
-                <Text style={styles.categoryIcon}>💡</Text>
-                <Text style={styles.categoryText}>Discovery</Text>
-              </View>
-              <Text style={styles.entryDate}>May 25, 2025</Text>
-            </View>
-            
-            <Text style={styles.entryTitle}>New insight from Genesis</Text>
-            <Text style={styles.entryContent}>
-              Saw how God's promises never fail, even when it see...
-            </Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.verseContainer}>
-                <Text style={styles.verseIcon}>📖</Text>
-                <Text style={styles.verseText}>Genesis 21:1</Text>
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+          ) : (
+            filteredJournals.map((journal) => {
+              const journalCategoryName = getCategoryName(journal.category || journal.note_categorie_id);
+              const categoryColor = getCategoryColor(journal.category || journal.note_categorie_id);
+              
+              return (
+                <View key={journal.id} style={[styles.entryCard, { borderLeftColor: categoryColor }]}>
+                  <View style={styles.entryHeader}>
+                    <View style={styles.categoryContainer}>
+                      <Text style={styles.categoryIcon}>📝</Text>
+                      <Text style={styles.categoryText}>{journalCategoryName}</Text>
+                    </View>
+                    <Text style={styles.entryDate}>{journal.date}</Text>
+                  </View>
+                  <Text style={styles.entryTitle}>{journal.title}</Text>
+                  <Text style={styles.entryContent}>{journal.content}</Text>
+                  <View style={styles.entryFooter}>
+                    <View style={styles.verseContainer}>
+                      <Text style={styles.verseIcon}>📖</Text>
+                      <Text style={styles.verseText}>{journal.verse}</Text>
+                    </View>
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity 
+                        style={styles.actionButton}
+                        onPress={() => handleEditJournal(journal)}
+                      >
+                        <Text style={styles.actionButtonText}>✏️</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.actionButton}
+                        onPress={() => handleDeleteJournal(journal.id)}
+                      >
+                        <Text style={styles.actionButtonText}>🗑️</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          )}
         </View>
       </ScrollView>
+      
       <UserNoteModal
         visible={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingJournal(null);
+        }}
         onSave={handleSaveNote}
+        onAuthRequired={() => setShowAuthModal(true)}
+        initialNote={editingJournal}
       />
     </SafeAreaView>
   );
@@ -285,6 +362,18 @@ const styles = StyleSheet.create({
   entriesContainer: {
     paddingBottom: 20,
   },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
   entryCard: {
     backgroundColor: 'white',
     borderRadius: 16,
@@ -299,22 +388,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-  },
-  gratitudeCard: {
-    borderLeftColor: '#E91E63',
-    backgroundColor: '#FDEDF2',
-  },
-  prayerCard: {
-    borderLeftColor: '#2196F3',
-    backgroundColor: '#F0F8FF',
-  },
-  reflectionCard: {
-    borderLeftColor: '#FF9800',
-    backgroundColor: '#FFF8E1',
-  },
-  discoveryCard: {
-    borderLeftColor: '#4CAF50',
-    backgroundColor: '#F1F8E9',
   },
   entryHeader: {
     flexDirection: 'row',
@@ -365,6 +438,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
+    flex: 1,
+    marginRight: 12,
   },
   verseIcon: {
     fontSize: 14,
@@ -374,6 +449,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'white',
     fontWeight: '500',
+    flex: 1,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -385,10 +461,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 16,
   },
   actionButtonText: {
     fontSize: 16,
-    color: '#A07553',
   },
 });
 

@@ -12,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // API function
 export const fetchNoteCategories = async () => {
@@ -45,6 +46,7 @@ const UserNoteModal = ({
   visible,
   onClose,
   onSave,
+  onAuthRequired,
   initialNote = null,
   sourceType = 'manual',
 }) => {
@@ -106,52 +108,66 @@ const UserNoteModal = ({
   }, [initialNote, visible, categories]);
 
  // In JournalModal.jsx, replace the handleSave function
-const handleSave = async () => {
-  if (!title.trim()) {
-    Alert.alert('Required Field', 'Please enter a title for your note.');
-    return;
-  }
-  if (!content.trim()) {
-    Alert.alert('Required Field', 'Please enter some content for your note.');
-    return;
-  }
-
-  // TODO: Replace with actual user ID from your auth context/session
-  const user_id = 1;
-
-  const noteData = {
-    user_id,
-    title: title.trim(),
-    content: content.trim(),
-    note_categorie_id: category,
-    date: new Date().toISOString().split('T')[0],
-    stark_id: sourceType === 'bible_study' ? null : null, // ← Fixed undefined variable
-  };
-
-  try {
-    const response = await fetch('http://localhost:8000/api/user-notes', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // Add Authorization header if needed
-      },
-      body: JSON.stringify(noteData),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Server response:', errorText);
-      throw new Error(`Failed to save note: ${response.status}`);
+  const handleSave = async () => {
+    if (!title.trim()) {
+      Alert.alert('Required Field', 'Please enter a title for your note.');
+      return;
     }
 
-    const savedNote = await response.json();
-    onSave(savedNote);
-    handleClose();
-  } catch (error) {
-    console.error('Save error:', error);
-    Alert.alert('Error', error.message);
-  }
-};
+    if (!content.trim()) {
+      Alert.alert('Required Field', 'Please enter some content for your note.');
+      return;
+    }
+
+    try {
+      const isAuthenticated = await AsyncStorage.getItem('isAuthenticated');
+      const userData = await AsyncStorage.getItem('user');
+
+      if (!isAuthenticated || !userData) {
+        // If user is not authenticated, trigger auth modal
+        if (onAuthRequired) onAuthRequired();
+        return;
+      }
+
+      const user = JSON.parse(userData);
+      const user_id = user?.id;
+
+      if (!user_id) {
+        Alert.alert('Error', 'User ID not found.');
+        return;
+      }
+
+      const noteData = {
+        user_id,
+        title: title.trim(),
+        content: content.trim(),
+        note_categorie_id: category,
+        date: new Date().toISOString().split('T')[0],
+        stark_id: sourceType === 'bible_study' ? null : null,
+      };
+
+      const response = await fetch('http://localhost:8000/api/user-notes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(noteData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server response:', errorText);
+        throw new Error(`Failed to save note: ${response.status}`);
+      }
+
+      const savedNote = await response.json();
+      onSave(savedNote);
+      handleClose();
+    } catch (error) {
+      console.error('Save error:', error);
+      Alert.alert('Error', error.message);
+    }
+  };
   const handleClose = () => {
     setTitle('');
     setContent('');
