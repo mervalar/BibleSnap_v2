@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,367 +6,924 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
+  TextInput,
+  Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import UserNoteModal from '../components/JournalModal'; 
+import { fetchNoteCategories } from '../api/noteCategories';
+import { fetchJournals, updateJournal, deleteJournal, createJournal } from '../api/journalApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import JournalPreview from '../components/JournalPreview';
 
-const JournalApp = () => {
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Responsive dimensions
+const getResponsiveDimensions = () => {
+  const isTablet = screenWidth >= 768;
+  const isLargePhone = screenWidth >= 414;
+  
+  return {
+    headerHeight: isTablet ? 80 : 60,
+    cardPadding: isTablet ? 24 : 16,
+    fontSize: {
+      title: isTablet ? 20 : 18,
+      subtitle: isTablet ? 16 : 14,
+      body: isTablet ? 16 : 14,
+      caption: isTablet ? 14 : 12,
+    },
+    spacing: {
+      xs: 4,
+      sm: 8,
+      md: 16,
+      lg: 24,
+      xl: 32,
+    },
+    iconSize: {
+      small: isTablet ? 20 : 16,
+      medium: isTablet ? 24 : 20,
+      large: isTablet ? 32 : 24,
+    }
+  };
+};
+
+// Professional color palette with your primary color
+const COLORS = {
+  primary: '#A07553',
+  primaryLight: '#B8956D',
+  primaryDark: '#8A6344',
+  background: '#FFFFFF',
+  surface: '#FAFAFA',
+  surfaceElevated: '#FFFFFF',
+  text: {
+    primary: '#1A1A1A',
+    secondary: '#666666',
+    tertiary: '#999999',
+  },
+  border: {
+    light: '#E0E0E0',
+    medium: '#CCCCCC',
+    strong: '#B0B0B0',
+  },
+  semantic: {
+    success: '#4CAF50',
+    warning: '#FF9800',
+    error: '#F44336',
+    info: '#2196F3',
+  },
+  overlay: 'rgba(160, 117, 83, 0.1)',
+};
+
+// Enhanced color table for categories with better contrast
+const CATEGORY_COLORS = [
+  '#E91E63', '#2196F3', '#FF9800', '#4CAF50', '#9C27B0', 
+  '#F44336', '#00BCD4', '#8BC34A', '#FF5722', '#3F51B5',
+  '#FFEB3B', '#795548', '#607D8B', '#FFC107', '#009688'
+];
+
+const JournalApp = ({ navigation }) => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [journals, setJournals] = useState([]);
+  const [editingJournal, setEditingJournal] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [selectedJournal, setSelectedJournal] = useState(null);
+
+  const dimensions = getResponsiveDimensions();
+
+  // Function to get category color by ID or name
+  const getCategoryColor = (categoryIdentifier) => {
+    const categoryIndex = categories.findIndex(cat => 
+      cat.id === categoryIdentifier || 
+      cat.name === categoryIdentifier ||
+      cat.id.toString() === categoryIdentifier?.toString()
+    );
+    return categoryIndex >= 0 ? CATEGORY_COLORS[categoryIndex % CATEGORY_COLORS.length] : COLORS.primary;
+  };
+
+  // Function to get category data by ID or name
+  const getCategoryData = (categoryIdentifier) => {
+    return categories.find(cat => 
+      cat.id === categoryIdentifier || 
+      cat.name === categoryIdentifier ||
+      cat.id.toString() === categoryIdentifier?.toString()
+    );
+  };
+
+  // Function to get category name from ID or return name if already a name
+  const getCategoryName = (categoryIdentifier) => {
+    const category = getCategoryData(categoryIdentifier);
+    return category ? category.name : categoryIdentifier;
+  };
+
+  // Initialize user data
+  useEffect(() => {
+    const initializeUser = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          const parsedUser = JSON.parse(userData);
+          setUserId(parsedUser.id);
+        }
+      } catch (error) {
+        console.error('Error getting user data:', error);
+      }
+    };
+    initializeUser();
+  }, []);
+
+  // Load categories
+  useEffect(() => {
+    const getCategories = async () => {
+      try {
+        const data = await fetchNoteCategories();
+        console.log('Loaded categories:', data);
+        setCategories(data);
+      } catch (error) {
+        console.error('Error loading categories:', error);
+        Alert.alert('Error', 'Failed to load categories');
+      }
+    };
+    getCategories();
+  }, []);
+
+  // Load journals
+  useEffect(() => {
+    const getJournals = async () => {
+      if (!userId || categories.length === 0) return;
+      
+      try {
+        setLoading(true);
+        const data = await fetchJournals(userId);
+        console.log('Loaded journals:', data);
+        
+        // Process journals to ensure consistent category naming
+        const processedJournals = data.map(journal => ({
+          ...journal,
+          category: getCategoryName(journal.category || journal.note_categorie_id)
+        }));
+        
+        setJournals(processedJournals);
+      } catch (error) {
+        console.error('Error loading journals:', error);
+        Alert.alert('Error', 'Failed to load journals');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getJournals();
+  }, [userId, categories]);
+
+  const handleSaveNote = async (noteData) => {
+    try {
+      setLoading(true);
+
+      const apiData = {
+        ...noteData,
+        user_id: userId,
+        note_categorie_id: noteData.note_categorie_id || noteData.category,
+      };
+
+      if (editingJournal) {
+        // Update existing journal
+        console.log('Updating journal:', editingJournal.id, apiData);
+        
+        const updatedJournal = await updateJournal(editingJournal.id, apiData);
+        
+        // Update local state
+        setJournals(journals.map(journal => 
+          journal.id === editingJournal.id 
+            ? { 
+                ...journal, 
+                ...apiData, 
+                category: getCategoryName(apiData.note_categorie_id || apiData.category) 
+              } 
+            : journal
+        ));
+        
+        setEditingJournal(null);
+        Alert.alert('Success', 'Journal updated successfully');
+      } else {
+        // Create new journal
+        console.log('Creating new journal:', apiData);
+        
+        const newJournal = await createJournal(apiData);
+        
+        // Add to local state
+        const processedJournal = {
+          ...newJournal,
+          category: getCategoryName(newJournal.note_categorie_id)
+        };
+        
+        setJournals([processedJournal, ...journals]);
+        Alert.alert('Success', 'Journal created successfully');
+      }
+      
+      setModalVisible(false);
+    } catch (error) {
+      console.error('Error saving journal:', error);
+      Alert.alert('Error', 'Failed to save journal. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle journal preview
+  const handleViewJournal = (journal) => {
+    setSelectedJournal(journal);
+    setPreviewVisible(true);
+  };
+  
+  const handleEditJournal = (journal) => {
+    console.log('Editing journal:', journal);
+    setEditingJournal(journal);
+    setModalVisible(true);
+  };
+
+  const handleDeleteJournal = (journalId) => {
+    Alert.alert(
+      'Delete Journal',
+      'Are you sure you want to delete this journal entry?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              console.log('Deleting journal:', journalId);
+              
+              await deleteJournal(journalId);
+              
+              // Remove from local state
+              setJournals(journals.filter(journal => journal.id !== journalId));
+              
+              Alert.alert('Success', 'Journal deleted successfully');
+            } catch (error) {
+              console.error('Error deleting journal:', error);
+              Alert.alert('Error', 'Failed to delete journal. Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleAddNew = () => {
+    setEditingJournal(null);
+    setModalVisible(true);
+  };
+
+  const handleBackPress = () => {
+    if (navigation && navigation.goBack) {
+      navigation.goBack();
+    }
+  };
+
+  // Enhanced category filter handler
+  const handleCategoryFilter = (categoryName) => {
+    console.log('Filtering by category:', categoryName);
+    setActiveCategory(categoryName);
+  };
+
+  // Enhanced filter journals based on active category and search query
+  const filteredJournals = journals.filter(journal => {
+    // Filter by category
+    let categoryMatch = true;
+    if (activeCategory !== 'All') {
+      const journalCategoryName = getCategoryName(journal.category || journal.note_categorie_id);
+      categoryMatch = journalCategoryName === activeCategory;
+    }
+
+    // Filter by search query
+    let searchMatch = true;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      searchMatch = 
+        journal.title?.toLowerCase().includes(query) ||
+        journal.content?.toLowerCase().includes(query) ||
+        journal.verse?.toLowerCase().includes(query) ||
+        getCategoryName(journal.category || journal.note_categorie_id)?.toLowerCase().includes(query);
+    }
+
+    return categoryMatch && searchMatch;
+  });
+
+  if (loading && journals.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={[styles.loadingText, { fontSize: dimensions.fontSize.body }]}>
+            Loading journals...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* Loading overlay */}
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContent}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={[styles.loadingOverlayText, { fontSize: dimensions.fontSize.body }]}>
+              Processing...
+            </Text>
+          </View>
+        </View>
+      )}
+      
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Journal</Text>
-        <TouchableOpacity style={styles.searchIcon}>
-          <Text style={styles.searchText}>🔍</Text>
+      <View style={[styles.header, { height: dimensions.headerHeight }]}>
+        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+          <Ionicons name="arrow-back" size={dimensions.iconSize.medium} color={COLORS.primary} />
         </TouchableOpacity>
+        <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}>
+          My Journals
+        </Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={[styles.headerActionButton, showSearch && styles.headerActionButtonActive]} 
+            onPress={() => setShowSearch(!showSearch)}
+          >
+            <Ionicons 
+              name="search" 
+              size={dimensions.iconSize.medium} 
+              color={showSearch ? COLORS.background : COLORS.primary} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addButton} onPress={handleAddNew}>
+            <Ionicons name="add" size={dimensions.iconSize.medium} color={COLORS.background} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView style={styles.content}>
-        {/* Stats Section */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>This month</Text>
-            <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statText}>Entries</Text>
-            <View style={styles.editIcon}>
-              <Text>✏️</Text>
-            </View>
-          </View>
-          
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Favorite verse</Text>
-            <Text style={styles.verseText}>📖 Psalm 23:1</Text>
+      {/* Search Bar */}
+      {showSearch && (
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputContainer}>
+            <Ionicons name="search" size={dimensions.iconSize.small} color={COLORS.text.tertiary} />
+            <TextInput
+              style={[styles.searchInput, { fontSize: dimensions.fontSize.body }]}
+              placeholder="Search journals, titles, content..."
+              placeholderTextColor={COLORS.text.tertiary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus={true}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity 
+                style={styles.clearSearchButton}
+                onPress={() => setSearchQuery('')}
+              >
+                <Ionicons name="close" size={dimensions.iconSize.small} color={COLORS.text.secondary} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
+      )}
 
-        {/* Filter Buttons */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity style={styles.activeFilter}>
-            <Text style={styles.activeFilterText}>All Entries</Text>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Filter Tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterContainer}
+          contentContainerStyle={styles.filterContentContainer}
+        >
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeCategory === 'All' ? styles.activeFilter : styles.inactiveFilter
+            ]}
+            onPress={() => handleCategoryFilter('All')}
+          >
+            <Text style={[
+              styles.filterText,
+              { fontSize: dimensions.fontSize.caption },
+              activeCategory === 'All' ? styles.activeFilterText : styles.inactiveFilterText
+            ]}>
+              All
+            </Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>❤️ Gratitude</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>🙏 Prayer</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inactiveFilter}>
-            <Text style={styles.inactiveFilterText}>💡</Text>
-          </TouchableOpacity>
-        </View>
+          {categories.map((cat) => (
+            <TouchableOpacity
+              key={cat.id || cat.name}
+              style={[
+                styles.filterButton,
+                activeCategory === cat.name ? styles.activeFilter : styles.inactiveFilter
+              ]}
+              onPress={() => handleCategoryFilter(cat.name)}
+            >
+              <View style={[
+                styles.categoryDot, 
+                { backgroundColor: getCategoryColor(cat.id || cat.name) }
+              ]} />
+              <Text style={[
+                styles.filterText,
+                { fontSize: dimensions.fontSize.caption },
+                activeCategory === cat.name ? styles.activeFilterText : styles.inactiveFilterText
+              ]}>
+                {cat.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
-            <View style={styles.progressFill} />
+        {/* Search Results Info */}
+        {(searchQuery.trim() || activeCategory !== 'All') && (
+          <View style={styles.resultsInfo}>
+            <Text style={[styles.resultsText, { fontSize: dimensions.fontSize.caption }]}>
+              {filteredJournals.length} result{filteredJournals.length !== 1 ? 's' : ''} 
+              {searchQuery.trim() && ` for "${searchQuery}"`}
+              {activeCategory !== 'All' && ` in "${activeCategory}"`}
+            </Text>
           </View>
-        </View>
+        )}
 
         {/* Journal Entries */}
         <View style={styles.entriesContainer}>
-          {/* Today Entry */}
-          <View style={styles.entryCard}>
-            <View style={styles.entryHeader}>
-              <View>
-                <Text style={styles.entryDate}>Today</Text>
-                <Text style={styles.entryTitle}>Morning Reflection</Text>
+          {filteredJournals.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconContainer}>
+                <Ionicons name="journal-outline" size={64} color={COLORS.border.medium} />
               </View>
-              <View style={styles.bookmark}>
-                <Text style={styles.bookmarkIcon}>🔖</Text>
-              </View>
+              <Text style={[styles.emptyTitle, { fontSize: dimensions.fontSize.subtitle }]}>
+                {searchQuery.trim() 
+                  ? 'No matches found' 
+                  : activeCategory === 'All' 
+                    ? 'Start your journey' 
+                    : 'No entries in this category'
+                }
+              </Text>
+              <Text style={[styles.emptyText, { fontSize: dimensions.fontSize.body }]}>
+                {searchQuery.trim() 
+                  ? `No journals found matching "${searchQuery}"` 
+                  : activeCategory === 'All' 
+                    ? 'Create your first journal entry to begin documenting your thoughts and experiences.' 
+                    : `No journals found in "${activeCategory}" category. Try a different category or create a new entry.`
+                }
+              </Text>
+              {(searchQuery.trim() || activeCategory !== 'All') && (
+                <TouchableOpacity 
+                  style={styles.clearFiltersButton}
+                  onPress={() => {
+                    setSearchQuery('');
+                    setActiveCategory('All');
+                  }}
+                >
+                  <Text style={[styles.clearFiltersText, { fontSize: dimensions.fontSize.caption }]}>
+                    Clear filters
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
-            
-            <Text style={styles.entryContent}>
-              Today I meditated on Psalm 23. The phrase "He restores my soul" spoke to me as I've been feeling overwhelmed lately...
-            </Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.tagContainer}>
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>Prayer</Text>
-                </View>
-                <View style={styles.insightTag}>
-                  <Text style={styles.insightTagText}>Insight</Text>
-                </View>
-              </View>
-              <Text style={styles.entryTime}>9:15 AM</Text>
-            </View>
-          </View>
-
-          {/* Yesterday Entry */}
-          <View style={styles.entryCard}>
-            <View style={styles.entryHeader}>
-              <View>
-                <Text style={styles.entryDate}>Yesterday</Text>
-                <Text style={styles.entryTitle}>Evening Thanks</Text>
-              </View>
-            </View>
-            
-            <Text style={styles.entryContent}>
-              I'm thankful for the peace I found in today's reading. John 14:27 reminded me...
-            </Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.tagContainer}>
-                <View style={styles.gratitudeTag}>
-                  <Text style={styles.gratitudeTagText}>Gratitude</Text>
-                </View>
-              </View>
-              <Text style={styles.entryTime}>10:32 PM</Text>
-            </View>
-          </View>
-
-          {/* May 12 Entry */}
-          <View style={styles.entryCard}>
-            <View style={styles.entryHeader}>
-              <View>
-                <Text style={styles.entryDate}>May 12, 2023</Text>
-                <Text style={styles.entryTitle}>Breakthrough Moment</Text>
-              </View>
-            </View>
-            
-            <Text style={styles.entryContent}>
-              Today's sermon on Romans 8:28 helped me understand how God works all things...
-            </Text>
-            
-            <View style={styles.entryFooter}>
-              <View style={styles.tagContainer}>
-                <View style={styles.insightTag}>
-                  <Text style={styles.insightTagText}>Insight</Text>
-                </View>
-              </View>
-              <Text style={styles.entryTime}>4:15 PM</Text>
-            </View>
-          </View>
+          ) : (
+            filteredJournals.map((journal) => {
+              const journalCategoryName = getCategoryName(journal.category || journal.note_categorie_id);
+              const categoryColor = getCategoryColor(journal.category || journal.note_categorie_id);
+              
+              return (
+                <TouchableOpacity 
+                  key={journal.id} 
+                  style={[styles.entryCard, { borderLeftColor: categoryColor }]}
+                  onPress={() => handleViewJournal(journal)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.entryHeader}>
+                    <View style={styles.categoryContainer}>
+                      <View style={[styles.categoryIndicator, { backgroundColor: categoryColor }]} />
+                      <Text style={[styles.categoryText, { fontSize: dimensions.fontSize.caption }]}>
+                        {journalCategoryName}
+                      </Text>
+                    </View>
+                    <Text style={[styles.entryDate, { fontSize: dimensions.fontSize.caption }]}>
+                      {journal.date}
+                    </Text>
+                  </View>
+                  
+                  <Text style={[styles.entryTitle, { fontSize: dimensions.fontSize.subtitle }]} numberOfLines={2}>
+                    {journal.title}
+                  </Text>
+                  
+                  <Text style={[styles.entryContent, { fontSize: dimensions.fontSize.body }]} numberOfLines={3}>
+                    {journal.content}
+                  </Text>
+                  
+                  <View style={styles.entryFooter}>
+                    <View style={styles.verseContainer}>
+                      <Ionicons name="book-outline" size={dimensions.iconSize.small} color={COLORS.primary} />
+                      <Text style={[styles.verseText, { fontSize: dimensions.fontSize.caption }]} numberOfLines={1}>
+                        {journal.verse}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity 
+                        style={styles.actionButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleEditJournal(journal);
+                        }}
+                        disabled={loading}
+                      >
+                        <Ionicons name="create-outline" size={dimensions.iconSize.small} color={COLORS.primary} />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={[styles.actionButton, styles.deleteButton]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteJournal(journal.id);
+                        }}
+                        disabled={loading}
+                      >
+                        <Ionicons name="trash-outline" size={dimensions.iconSize.small} color={COLORS.semantic.error} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
       </ScrollView>
-
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab}>
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      
+      <UserNoteModal
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingJournal(null);
+        }}
+        onSave={handleSaveNote}
+        onAuthRequired={() => setShowAuthModal(true)}
+        initialNote={editingJournal}
+      />
+      
+      <JournalPreview
+        visible={previewVisible}
+        onClose={() => setPreviewVisible(false)}
+        journal={selectedJournal}
+        categories={categories}
+        onEdit={(journal) => {
+          setPreviewVisible(false);
+          handleEditJournal(journal);
+        }}
+        onDelete={(journalId) => {
+          setPreviewVisible(false);
+          handleDeleteJournal(journalId);
+        }}
+      />
     </SafeAreaView>
   );
 };
 
+const dimensions = getResponsiveDimensions();
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+  },
+  loadingText: {
+    marginTop: dimensions.spacing.md,
+    color: COLORS.text.secondary,
+    fontWeight: '500',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingContent: {
+    backgroundColor: COLORS.surfaceElevated,
+    padding: dimensions.spacing.xl,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  loadingOverlayText: {
+    marginTop: dimensions.spacing.md,
+    color: COLORS.text.primary,
+    fontWeight: '500',
   },
   header: {
-    backgroundColor: '#AE796D',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    backgroundColor: COLORS.surfaceElevated,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    letterSpacing: -0.5,
   },
-  searchIcon: {
-    padding: 5,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: dimensions.spacing.sm,
   },
-  searchText: {
-    fontSize: 20,
-    color: 'white',
+  headerActionButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: COLORS.surface,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+  },
+  headerActionButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  addButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: COLORS.primary,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  searchContainer: {
+    backgroundColor: COLORS.surfaceElevated,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+    minHeight: 48,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: dimensions.spacing.sm,
+    color: COLORS.text.primary,
+    fontWeight: '400',
+  },
+  clearSearchButton: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.border.light,
+    borderRadius: 12,
+    marginLeft: dimensions.spacing.sm,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  statCard: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 15,
-    flex: 0.48,
-    position: 'relative',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 5,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  statText: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-  },
-  verseText: {
-    fontSize: 16,
-    color: '#A07553',
-    fontWeight: '600',
-    marginTop: 10,
-  },
-  editIcon: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
+    backgroundColor: COLORS.surface,
   },
   filterContainer: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
+  },
+  filterContentContainer: {
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.md,
+    alignItems: 'center',
+  },
+  filterButton: {
     flexDirection: 'row',
-    marginBottom: 10,
+    alignItems: 'center',
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: 20,
+    marginRight: dimensions.spacing.sm,
+    borderWidth: 1,
+    minHeight: 36,
   },
   activeFilter: {
-    backgroundColor: '#AE796D',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  activeFilterText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '500',
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   inactiveFilter: {
-    backgroundColor: 'white',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 10,
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border.medium,
+  },
+  filterText: {
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  activeFilterText: {
+    color: COLORS.background,
   },
   inactiveFilterText: {
-    color: '#666',
-    fontSize: 14,
+    color: COLORS.text.secondary,
   },
-  progressContainer: {
-    marginBottom: 20,
+  categoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: dimensions.spacing.xs,
   },
-  progressBar: {
-    height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
+  resultsInfo: {
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    backgroundColor: COLORS.surfaceElevated,
   },
-  progressFill: {
-    height: 4,
-    backgroundColor: '#A07553',
-    borderRadius: 2,
-    width: '60%',
+  resultsText: {
+    color: COLORS.text.secondary,
+    fontWeight: '500',
   },
   entriesContainer: {
-    paddingBottom: 100,
+    padding: dimensions.spacing.md,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: dimensions.spacing.xl * 2,
+    paddingHorizontal: dimensions.spacing.lg,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 60,
+    marginBottom: dimensions.spacing.lg,
+    borderWidth: 2,
+    borderColor: COLORS.border.light,
+  },
+  emptyTitle: {
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: dimensions.spacing.sm,
+    textAlign: 'center',
+  },
+  emptyText: {
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: dimensions.spacing.lg,
+  },
+  clearFiltersButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: 24,
+  },
+  clearFiltersText: {
+    color: COLORS.background,
+    fontWeight: '600',
   },
   entryCard: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 15,
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: 16,
+    padding: dimensions.cardPadding,
+    marginBottom: dimensions.spacing.md,
     borderLeftWidth: 4,
-    borderLeftColor: '#AE796D',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
   },
   entryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10,
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.md,
+  },
+  categoryContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categoryIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: dimensions.spacing.sm,
+  },
+  categoryText: {
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   entryDate: {
-    fontSize: 14,
-    color: '#A07553',
+    color: COLORS.text.tertiary,
     fontWeight: '500',
   },
   entryTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 2,
-  },
-  bookmark: {
-    padding: 5,
-  },
-  bookmarkIcon: {
-    fontSize: 16,
-    color: '#AE796D',
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginBottom: dimensions.spacing.sm,
+    lineHeight: 24,
   },
   entryContent: {
-    fontSize: 14,
-    color: '#666',
+    color: COLORS.text.secondary,
     lineHeight: 20,
-    marginBottom: 15,
+    marginBottom: dimensions.spacing.md,
   },
   entryFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  tagContainer: {
+  verseContainer: {
     flexDirection: 'row',
-  },
-  tag: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    alignItems: 'center',
+    backgroundColor: '#DDBBA1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
-    marginRight: 8,
+    flex: 1,
+    marginRight: 12,
   },
-  tagText: {
+  verseIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  verseText: {
     fontSize: 12,
-    color: '#1976D2',
+    color: '#333',
+    fontWeight: '500',
+    flex: 1,
   },
-  insightTag: {
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  insightTagText: {
-    fontSize: 12,
-    color: '#F57C00',
-  },
-  gratitudeTag: {
-    backgroundColor: '#FCE4EC',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  gratitudeTagText: {
-    fontSize: 12,
-    color: '#C2185B',
-  },
-  entryTime: {
-    fontSize: 12,
-    color: '#999',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    backgroundColor: '#AE796D',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  actionButton: {
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    backgroundColor: '#EEDED2',
+    borderRadius: 18,
   },
-  fabText: {
-    fontSize: 24,
-    color: 'white',
-    fontWeight: 'bold',
+  deleteButton: {
+    backgroundColor: '#ffebee',
+  },
+  actionButtonText: {
+    fontSize: 16,
   },
 });
+
 export default JournalApp;

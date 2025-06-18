@@ -1,23 +1,73 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView,Image } from 'react-native';
-import styles from './../styles/LandingPage.styles'; 
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient'; // Add this import
+import styles from './../styles/LandingPage.styles';
 
-const LandingPage = () => {
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
+const LandingPage = ({navigation}) => {
+  const [primaryButtonAnim] = useState(new Animated.Value(1));
+  const [secondaryButtonAnim] = useState(new Animated.Value(1));
+
+  const handlePrimaryPressIn = () => {
+    Animated.spring(primaryButtonAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePrimaryPressOut = () => {
+    Animated.spring(primaryButtonAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handleSecondaryPressIn = () => {
+    Animated.spring(secondaryButtonAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handleSecondaryPressOut = () => {
+    Animated.spring(secondaryButtonAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.appIcon}>
-        <Image
-          source={require('../assets/Biblesnap.png')}
-          style={{ width: 100, height: 100, borderRadius: 30 }}
-          resizeMode="contain"
-        />
-       </View>
-        
-        {/* App Title */}
-        <Text style={styles.appTitle}>BibleSnap</Text>
-        <Text style={styles.appSubtitle}>Your Daily Scripture Companion</Text>
-      </View>
+      {/* Gradient Header Background */}
+      <LinearGradient
+        colors={['#AE796D', '#A07553', '#8B7355']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientHeader}
+      >
+        <View style={styles.header}>
+          <View style={styles.appIcon}>
+            <Image
+              source={require('../assets/Biblesnap.png')}
+              style={{ width: 100, height: 100, borderRadius: 30 }}
+              resizeMode="contain"
+            />
+          </View>
+          
+          {/* App Title */}
+          <Text style={styles.appTitleOnGradient}>BibleSnap</Text>
+          <Text style={styles.appSubtitleOnGradient}>Your Daily Scripture Companion</Text>
+        </View>
+      </LinearGradient>
 
       <View style={styles.contentCard}>
         <Text style={styles.welcomeTitle}>Welcome to BibleSnap!</Text>
@@ -28,6 +78,12 @@ const LandingPage = () => {
         <View style={styles.featureGrid}>
           <View style={styles.featureItem}>
             <View style={styles.featureIconContainer}>
+              {/* Book Icon */}
+              <View style={{ width: 20, height: 16, backgroundColor: 'white', borderRadius: 2 }}>
+                <View style={{ width: '100%', height: 2, backgroundColor: '#AE796D', marginTop: 4 }} />
+                <View style={{ width: '80%', height: 2, backgroundColor: '#AE796D', marginTop: 2 }} />
+                <View style={{ width: '90%', height: 2, backgroundColor: '#AE796D', marginTop: 2 }} />
+              </View>
             </View>
             <Text style={styles.featureTitle}>Bible Study</Text>
             <Text style={styles.featureDescription}>Read, listen, and explore Scripture daily</Text>
@@ -35,7 +91,24 @@ const LandingPage = () => {
 
           <View style={styles.featureItem}>
             <View style={styles.featureIconContainer}>
-              {/* <DollarSign className="w-6 h-6 text-white" /> */}
+              {/* Prayer Hands Icon */}
+              <View style={{ 
+                width: 16, 
+                height: 20, 
+                backgroundColor: 'white', 
+                borderRadius: 8,
+                position: 'relative'
+              }}>
+                <View style={{
+                  position: 'absolute',
+                  top: 4,
+                  left: 2,
+                  width: 12,
+                  height: 12,
+                  backgroundColor: '#AE796D',
+                  borderRadius: 6,
+                }} />
+              </View>
             </View>
             <Text style={styles.featureTitle}>Prayer Tools</Text>
             <Text style={styles.featureDescription}>Track prayers and set reminders</Text>
@@ -44,7 +117,19 @@ const LandingPage = () => {
           {/* Journal */}
           <View style={styles.featureItem}>
             <View style={styles.featureIconContainer}>
-              {/* <Edit3 className="w-6 h-6 text-white" /> */}
+              {/* Journal Icon */}
+              <View style={{ 
+                width: 18, 
+                height: 20, 
+                backgroundColor: 'white', 
+                borderRadius: 2,
+                borderLeftWidth: 3,
+                borderLeftColor: '#AE796D'
+              }}>
+                <View style={{ width: '80%', height: 2, backgroundColor: '#AE796D', marginTop: 4, marginLeft: 2 }} />
+                <View style={{ width: '60%', height: 2, backgroundColor: '#AE796D', marginTop: 2, marginLeft: 2 }} />
+                <View style={{ width: '70%', height: 2, backgroundColor: '#AE796D', marginTop: 2, marginLeft: 2 }} />
+              </View>
             </View>
             <Text style={styles.featureTitle}>Journal</Text>
             <Text style={styles.featureDescription}>Document your spiritual journey</Text>
@@ -53,7 +138,32 @@ const LandingPage = () => {
           {/* AI Assistant */}
           <View style={styles.featureItem}>
             <View style={styles.featureIconContainer}>
-              {/* <Crown className="w-6 h-6 text-white" /> */}
+              {/* AI Icon */}
+              <View style={{ 
+                width: 20, 
+                height: 20, 
+                backgroundColor: 'white', 
+                borderRadius: 10,
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
+                <View style={{ 
+                  width: 12, 
+                  height: 12, 
+                  borderRadius: 6,
+                  borderWidth: 2,
+                  borderColor: '#AE796D',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}>
+                  <View style={{ 
+                    width: 4, 
+                    height: 4, 
+                    backgroundColor: '#AE796D', 
+                    borderRadius: 2 
+                  }} />
+                </View>
+              </View>
             </View>
             <Text style={styles.featureTitle}>AI Assistant</Text>
             <Text style={styles.featureDescription}>Get instant biblical insights</Text>
@@ -62,13 +172,44 @@ const LandingPage = () => {
 
         {/* Review Section */}
         <View style={styles.reviewSection}>
-          {/* <View style={styles.ratingContainer}>
+          <View style={styles.ratingContainer}>
             {[...Array(5)].map((_, i) => (
-              <svg key={i} className="w-5 h-5 text-yellow-400 fill-current" viewBox="0 0 24 24">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-              </svg>
+              <View key={i} style={{
+                width: 20,
+                height: 20,
+                marginHorizontal: 2,
+              }}>
+                <View style={{
+                  width: 0,
+                  height: 0,
+                  borderLeftWidth: 8,
+                  borderRightWidth: 8,
+                  borderBottomWidth: 6,
+                  borderLeftColor: 'transparent',
+                  borderRightColor: 'transparent',
+                  borderBottomColor: '#FFD700',
+                  transform: [{ rotate: '35deg' }],
+                  position: 'absolute',
+                  top: 4,
+                  left: 2,
+                }} />
+                <View style={{
+                  width: 0,
+                  height: 0,
+                  borderLeftWidth: 8,
+                  borderRightWidth: 8,
+                  borderBottomWidth: 6,
+                  borderLeftColor: 'transparent',
+                  borderRightColor: 'transparent',
+                  borderBottomColor: '#FFD700',
+                  transform: [{ rotate: '-35deg' }],
+                  position: 'absolute',
+                  top: 4,
+                  left: 2,
+                }} />
+              </View>
             ))}
-          </View> */}
+          </View>
           <View style={styles.reviewTextContainer}>
             <Text style={styles.reviewAuthor}>Changed my daily routine!</Text>
             <Text style={styles.reviewText}>
@@ -79,12 +220,18 @@ const LandingPage = () => {
 
         {/* Buttons */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.primaryButton}>
+          <AnimatedTouchableOpacity 
+            style={[
+              styles.primaryButton,
+              { transform: [{ scale: primaryButtonAnim }] }
+            ]}
+            onPressIn={handlePrimaryPressIn}
+            onPressOut={handlePrimaryPressOut}
+            activeOpacity={1}
+            onPress={() => navigation.navigate('Auth')}
+          >
             <Text style={styles.primaryButtonText}>Get Started</Text>
-          </TouchableOpacity>
-          <TouchableOpacity>
-            <Text style={styles.secondaryButtonText}>I already have an account</Text>
-          </TouchableOpacity>
+          </AnimatedTouchableOpacity>
         </View>
       </View>
 
