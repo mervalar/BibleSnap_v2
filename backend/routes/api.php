@@ -28,7 +28,18 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/starks', [StarkController::class, 'index']);
 Route::get('/note-categories', [NotecategoryController::class, 'index']);
+Route::get('/starks/random', [StarkController::class, 'getRandomStudy']);
 
-// User notes routes (you might want to protect these too)
-Route::post('/user-notes', [UserNoteController::class, 'store']);
-Route::get('/user-notes', [UserNoteController::class, 'index']);
+// User notes routes - Clean and simple
+Route::prefix('user-notes')->group(function () {
+    Route::post('/', [UserNoteController::class, 'store']);           // Create new note
+    Route::get('/', [UserNoteController::class, 'index']);            // Get all notes for user
+    Route::get('/{id}', [UserNoteController::class, 'show']);         // Get single note
+    Route::put('/{id}', [UserNoteController::class, 'update']);       // Update note
+    Route::delete('/{id}', [UserNoteController::class, 'destroy']);   // Delete note
+    
+    // Additional routes for filtering
+    Route::get('/category/{categoryId}', [UserNoteController::class, 'getNotesByCategory']);
+    Route::get('/stark/{starkId}', [UserNoteController::class, 'getNotesByStark']);
+    Route::get('/date/{date}', [UserNoteController::class, 'getNotesByDate']);
+});

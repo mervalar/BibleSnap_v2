@@ -6,9 +6,11 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\UserNote;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class UserNoteController extends Controller
 {
+    // Create a new note
     public function store(Request $request)
     {
         try {
@@ -22,6 +24,9 @@ class UserNoteController extends Controller
             ]);
 
             $note = UserNote::create($validated);
+            
+            // Load relationships for consistent response
+            $note->load('noteCategorie', 'stark');
 
             return response()->json($note, 201);
             
@@ -36,43 +41,83 @@ class UserNoteController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
-        
     }
-    // select all notes for a user
+
+    // Get all notes for a user
     public function index(Request $request)
     {
-        $userId = $request->query('user_id');
+        try {
+            $userId = $request->query('user_id');
 
-        if (!$userId) {
-            return response()->json(['message' => 'User ID is required'], 400);
+            if (!$userId) {
+                return response()->json(['message' => 'User ID is required'], 400);
+            }
+
+            $notes = UserNote::where('user_id', $userId)
+                ->with('noteCategorie', 'stark')
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json($notes);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch notes',
+                'error' => $e->getMessage()
+            ], 500);
         }
-    $notes = UserNote::where('user_id', $userId)->with('noteCategorie', 'stark')->get();
-        return response()->json($notes);
     }
+
+    // Get a single note by ID
     public function show($id)
     {
-        $note = UserNote::with('noteCategory', 'stark')->find($id);
+        try {
+            $note = UserNote::with('noteCategorie', 'stark')->find($id);
 
-        if (!$note) {
-            return response()->json(['message' => 'Note not found'], 404);
+            if (!$note) {
+                return response()->json(['message' => 'Note not found'], 404);
+            }
+
+            return response()->json($note);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch note',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        return response()->json($note);
     }
+
+    // Update a note - FIXED VERSION
     public function update(Request $request, $id)
     {
         try {
+            // Validate the incoming data
             $validated = $request->validate([
-                'title' => 'sometimes|required|string|max:100',
-                'content' => 'sometimes|required|string|max:1000',
-                'date' => 'sometimes|required|date',
+                'title' => 'required|string|max:100',
+                'content' => 'required|string|max:1000', 
+                'date' => 'required|date',
                 'stark_id' => 'nullable|integer',
+                'note_categorie_id' => 'required|exists:note_categorie,id',
             ]);
 
-            $note = UserNote::findOrFail($id);
-            $note->update($validated);
+            // Find the note
+            $note = UserNote::find($id);
+            
+            if (!$note) {
+                return response()->json(['message' => 'Note not found'], 404);
+            }
 
-            return response()->json($note, 200);
+            // Update the note
+            $note->update($validated);
+            
+            // Load relationships for response
+            $note->load('noteCategorie', 'stark');
+
+            return response()->json([
+                'message' => 'Note updated successfully',
+                'data' => $note
+            ], 200);
 
         } catch (ValidationException $e) {
             return response()->json([
@@ -86,46 +131,96 @@ class UserNoteController extends Controller
             ], 500);
         }
     }
+
+    // Delete a note - FIXED VERSION
     public function destroy($id)
     {
-        $note = UserNote::find($id);
+        try {
+            // Find the note
+            $note = UserNote::find($id);
 
-        if (!$note) {
-            return response()->json(['message' => 'Note not found'], 404);
+            if (!$note) {
+                return response()->json(['message' => 'Note not found'], 404);
+            }
+
+            // Delete the note
+            $note->delete();
+
+            return response()->json([
+                'message' => 'Note deleted successfully'
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to delete note',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $note->delete();
-
-        return response()->json(['message' => 'Note deleted successfully'], 200);
     }
+
+    // Get notes by category
     public function getNotesByCategory(Request $request, $categoryId)
     {
-        $notes = UserNote::where('note_categorie_id', $categoryId)->with('noteCategory', 'stark')->get();
+        try {
+            $notes = UserNote::where('note_categorie_id', $categoryId)
+                ->with('noteCategorie', 'stark')
+                ->get();
 
-        if ($notes->isEmpty()) {
-            return response()->json(['message' => 'No notes found for this category'], 404);
+            if ($notes->isEmpty()) {
+                return response()->json(['message' => 'No notes found for this category'], 404);
+            }
+
+            return response()->json($notes);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch notes',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        return response()->json($notes);
     }
+
+    // Get notes by stark verse
     public function getNotesByStark(Request $request, $starkId)
     {
-        $notes = UserNote::where('stark_id', $starkId)->with('noteCategory', 'stark')->get();
+        try {
+            $notes = UserNote::where('stark_id', $starkId)
+                ->with('noteCategorie', 'stark')
+                ->get();
 
-        if ($notes->isEmpty()) {
-            return response()->json(['message' => 'No notes found for this Stark'], 404);
+            if ($notes->isEmpty()) {
+                return response()->json(['message' => 'No notes found for this verse'], 404);
+            }
+
+            return response()->json($notes);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch notes',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        return response()->json($notes);
     }
+
+    // Get notes by date
     public function getNotesByDate(Request $request, $date)
     {
-        $notes = UserNote::whereDate('date', $date)->with('noteCategory', 'stark')->get();
+        try {
+            $notes = UserNote::whereDate('date', $date)
+                ->with('noteCategorie', 'stark')
+                ->get();
 
-        if ($notes->isEmpty()) {
-            return response()->json(['message' => 'No notes found for this date'], 404);
+            if ($notes->isEmpty()) {
+                return response()->json(['message' => 'No notes found for this date'], 404);
+            }
+
+            return response()->json($notes);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch notes',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        return response()->json($notes);
     }
 }

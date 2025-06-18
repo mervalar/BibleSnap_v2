@@ -62,14 +62,21 @@ export default function App() {
           component={Journal} 
           options={{ headerShown: false }} 
         />
-        <Stack.Screen name="BookChapters" component={BookChapters} />
+        <Stack.Screen name="BookChapters" 
+        options={{ headerShown: false }} 
+        component={BookChapters} 
+        />
         <Stack.Screen 
           name="BookContent" 
           component={BookContent}  
           options={{ headerShown: false }} 
         />
-        <Stack.Screen name="Profile" component={Profile} />
-        <Stack.Screen name="BibleStudyContent" component={BibleStudyContent} />
+        <Stack.Screen name="Profile" component={Profile}
+        options={{ headerShown: false }} 
+         />
+        <Stack.Screen name="BibleStudyContent" 
+        options={{ headerShown: false }} 
+        component={BibleStudyContent} />
       </Stack.Navigator>
     </NavigationContainer>
   );

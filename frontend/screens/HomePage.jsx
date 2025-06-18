@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthModal from '../components/AuthModal';
-
+import { fetchRandomStudy } from '../api/starksService'; // Import the new service function
 
 const HomePage = () => {
   const navigation = useNavigation();
@@ -14,6 +14,8 @@ const HomePage = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
+  const [todaysChallenge, setTodaysChallenge] = useState(null);
+  const [challengeLoading, setChallengeLoading] = useState(true);
 
   useEffect(() => {
     // Load verse of the day
@@ -25,6 +27,9 @@ const HomePage = () => {
       })
       .catch(() => setLoading(false));
 
+    // Load today's challenge (random bible study)
+    loadTodaysChallenge();
+
     // Check authentication on component mount
     checkUserAuth();
   }, []);
@@ -35,6 +40,67 @@ const HomePage = () => {
       checkUserAuth();
     }, [])
   );
+
+const loadChallengeProgress = async () => {
+  try {
+    const today = new Date().toDateString();
+    const progress = await AsyncStorage.getItem('challengeProgress');
+    const progressDate = await AsyncStorage.getItem('challengeProgressDate');
+    
+    if (progress && progressDate === today) {
+      return JSON.parse(progress);
+    }
+    return null;
+  } catch (error) {
+    console.error('Error loading challenge progress:', error);
+    return null;
+  }
+};
+
+  const loadTodaysChallenge = async () => {
+  try {
+    setChallengeLoading(true);
+    
+    const today = new Date().toDateString();
+    const cachedChallenge = await AsyncStorage.getItem('todaysChallenge');
+    const cachedDate = await AsyncStorage.getItem('challengeDate');
+    
+    // Load progress
+    const progressData = await loadChallengeProgress();
+    
+    if (cachedChallenge && cachedDate === today) {
+      // Use cached challenge if it's from today
+      const challenge = JSON.parse(cachedChallenge);
+      setTodaysChallenge({
+        ...challenge,
+        progress: progressData // Add progress data to the challenge
+      });
+    } else {
+      // Fetch new random study
+      const randomStudy = await fetchRandomStudy();
+      setTodaysChallenge({
+        ...randomStudy,
+        progress: null // No progress for new challenge
+      });
+      
+      // Cache the challenge for today
+      await AsyncStorage.setItem('todaysChallenge', JSON.stringify(randomStudy));
+      await AsyncStorage.setItem('challengeDate', today);
+      
+      // Clear previous progress if it exists
+      await AsyncStorage.removeItem('challengeProgress');
+    }
+  } catch (error) {
+    console.error('Error loading today\'s challenge:', error);
+    setTodaysChallenge({
+      title: "Share God's love with someone today",
+      category: { name: 'Daily Challenge' },
+      progress: null
+    });
+  } finally {
+    setChallengeLoading(false);
+  }
+};
 
   const checkUserAuth = async () => {
     try {
@@ -81,17 +147,43 @@ const HomePage = () => {
     checkUserAuth();
   };
 
-  const handleLogout = async () => {
-    try {
-      // Clear all stored data
-      await AsyncStorage.multiRemove(['user', 'isAuthenticated', 'token']);
-      setUser(null);
-      setUserToken(null);
-      setIsConnected(false);
-      console.log('User logged out');
-    } catch (error) {
-      console.error('Error logging out:', error);
+  // Helper function to check auth before navigation
+  const handleAuthenticatedAction = (action) => {
+    if (isConnected) {
+      action();
+    } else {
+      setShowAuthModal(true);
     }
+  };
+
+  const handleJournalPress = () => {
+    handleAuthenticatedAction(() => {
+      navigation.navigate('Journal');
+    });
+  };
+
+  const handleChallengePress = () => {
+    handleAuthenticatedAction(() => {
+      if (todaysChallenge && todaysChallenge.id) {
+        // Navigate to the specific bible study
+        navigation.navigate('BibleStudyContent', {
+          stark: todaysChallenge,
+          onProgressUpdate: (percent) => {
+            // Update local state when progress changes
+            setTodaysChallenge(prev => ({
+              ...prev,
+              progress: {
+                ...prev.progress,
+                percent
+              }
+            }));
+          }
+        });
+      } else {
+        // Navigate to bible studies list
+        navigation.navigate('BibleStudy');
+      }
+    });
   };
 
   // Show loading state while checking authentication
@@ -132,12 +224,7 @@ const HomePage = () => {
         {/* Show bell icon and logout when connected, login/register buttons when not */}
         {isConnected ? (
           <View style={styles.connectedActions}>
-            <TouchableOpacity style={styles.bellIcon}>
-              <Text style={styles.bellText}>🔔</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Text style={styles.logoutText}>Logout</Text>
-            </TouchableOpacity>
+            
           </View>
         ) : (
           <View style={styles.authButtons}>
@@ -175,10 +262,6 @@ const HomePage = () => {
           
           <View style={styles.verseActions}>
             <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionIcon}>♡</Text>
-              <Text style={styles.actionText}>Like</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
               <Text style={styles.actionIcon}>📖</Text>
               <Text style={styles.actionText}>Read Chapter</Text>
             </TouchableOpacity>
@@ -196,17 +279,17 @@ const HomePage = () => {
           
           <TouchableOpacity 
             style={[styles.quickActionCard, styles.studyCard]}
-            onPress={() => navigation.navigate('Journal')}
+            onPress={handleJournalPress}
           >
             <Text style={styles.quickActionIcon}>📚</Text>
             <Text style={styles.quickActionTitle}>Journal</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={[styles.quickActionCard, styles.assistantCard]}
-           onPress={() => navigation.navigate('Journal')}
+           onPress={() => navigation.navigate('BibleStudy')}
            >
             <Text style={styles.quickActionIcon}>👑</Text>
-            <Text style={styles.quickActionTitle}>AI Assistant</Text>
+            <Text style={styles.quickActionTitle}>Bible study</Text>
           </TouchableOpacity>
         </View>
 
@@ -236,17 +319,53 @@ const HomePage = () => {
           </View>
         </View>
 
-        {/* Today's Challenge */}
-        <TouchableOpacity style={styles.challengeCard} onPress={() => navigation.navigate('BibleStudy')}>
-          <Text style={styles.challengeTitle}>Today's Challenge</Text>
-          <Text style={styles.challengeDesc}>Share God's love with someone today</Text>
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View style={styles.progressFill} />
-            </View>
-            <Text style={styles.progressText}>75%</Text>
+        {/* Today's Challenge - Now with Random Bible Study */}
+        <TouchableOpacity style={styles.challengeCard} onPress={handleChallengePress}>
+          <View style={styles.challengeHeader}>
+            <Text style={styles.challengeTitle}>Today's Challenge</Text>
+            {todaysChallenge?.category && (
+              <View style={styles.challengeBadge}>
+                <Text style={styles.challengeBadgeText}>{todaysChallenge.category.name}</Text>
+              </View>
+            )}
           </View>
-      </TouchableOpacity>
+          
+          {challengeLoading ? (
+            <View style={styles.challengeLoadingContainer}>
+              <ActivityIndicator size="small" color="#A07553" />
+              <Text style={styles.challengeLoadingText}>Loading challenge...</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.challengeDesc}>
+                {todaysChallenge?.title || "Share God's love with someone today"}
+              </Text>
+              {todaysChallenge?.main_verse && (
+                <Text style={styles.challengeVerse}>
+                  📖 {todaysChallenge.main_verse}
+                </Text>
+              )}
+            </>
+          )}
+          
+         <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
+            <View style={[
+              styles.progressFill, 
+              { 
+                width: todaysChallenge?.progress?.percent 
+                  ? `${todaysChallenge.progress.percent}%` 
+                  : '0%' 
+              }
+            ]} />
+          </View>
+          <Text style={styles.progressText}>
+            {todaysChallenge?.progress?.percent 
+              ? `${todaysChallenge.progress.percent}% Complete` 
+              : 'Start'}
+          </Text>
+        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Auth Modal */}
@@ -427,7 +546,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   prayerCard: {
-    backgroundColor: '#DDBBA1',
+    backgroundColor: '#9E795D',
   },
   studyCard: {
     backgroundColor: '#A07553',
@@ -497,17 +616,50 @@ const styles = StyleSheet.create({
     padding: 16,
     flex: 0.12,
   },
+  challengeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   challengeTitle: {
     color: '#333',
     fontWeight: 'bold',
     fontSize: 14,
-    marginBottom: 6,
+  },
+  challengeBadge: {
+    backgroundColor: '#A07553',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  challengeBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  challengeLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  challengeLoadingText: {
+    marginLeft: 8,
+    color: '#9E795D',
+    fontSize: 12,
   },
   challengeDesc: {
     color: '#9E795D',
     fontSize: 12,
-    marginBottom: 20,
+    marginBottom: 8,
     flex: 1,
+  },
+  challengeVerse: {
+    color: '#9E795D',
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginBottom: 12,
   },
   progressContainer: {
     flexDirection: 'row',
@@ -523,7 +675,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    width: '75%',
+    width: '0%',
     backgroundColor: '#A07553',
     borderRadius: 3,
   },

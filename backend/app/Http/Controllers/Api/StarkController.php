@@ -11,7 +11,17 @@ class StarkController extends Controller
 {
     public function index(){
         return response()->json(
-        starks::with('category')->get()
+            starks::with('category')->get()
         );
+    }
+
+    public function getRandomStudy() {
+        $randomStudy = starks::with('category')->inRandomOrder()->first();
+        
+        if (!$randomStudy) {
+            return response()->json(['error' => 'No studies available'], 404);
+        }
+        
+        return response()->json($randomStudy);
     }
 }
