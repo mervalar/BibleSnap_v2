@@ -1,42 +1,25 @@
 services:
   - type: web
     name: biblesnap-backend
-    env: php
-    plan: free
-    repo: https://github.com/mmervalar/BibleSnap_v2
+    env: docker
+    repo: https://github.com/mervalar/BibleSnap_v2
+    branch: main
     rootDir: backend
-    buildCommand: |
-      composer install --optimize-autoloader --no-dev
-      php artisan config:cache
-      php artisan route:cache
-      php artisan view:cache
-    startCommand: php artisan serve --host 0.0.0.0 --port $PORT
+    plan: free
     envVars:
       - key: APP_ENV
         value: production
       - key: APP_KEY
-        generateValue: true
-      - key: APP_DEBUG
-        value: false
+        value: <put the result of `php artisan key:generate --show` here>
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
-        fromDatabase:
-          name: biblesnap-db
-          property: host
+        value: dpg-d1a29uemcj7s73f3envg-a
       - key: DB_PORT
-        fromDatabase:
-          name: biblesnap-db
-          property: port
+        value: 5432
       - key: DB_DATABASE
-        fromDatabase:
-          name: biblesnap-db
-          property: database
+        value: biblesnap_db
       - key: DB_USERNAME
-        fromDatabase:
-          name: biblesnap-db
-          property: user
+        value: biblesnap_db_user
       - key: DB_PASSWORD
-        fromDatabase:
-          name: biblesnap-db
-          property: password
+        value: 3osr6cU7Rpoa6ei7lzMufC13lBHBWlCr
