@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: laravel-backend
+    env: php
+    plan: free
+    rootDir: backend
+    buildCommand: |
+      composer install --no-dev --optimize-autoloader
+      php artisan key:generate
+      php artisan migrate --force
+    startCommand: |
+      php artisan serve --host 0.0.0.0 --port 10000
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_KEY
+        generateValue: true
+      - key: APP_NAME
+        value: BibleSnap
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromDatabase:
+          name: biblesnap-db    
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: biblesnap-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: biblesnap-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: biblesnap-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: biblesnap-db
+          property: password
