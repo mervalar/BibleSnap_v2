@@ -189,7 +189,7 @@ const ProfilePage = () => {
     try {
       setUpdateLoading(true);
       
-      const response = await fetch('http://localhost:8000/api/user/update', {
+      const response = await fetch('http://biblesnap.bellatis.com/api/user/update', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

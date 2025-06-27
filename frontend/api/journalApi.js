@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'http://biblesnap.bellatis.com/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Helper function to get token

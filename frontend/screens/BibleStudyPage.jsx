@@ -212,9 +212,6 @@ const BibleStudyApp = () => {
               color={showSearch ? COLORS.background : COLORS.primary} 
             />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addButton}>
-            <Ionicons name="add" size={dimensions.iconSize.medium} color={COLORS.background} />
-          </TouchableOpacity>
         </View>
       </View>
 
