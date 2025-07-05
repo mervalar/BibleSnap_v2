@@ -10,7 +10,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Speech from 'expo-speech';
+import SplashScreen from '../components/SplashScreen';
+
 
 const BookContent = () => {
   const route = useRoute();
@@ -18,23 +21,43 @@ const BookContent = () => {
   const { book } = route.params;
   
   const [verses, setVerses] = useState([]);
-  const [audioUrl, setAudioUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [currentChapter, setCurrentChapter] = useState(1);
   const [chapters, setChapters] = useState([]);
-  const [playbackStatus, setPlaybackStatus] = useState({});
-  const soundRef = useRef(null);
+  const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
+  const [speechRate, setSpeechRate] = useState(0.8);
+  const [speechPitch, setSpeechPitch] = useState(1.0);
+  const [highlights, setHighlights] = useState({});
+  const [selectedVerse, setSelectedVerse] = useState(null);
+  const [showToolbox, setShowToolbox] = useState(false);
+  const highlightColors = ['#FFD700', '#90EE90', '#ADD8E6', '#FFB6C1'];
+  
+  // Audio progress state
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [progress, setProgress] = useState(0);
+  
+  // TTS state management
+  const [chapterText, setChapterText] = useState('');
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [selectedVoice, setSelectedVoice] = useState(null);
 
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
   const BIBLE_ID = 'de4e12af7f28f599-01';
 
+  // Refs for tracking
+  const progressInterval = useRef(null);
+  const startTime = useRef(null);
+
+  // Initialize TTS and fetch data
   useEffect(() => {
+    initializeTTS();
     fetchChapters();
+    
     return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
+      cleanupTTS();
     };
   }, []);
 
@@ -43,6 +66,72 @@ const BookContent = () => {
       fetchChapterContent(currentChapter);
     }
   }, [currentChapter, chapters]);
+    useEffect(() => {
+      initializeTTS();
+      fetchChapters();
+      loadHighlights(); 
+      
+      return () => {
+        cleanupTTS();
+        saveHighlights(); 
+      };
+    }, []);
+
+    useEffect(() => {
+      saveHighlights();
+    }, [highlights]);
+
+useEffect(() => {
+  saveHighlights();
+}, [highlights]);
+  const initializeTTS = async () => {
+    try {
+      // Get available voices
+      const voices = await Speech.getAvailableVoicesAsync();
+      setAvailableVoices(voices);
+      const englishVoice = voices.find(voice => 
+        voice.language.startsWith('en') || voice.language.includes('en')
+      );
+      setSelectedVoice(englishVoice || voices[0]);
+    } catch (error) {
+      console.log('TTS initialization error:', error);
+    }
+  };
+     const saveHighlights = async () => {
+        try {
+          await AsyncStorage.setItem(`highlights_${book.id}`, JSON.stringify(highlights));
+        } catch (e) {
+          console.error('Failed to save highlights', e);
+        }
+      };
+
+        const loadHighlights = async () => {
+        try {
+          const saved = await AsyncStorage.getItem(`highlights_${book.id}`);
+          if (saved) {
+            setHighlights(JSON.parse(saved));
+          }
+        } catch (e) {
+          console.error('Failed to load highlights', e);
+        }
+      };
+
+  const cleanupTTS = async () => {
+    try {
+      await Speech.stop();
+      setIsPlaying(false);
+      setIsPaused(false);
+      setCurrentVerseIndex(0);
+      setCurrentTime(0);
+      setProgress(0);
+      if (progressInterval.current) {
+        clearInterval(progressInterval.current);
+        progressInterval.current = null;
+      }
+    } catch (error) {
+      console.log('TTS cleanup error:', error);
+    }
+  };
 
   const fetchChapters = async () => {
     try {
@@ -67,12 +156,9 @@ const BookContent = () => {
   const fetchChapterContent = async (chapterNum) => {
     try {
       setLoading(true);
-      // Stop current audio when changing chapters
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-        setIsPlaying(false);
-      }
+      
+      // Stop current TTS
+      await cleanupTTS();
 
       const chapter = chapters.find(c => c.number === chapterNum.toString());
       if (!chapter) return;
@@ -108,7 +194,18 @@ const BookContent = () => {
       );
 
       setVerses(versesWithText);
-      await fetchAudioUrl(chapter.id);
+      
+      // Prepare text for TTS
+      const fullChapterText = versesWithText
+        .map(verse => `Verse ${verse.number}. ${stripHtml(verse.text)}`)
+        .join(' ');
+      setChapterText(fullChapterText);
+      
+      // Estimate duration (rough calculation: ~150 words per minute)
+      const wordCount = fullChapterText.split(' ').length;
+      const estimatedDuration = (wordCount / 150) * 60; // in seconds
+      setDuration(estimatedDuration);
+      
     } catch (error) {
       console.error(`Error fetching chapter ${chapterNum}:`, error);
       Alert.alert('Error', `Failed to load chapter ${chapterNum}. Please try again.`);
@@ -117,119 +214,233 @@ const BookContent = () => {
     }
   };
 
-  const fetchAudioUrl = async (chapterId) => {
-    try {
-      const audioResponse = await fetch(
-        `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/chapters/${chapterId}/audio`,
-        { headers: { 'api-key': API_KEY } }
-      );
-
-      if (audioResponse.ok) {
-        const audioData = await audioResponse.json();
-        setAudioUrl(audioData.data?.url || null);
-      } else {
-        setAudioUrl(null);
+  const startProgressTracking = () => {
+    startTime.current = Date.now();
+    setCurrentTime(0);
+    setProgress(0);
+    
+    progressInterval.current = setInterval(() => {
+      if (startTime.current && duration > 0) {
+        const elapsed = (Date.now() - startTime.current) / 1000;
+        const currentProgress = Math.min(elapsed / duration, 1);
+        setCurrentTime(elapsed);
+        setProgress(currentProgress);
       }
-    } catch (error) {
-      console.error('Audio not available:', error);
-      setAudioUrl(null);
+    }, 100);
+  };
+
+  const stopProgressTracking = () => {
+    if (progressInterval.current) {
+      clearInterval(progressInterval.current);
+      progressInterval.current = null;
     }
   };
 
-  const setupAudioHandlers = (sound) => {
-    sound.setOnPlaybackStatusUpdate((status) => {
-      setPlaybackStatus(status);
-      setIsPlaying(status.isLoaded && status.isPlaying);
-      
-      // Auto-advance to next chapter when current chapter finishes
-      if (status.didJustFinish && currentChapter < chapters.length) {
-        setTimeout(() => {
-          goToNextChapter();
-        }, 1000); // Small delay before auto-advancing
+  const startTTS = async () => {
+    try {
+      if (!chapterText) {
+        Alert.alert('No Content', 'No text available to read.');
+        return;
       }
-    });
+
+      setIsPlaying(true);
+      setIsPaused(false);
+      startProgressTracking();
+
+      const options = {
+        voice: selectedVoice?.identifier,
+        rate: speechRate,
+        pitch: speechPitch,
+        onStart: () => {
+          setIsPlaying(true);
+        },
+        onDone: () => {
+          setIsPlaying(false);
+          setIsPaused(false);
+          setCurrentVerseIndex(0);
+          stopProgressTracking();
+          setProgress(1);
+          
+          // Auto-advance to next chapter when finished
+          if (currentChapter < chapters.length) {
+            setTimeout(() => {
+              goToNextChapter();
+            }, 1000);
+          }
+        },
+        onStopped: () => {
+          setIsPlaying(false);
+          setIsPaused(false);
+          stopProgressTracking();
+        },
+        onError: (error) => {
+          console.error('TTS Error:', error);
+          setIsPlaying(false);
+          setIsPaused(false);
+          stopProgressTracking();
+          Alert.alert('Speech Error', 'Unable to play text-to-speech. Please try again.');
+        }
+      };
+
+      await Speech.speak(chapterText, options);
+    } catch (error) {
+      console.error('TTS start error:', error);
+      Alert.alert('Speech Error', 'Could not start text-to-speech. Please try again.');
+      setIsPlaying(false);
+      stopProgressTracking();
+    }
+  };
+
+  const pauseTTS = async () => {
+    try {
+      await Speech.pause();
+      setIsPaused(true);
+      setIsPlaying(false);
+      stopProgressTracking();
+    } catch (error) {
+      console.error('TTS pause error:', error);
+    }
+  };
+
+  const resumeTTS = async () => {
+    try {
+      await Speech.resume();
+      setIsPaused(false);
+      setIsPlaying(true);
+      startProgressTracking();
+    } catch (error) {
+      console.error('TTS resume error:', error);
+    }
+  };
+
+  const stopTTS = async () => {
+    try {
+      await Speech.stop();
+      setIsPlaying(false);
+      setIsPaused(false);
+      setCurrentVerseIndex(0);
+      stopProgressTracking();
+      setCurrentTime(0);
+      setProgress(0);
+    } catch (error) {
+      console.error('TTS stop error:', error);
+    }
   };
 
   const togglePlayback = async () => {
-    if (!audioUrl) {
-      Alert.alert('Audio Not Available', 'Audio is not available for this chapter.');
-      return;
-    }
-
     try {
-      if (isPlaying && soundRef.current) {
-        await soundRef.current.pauseAsync();
-        setIsPlaying(false);
+      if (isPlaying) {
+        await pauseTTS();
+      } else if (isPaused) {
+        await resumeTTS();
       } else {
-        if (soundRef.current) {
-          await soundRef.current.playAsync();
-          setIsPlaying(true);
-        } else {
-          // Load and play new audio
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: audioUrl },
-            { 
-              shouldPlay: true,
-              progressUpdateIntervalMillis: 1000,
-            }
-          );
-          soundRef.current = sound;
-          setupAudioHandlers(sound);
-          setIsPlaying(true);
-        }
+        await startTTS();
       }
     } catch (error) {
-      console.error('Error with audio playback:', error);
-      Alert.alert('Error', 'Could not play audio. Please try again.');
+      console.error('TTS toggle error:', error);
+      Alert.alert('Speech Error', 'Could not control text-to-speech. Please try again.');
     }
   };
 
   const goToNextChapter = async () => {
     if (currentChapter < chapters.length) {
-      const wasPlaying = isPlaying;
+      await cleanupTTS();
       setCurrentChapter(currentChapter + 1);
-      
-      // If audio was playing, automatically start playing the next chapter
-      if (wasPlaying) {
-        setTimeout(() => {
-          togglePlayback();
-        }, 500); // Small delay to allow content to load
-      }
     }
   };
 
   const goToPrevChapter = async () => {
     if (currentChapter > 1) {
-      const wasPlaying = isPlaying;
+      await cleanupTTS();
       setCurrentChapter(currentChapter - 1);
-      
-      // If audio was playing, automatically start playing the previous chapter
-      if (wasPlaying) {
-        setTimeout(() => {
-          togglePlayback();
-        }, 500); // Small delay to allow content to load
-      }
     }
+  };
+
+  const adjustSpeechRate = (rate) => {
+    setSpeechRate(rate);
+    if (isPlaying) {
+      // Restart with new rate
+      stopTTS().then(() => {
+        setTimeout(() => startTTS(), 500);
+      });
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   if (loading && verses.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9E795D" />
-          <Text style={styles.loadingText}>Loading {book.name}...</Text>
-        </View>
-      </SafeAreaView>
+      <SplashScreen 
+      onFinish={() => {
+      }}
+      duration={2000} 
+    />
     );
   }
 
+  const handleVersePress = (verse) => {
+  setSelectedVerse(verse);
+  setShowToolbox(true);
+};
+
+const handleHighlight = (color) => {
+  if (!selectedVerse) return;
+  
+  setHighlights(prev => ({
+    ...prev,
+    [selectedVerse.id]: {
+      color,
+      text: stripHtml(selectedVerse.text)
+    }
+  }));
+  setShowToolbox(false);
+};
+
+const removeHighlight = (verseId) => {
+  setHighlights(prev => {
+    const newHighlights = {...prev};
+    delete newHighlights[verseId];
+    return newHighlights;
+  });
+};
+
+const HighlightToolbox = ({ visible, onSelectColor, onClose }) => {
+  if (!visible) return null;
+
+  return (
+    <View style={styles.toolboxContainer}>
+      <View style={styles.toolbox}>
+        {highlightColors.map((color) => (
+          <TouchableOpacity
+            key={color}
+            style={[styles.colorButton, { backgroundColor: color }]}
+            onPress={() => onSelectColor(color)}
+          />
+        ))}
+        <TouchableOpacity 
+          style={styles.closeButton}
+          onPress={onClose}
+        >
+          <Text style={styles.closeButtonText}>×</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            cleanupTTS();
+            navigation.goBack();
+          }}
         >
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
@@ -266,16 +477,28 @@ const BookContent = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Content - Removed repetitive chapter title */}
+      {/* Content */}
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {verses.map((verse) => (
-          <View key={verse.id} style={styles.verse}>
-            <Text style={styles.verseNumber}>{verse.number}</Text>
-            <Text style={styles.verseText}>
-              {verse.text ? stripHtml(verse.text) : 'Verse text not available'}
-            </Text>
-          </View>
-        ))}
+        {verses.map((verse, index) => {
+          const isHighlighted = highlights[verse.id];
+          return (
+            <TouchableOpacity 
+              key={verse.id} 
+              style={[
+                styles.verse, 
+                currentVerseIndex === index && isPlaying && styles.activeVerse,
+                isHighlighted && { backgroundColor: isHighlighted.color }
+              ]}
+              onPress={() => handleVersePress(verse)}
+              onLongPress={() => removeHighlight(verse.id)}
+            >
+              <Text style={styles.verseNumber}>{verse.number}</Text>
+              <Text style={styles.verseText}>
+                {verse.text ? stripHtml(verse.text) : 'Verse text not available'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
         
         {verses.length === 0 && !loading && (
           <View style={styles.emptyContainer}>
@@ -284,56 +507,98 @@ const BookContent = () => {
         )}
       </ScrollView>
 
-      {/* Audio Player */}
+      {/* Compact Audio Player */}
       <View style={styles.audioPlayerContainer}>
+        {/* Progress Bar */}
+        <View style={styles.progressContainer}>
+          <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+          </View>
+          <Text style={styles.timeText}>{formatTime(duration)}</Text>
+        </View>
+
+        {/* Audio Controls */}
         <View style={styles.audioControls}>
-          <TouchableOpacity 
-            style={styles.controlButton}
-            onPress={goToPrevChapter}
-            disabled={currentChapter === 1}
-          >
-            <Text style={[styles.controlIcon, currentChapter === 1 && styles.disabledIcon]}>⏮</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.playButton, !audioUrl && styles.disabledPlayButton]} 
-            onPress={togglePlayback}
-            disabled={!audioUrl}
-          >
-            <Text style={[styles.playIcon, !audioUrl && styles.disabledIcon]}>
-              {isPlaying ? '⏸' : '▶'}
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.controlButton}
-            onPress={goToNextChapter}
-            disabled={currentChapter === chapters.length}
-          >
-            <Text style={[styles.controlIcon, currentChapter === chapters.length && styles.disabledIcon]}>⏭</Text>
-          </TouchableOpacity>
+          {/* Speed Controls - Left */}
+          <View style={styles.speedControls}>
+            <TouchableOpacity 
+              style={[styles.speedButton, speechRate === 0.5 && styles.activeSpeedButton]}
+              onPress={() => adjustSpeechRate(0.5)}
+            >
+              <Text style={[styles.speedButtonText, speechRate === 0.5 && styles.activeSpeedText]}>0.5×</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.speedButton, speechRate === 0.8 && styles.activeSpeedButton]}
+              onPress={() => adjustSpeechRate(0.8)}
+            >
+              <Text style={[styles.speedButtonText, speechRate === 0.8 && styles.activeSpeedText]}>0.8×</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Center Controls */}
+          <View style={styles.centerControls}>
+            <TouchableOpacity 
+              style={styles.controlButton}
+              onPress={goToPrevChapter}
+              disabled={currentChapter === 1}
+            >
+              <Text style={[styles.controlIcon, currentChapter === 1 && styles.disabledIcon]}>|◀</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.controlButton}
+              onPress={stopTTS}
+            >
+              <Text style={styles.controlIcon}>■</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.playButton} 
+              onPress={togglePlayback}
+            >
+              <Text style={styles.playIcon}>
+                {isPlaying ? '⏸' : '▶'}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.controlButton}
+              onPress={goToNextChapter}
+              disabled={currentChapter === chapters.length}
+            >
+              <Text style={[styles.controlIcon, currentChapter === chapters.length && styles.disabledIcon]}>▶|</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Speed Controls - Right */}
+          <View style={styles.speedControls}>
+            <TouchableOpacity 
+              style={[styles.speedButton, speechRate === 1.0 && styles.activeSpeedButton]}
+              onPress={() => adjustSpeechRate(1.0)}
+            >
+              <Text style={[styles.speedButtonText, speechRate === 1.0 && styles.activeSpeedText]}>1×</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.speedButton, speechRate === 1.2 && styles.activeSpeedButton]}
+              onPress={() => adjustSpeechRate(1.2)}
+            >
+              <Text style={[styles.speedButtonText, speechRate === 1.2 && styles.activeSpeedText]}>1.2×</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         
         <Text style={styles.audioTitle}>
           {book.name} - Chapter {currentChapter}
-          {!audioUrl && ' (Audio Unavailable)'}
-          {isPlaying && ' • Playing'}
+          {isPlaying && ' • Speaking'}
+          {isPaused && ' • Paused'}
         </Text>
-        
-        {/* Progress indicator */}
-        {playbackStatus.isLoaded && playbackStatus.durationMillis && (
-          <View style={styles.progressContainer}>
-            <View 
-              style={[
-                styles.progressBar, 
-                { 
-                  width: `${(playbackStatus.positionMillis / playbackStatus.durationMillis) * 100}%` 
-                }
-              ]} 
-            />
-          </View>
-        )}
       </View>
+      <HighlightToolbox 
+        visible={showToolbox && selectedVerse}
+        onSelectColor={handleHighlight}
+        onClose={() => setShowToolbox(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -438,6 +703,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 16,
     alignItems: 'flex-start',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  activeVerse: {
+    backgroundColor: '#FFF8E1',
+    borderLeftWidth: 3,
+    borderLeftColor: '#9E795D',
   },
   verseNumber: {
     fontSize: 12,
@@ -471,16 +744,69 @@ const styles = StyleSheet.create({
   audioPlayerContainer: {
     backgroundColor: '#9E795D',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
   },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  timeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '500',
+    minWidth: 35,
+    textAlign: 'center',
+  },
+  progressBar: {
+    flex: 1,
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 2,
+  },
   audioControls: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
-    gap: 24,
+  },
+  speedControls: {
+    flexDirection: 'column',
+    gap: 4,
+    minWidth: 35,
+  },
+  speedButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  activeSpeedButton: {
+    backgroundColor: '#FFFFFF',
+  },
+  speedButtonText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  activeSpeedText: {
+    color: '#9E795D',
+  },
+  centerControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15,
   },
   controlButton: {
     width: 32,
@@ -490,10 +816,11 @@ const styles = StyleSheet.create({
   },
   controlIcon: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   disabledIcon: {
-    color: '#CCCCCC',
+    color: 'rgba(255, 255, 255, 0.4)',
   },
   playButton: {
     width: 44,
@@ -508,33 +835,57 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2,
   },
-  disabledPlayButton: {
-    backgroundColor: '#F0F0F0',
-  },
   playIcon: {
     color: '#9E795D',
     fontSize: 18,
-    marginLeft: 2,
+    fontWeight: 'bold',
+    marginLeft: 1,
   },
   audioTitle: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     textAlign: 'center',
     opacity: 0.9,
-    marginBottom: 4,
   },
-  progressContainer: {
-    height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 1,
-    marginTop: 4,
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 1,
-  },
+  toolboxContainer: {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: 'rgba(0,0,0,0.2)',
+},
+toolbox: {
+  flexDirection: 'row',
+  backgroundColor: 'white',
+  borderRadius: 8,
+  padding: 10,
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+  elevation: 5,
+},
+colorButton: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  marginHorizontal: 5,
+  borderWidth: 1,
+  borderColor: '#ddd',
+},
+closeButton: {
+  marginLeft: 10,
+  padding: 8,
+},
+closeButtonText: {
+  fontSize: 20,
+  color: '#333',
+},
 });
 
 export default BookContent;

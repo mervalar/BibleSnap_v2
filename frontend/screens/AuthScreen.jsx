@@ -19,7 +19,7 @@ const AuthScreen = () => {
       const { authentication } = response;
       
       // Send the access token to your Laravel backend
-      axios.post('http://localhost:8000/auth/google', {
+      axios.post('http://biblesnap.bellatis.com/auth/google', {
         token: authentication.accessToken,
       })
       .then(response => {

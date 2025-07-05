@@ -17,6 +17,7 @@ import { fetchNoteCategories } from '../api/noteCategories';
 import { fetchJournals, updateJournal, deleteJournal, createJournal } from '../api/journalApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JournalPreview from '../components/JournalPreview';
+import SplashScreen from '../components/SplashScreen';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -325,14 +326,11 @@ const JournalApp = ({ navigation }) => {
 
   if (loading && journals.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={[styles.loadingText, { fontSize: dimensions.fontSize.body }]}>
-            Loading journals...
-          </Text>
-        </View>
-      </SafeAreaView>
+      <SplashScreen 
+      onFinish={() => {
+      }}
+      duration={2000}
+    />
     );
   }
 

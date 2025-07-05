@@ -244,27 +244,46 @@ const loadChallengeProgress = async () => {
 
       {/* Main Content */}
       <View style={styles.mainContent}>
-        {/* Verse of the Day Card */}
+        {/* Verse of the Day Card - Enhanced */}
         <View style={styles.verseCard}>
-          <Text style={styles.verseLabel}>VERSE OF THE DAY</Text>
+          <View style={styles.verseHeader}>
+            <Text style={styles.verseLabel}>VERSE OF THE DAY</Text>
+            <Text style={styles.verseDate}>{new Date().toLocaleDateString('en-US', { 
+              weekday: 'short', 
+              month: 'short', 
+              day: 'numeric' 
+            })}</Text>
+          </View>
+          
           {loading ? (
-            <ActivityIndicator color="#A07553" />
+            <View style={styles.verseLoadingContainer}>
+              <ActivityIndicator color="#A07553" size="large" />
+              <Text style={styles.verseLoadingText}>Loading today's verse...</Text>
+            </View>
           ) : verse ? (
-            <>
+            <View style={styles.verseContent}>
               <Text style={styles.verseText}>
                 "{verse.text}"
               </Text>
-              <Text style={styles.verseRef}>{verse.reference}</Text>
-            </>
+              <View style={styles.verseRefContainer}>
+                <Text style={styles.verseRef}>{verse.reference}</Text>
+                <View style={styles.verseDecorator}>
+                  <Text style={styles.verseDecoratorText}></Text>
+                </View>
+              </View>
+            </View>
           ) : (
-            <Text style={styles.verseText}>Could not load verse.</Text>
+            <View style={styles.verseErrorContainer}>
+              <Text style={styles.verseErrorText}>Could not load verse.</Text>
+              <Text style={styles.verseErrorSubtext}>Please check your connection</Text>
+            </View>
           )}
           
           <View style={styles.verseActions}>
-            <TouchableOpacity style={styles.actionButton}>
+            {/* <TouchableOpacity style={styles.actionButton}>
               <Text style={styles.actionIcon}>📖</Text>
               <Text style={styles.actionText}>Read Chapter</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
 
@@ -294,7 +313,7 @@ const loadChallengeProgress = async () => {
         </View>
 
         {/* Spiritual Growth Chart */}
-        <View style={styles.chartCard}>
+        {/* <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Your Spiritual Growth</Text>
           <View style={styles.chartContainer}>
             <View style={styles.chartArea}>
@@ -317,7 +336,7 @@ const loadChallengeProgress = async () => {
               </View>
             </View>
           </View>
-        </View>
+        </View> */}
 
         {/* Today's Challenge - Now with Random Bible Study */}
         <TouchableOpacity style={styles.challengeCard} onPress={handleChallengePress}>
@@ -402,7 +421,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
     paddingHorizontal: 4,
   },
   profileSection: {
@@ -482,38 +501,101 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
-    justifyContent: 'space-between',
   },
   verseCard: {
     backgroundColor: '#DDBBA1',
-    borderRadius: 16,
-    padding: 20,
-    flex: 0.3,
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    minHeight: 240,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  verseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   verseLabel: {
     color: '#9E795D',
     fontWeight: 'bold',
-    fontSize: 11,
-    marginBottom: 8,
-    letterSpacing: 1,
+    fontSize: 12,
+    letterSpacing: 1.2,
+  },
+  verseDate: {
+    color: '#9E795D',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  verseLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verseLoadingText: {
+    marginTop: 12,
+    color: '#9E795D',
+    fontSize: 14,
+  },
+  verseContent: {
+    flex: 1,
+    justifyContent: 'center',
   },
   verseText: {
     color: '#333',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 8,
+    fontSize: 16,
+    lineHeight: 24,
     fontWeight: '500',
-    flex: 1,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontStyle: 'italic',
+  },
+  verseRefContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   verseRef: {
     color: '#9E795D',
     fontWeight: 'bold',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  verseDecorator: {
+    marginLeft: 8,
+  },
+  verseDecoratorText: {
+    fontSize: 16,
+  },
+  verseErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verseErrorText: {
+    color: '#9E795D',
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  verseErrorSubtext: {
+    color: '#9E795D',
     fontSize: 12,
-    marginBottom: 12,
+    textAlign: 'center',
+    marginTop: 4,
+    opacity: 0.8,
   },
   verseActions: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 16,
   },
   actionButton: {
     flexDirection: 'row',
@@ -535,15 +617,24 @@ const styles = StyleSheet.create({
   quickActionsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
-    flex: 0.15,
+    gap: 12,
+    marginBottom: 20,
   },
   quickActionCard: {
     flex: 1,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 80,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   prayerCard: {
     backgroundColor: '#9E795D',
@@ -555,13 +646,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#9E795D',
   },
   quickActionIcon: {
-    fontSize: 20,
-    marginBottom: 4,
+    fontSize: 24,
+    marginBottom: 8,
   },
   quickActionTitle: {
     color: '#EEDED2',
     fontWeight: 'bold',
-    fontSize: 11,
+    fontSize: 12,
     textAlign: 'center',
   },
   chartCard: {
@@ -613,29 +704,37 @@ const styles = StyleSheet.create({
   challengeCard: {
     backgroundColor: '#DDBBA1',
     borderRadius: 16,
-    padding: 16,
-    flex: 0.12,
+    padding: 20,
+    minHeight: 140,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   challengeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 12,
   },
   challengeTitle: {
     color: '#333',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 16,
   },
   challengeBadge: {
     backgroundColor: '#A07553',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   challengeBadgeText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
   },
   challengeLoadingContainer: {
@@ -651,33 +750,34 @@ const styles = StyleSheet.create({
   },
   challengeDesc: {
     color: '#9E795D',
-    fontSize: 12,
-    marginBottom: 8,
-    flex: 1,
+    fontSize: 14,
+    marginBottom: 12,
+    lineHeight: 20,
   },
   challengeVerse: {
     color: '#9E795D',
-    fontSize: 10,
+    fontSize: 11,
     fontStyle: 'italic',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+    marginTop: 'auto',
   },
   progressBar: {
     flex: 1,
-    height: 6,
+    height: 8,
     backgroundColor: '#EEDED2',
-    borderRadius: 3,
+    borderRadius: 4,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     width: '0%',
     backgroundColor: '#A07553',
-    borderRadius: 3,
+    borderRadius: 4,
   },
   progressText: {
     color: '#9E795D',

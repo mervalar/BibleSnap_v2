@@ -1,6 +1,6 @@
 export const fetchNoteCategories = async () => {
   try {
-    const response = await fetch(`http://localhost:8000/api/note-categories`);
+    const response = await fetch(`http://biblesnap.bellatis.com/api/note-categories`);
     if (!response.ok) {
       throw new Error('Failed to fetch note categories');
     }

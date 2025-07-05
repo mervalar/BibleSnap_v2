@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import SplashScreen from '../components/SplashScreen';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -155,14 +156,11 @@ const BooksListPage = () => {
 
   if (loading && books.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={[styles.loadingText, { fontSize: dimensions.fontSize.body }]}>
-            Loading Bible Books...
-          </Text>
-        </View>
-      </SafeAreaView>
+      <SplashScreen 
+      onFinish={() => {
+      }}
+      duration={2000} 
+    />
     );
   }
 

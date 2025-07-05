@@ -1,4 +1,4 @@
-import React, { useState, useEffect ,useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,16 @@ import {
   SafeAreaView,
   StatusBar,
   ActivityIndicator,
-    Platform,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
+import SplashScreen from '../components/SplashScreen';
+
+
 // Responsive dimensions (matching Journal app)
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -76,6 +80,244 @@ const COLORS = {
   overlay: 'rgba(160, 117, 83, 0.1)',
 };
 
+// Cross-platform TTS Service
+class TTSService {
+  constructor() {
+    this.isPlaying = false;
+    this.currentUtterance = null;
+    this.onStatusChange = null;
+  }
+
+  // Initialize TTS for the current platform
+  async initialize() {
+    if (Platform.OS === 'web') {
+      // Check if Web Speech API is supported
+      if (!('speechSynthesis' in window)) {
+        throw new Error('Text-to-Speech not supported in this browser');
+      }
+      
+      // Load voices (they might not be available immediately)
+      return new Promise((resolve) => {
+        const loadVoices = () => {
+          const voices = speechSynthesis.getVoices();
+          if (voices.length > 0) {
+            resolve(voices);
+          } else {
+            // Voices might load asynchronously
+            speechSynthesis.onvoiceschanged = () => {
+              resolve(speechSynthesis.getVoices());
+            };
+          }
+        };
+        loadVoices();
+      });
+    } else {
+      // For React Native (iOS/Android), expo-speech handles initialization
+      const voices = await Speech.getAvailableVoicesAsync();
+      return voices;
+    }
+  }
+
+  // Get available voices for the platform
+  async getVoices() {
+    if (Platform.OS === 'web') {
+      return speechSynthesis.getVoices();
+    } else {
+      return await Speech.getAvailableVoicesAsync();
+    }
+  }
+
+  // Speak text with options
+  async speak(text, options = {}) {
+    const defaultOptions = {
+      language: 'en-US',
+      pitch: 1.0,
+      rate: 0.8,
+      voice: null,
+    };
+
+    const ttsOptions = { ...defaultOptions, ...options };
+
+    try {
+      // Stop any current speech
+      await this.stop();
+
+      if (Platform.OS === 'web') {
+        return this._speakWeb(text, ttsOptions);
+      } else {
+        return this._speakNative(text, ttsOptions);
+      }
+    } catch (error) {
+      console.error('TTS Error:', error);
+      throw error;
+    }
+  }
+
+  // Web Speech API implementation
+  _speakWeb(text, options) {
+    return new Promise((resolve, reject) => {
+      try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Set voice options
+        utterance.lang = options.language;
+        utterance.pitch = options.pitch;
+        utterance.rate = options.rate;
+        
+        // Set voice if specified
+        if (options.voice) {
+          const voices = speechSynthesis.getVoices();
+          const selectedVoice = voices.find(voice => 
+            voice.name === options.voice || voice.lang.includes(options.language)
+          );
+          if (selectedVoice) {
+            utterance.voice = selectedVoice;
+          }
+        }
+
+        // Event handlers
+        utterance.onstart = () => {
+          this.isPlaying = true;
+          if (this.onStatusChange) {
+            this.onStatusChange({ isPlaying: true });
+          }
+        };
+
+        utterance.onend = () => {
+          this.isPlaying = false;
+          this.currentUtterance = null;
+          if (this.onStatusChange) {
+            this.onStatusChange({ isPlaying: false });
+          }
+          resolve();
+        };
+
+        utterance.onerror = (event) => {
+          this.isPlaying = false;
+          this.currentUtterance = null;
+          if (this.onStatusChange) {
+            this.onStatusChange({ isPlaying: false, error: event.error });
+          }
+          reject(new Error(`TTS Error: ${event.error}`));
+        };
+
+        this.currentUtterance = utterance;
+        speechSynthesis.speak(utterance);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  // React Native (iOS/Android) implementation
+  async _speakNative(text, options) {
+    const speechOptions = {
+      language: options.language,
+      pitch: options.pitch,
+      rate: options.rate,
+    };
+
+    // Set voice if specified
+    if (options.voice) {
+      speechOptions.voice = options.voice;
+    }
+
+    // Set up status listener
+    this.isPlaying = true;
+    if (this.onStatusChange) {
+      this.onStatusChange({ isPlaying: true });
+    }
+
+    try {
+      await Speech.speak(text, {
+        ...speechOptions,
+        onStart: () => {
+          this.isPlaying = true;
+          if (this.onStatusChange) {
+            this.onStatusChange({ isPlaying: true });
+          }
+        },
+        onDone: () => {
+          this.isPlaying = false;
+          if (this.onStatusChange) {
+            this.onStatusChange({ isPlaying: false });
+          }
+        },
+        onStopped: () => {
+          this.isPlaying = false;
+          if (this.onStatusChange) {
+            this.onStatusChange({ isPlaying: false });
+          }
+        },
+        onError: (error) => {
+          this.isPlaying = false;
+          if (this.onStatusChange) {
+            this.onStatusChange({ isPlaying: false, error });
+          }
+        },
+      });
+    } catch (error) {
+      this.isPlaying = false;
+      if (this.onStatusChange) {
+        this.onStatusChange({ isPlaying: false, error });
+      }
+      throw error;
+    }
+  }
+
+  // Stop current speech
+  async stop() {
+    try {
+      if (Platform.OS === 'web') {
+        if (speechSynthesis.speaking) {
+          speechSynthesis.cancel();
+        }
+      } else {
+        await Speech.stop();
+      }
+      
+      this.isPlaying = false;
+      this.currentUtterance = null;
+      
+      if (this.onStatusChange) {
+        this.onStatusChange({ isPlaying: false });
+      }
+    } catch (error) {
+      console.error('Error stopping TTS:', error);
+    }
+  }
+
+  // Pause speech (Web only - React Native doesn't support pause/resume)
+  pause() {
+    if (Platform.OS === 'web' && speechSynthesis.speaking && !speechSynthesis.paused) {
+      speechSynthesis.pause();
+      if (this.onStatusChange) {
+        this.onStatusChange({ isPlaying: false, isPaused: true });
+      }
+    }
+  }
+
+  // Resume speech (Web only)
+  resume() {
+    if (Platform.OS === 'web' && speechSynthesis.paused) {
+      speechSynthesis.resume();
+      if (this.onStatusChange) {
+        this.onStatusChange({ isPlaying: true, isPaused: false });
+      }
+    }
+  }
+
+  // Check if TTS is currently playing
+  getIsPlaying() {
+    return this.isPlaying;
+  }
+
+  // Set status change callback
+  setOnStatusChange(callback) {
+    this.onStatusChange = callback;
+  }
+}
+
 const BibleStudyContent = () => {
   const [showJournal, setShowJournal] = useState(false);
   const [journalText, setJournalText] = useState('');
@@ -88,78 +330,106 @@ const BibleStudyContent = () => {
   const { stark, onProgressUpdate } = route.params || {};
   const dimensions = getResponsiveDimensions();
   const navigation = useNavigation();
-const [sound, setSound] = useState(null);
+
+  // TTS-related state
+  const [ttsService] = useState(() => new TTSService());
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentPlayingStep, setCurrentPlayingStep] = useState(null);
-  const soundRef = useRef(null);
+  const [ttsError, setTtsError] = useState(null);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [selectedVoice, setSelectedVoice] = useState(null);
+  const [ttsSettings, setTtsSettings] = useState({
+    rate: 0.8,
+    pitch: 1.0,
+    language: 'en-US'
+  });
+
+  // Initialize TTS service
+  useEffect(() => {
+    const initializeTTS = async () => {
+      try {
+        const voices = await ttsService.initialize();
+        setAvailableVoices(voices);
+        
+        // Select a default voice (prefer English)
+        const englishVoice = voices.find(voice => 
+          voice.lang && voice.lang.includes('en')
+        );
+        if (englishVoice) {
+          setSelectedVoice(englishVoice);
+        }
+
+        // Set up status change listener
+        ttsService.setOnStatusChange((status) => {
+          setIsPlaying(status.isPlaying);
+          if (status.error) {
+            setTtsError(status.error);
+          }
+          if (!status.isPlaying) {
+            setCurrentPlayingStep(null);
+          }
+        });
+      } catch (error) {
+        console.error('Failed to initialize TTS:', error);
+        setTtsError('Text-to-speech not available on this device');
+      }
+    };
+
+    initializeTTS();
+
+    // Cleanup on unmount
+    return () => {
+      ttsService.stop();
+    };
+  }, []);
 
   // Function to play audio for a specific step
   const playStepAudio = async (stepId, textToRead) => {
     try {
-      // Stop any currently playing audio
-      if (soundRef.current) {
-        await soundRef.current.stopAsync();
+      setTtsError(null);
+      
+      if (isPlaying && currentPlayingStep === stepId) {
+        // If already playing this step, stop it
+        await ttsService.stop();
+        return;
       }
 
-      // On iOS/Android, use TTS
-      if (Platform.OS !== 'web') {
-        const { sound: playbackObject } = await Audio.Sound.createAsync(
-          { uri: 'https://your-tts-service.com/generate?text=${encodeURIComponent(textToRead)}' }, // Replace with actual TTS implementation
-          { shouldPlay: true }
-        );
-        soundRef.current = playbackObject;
-        setCurrentPlayingStep(stepId);
-        setIsPlaying(true);
-        
-        playbackObject.setOnPlaybackStatusUpdate((status) => {
-          if (status.didJustFinish) {
-            setIsPlaying(false);
-            setCurrentPlayingStep(null);
-          }
-        });
-      } else {
-        // On web, use the Web Speech API
-        const utterance = new SpeechSynthesisUtterance(textToRead);
-        utterance.onend = () => {
-          setIsPlaying(false);
-          setCurrentPlayingStep(null);
-        };
-        speechSynthesis.speak(utterance);
-        setCurrentPlayingStep(stepId);
-        setIsPlaying(true);
+      // Stop any current playback
+      await ttsService.stop();
+
+      // Prepare TTS options
+      const ttsOptions = {
+        language: ttsSettings.language,
+        rate: ttsSettings.rate,
+        pitch: ttsSettings.pitch,
+      };
+
+      // Add voice selection for web
+      if (Platform.OS === 'web' && selectedVoice) {
+        ttsOptions.voice = selectedVoice.name;
+      } else if (Platform.OS !== 'web' && selectedVoice) {
+        ttsOptions.voice = selectedVoice.identifier;
       }
+
+      setCurrentPlayingStep(stepId);
+      await ttsService.speak(textToRead, ttsOptions);
+      
     } catch (error) {
       console.error('Error playing audio:', error);
+      setTtsError('Failed to play audio');
+      setIsPlaying(false);
+      setCurrentPlayingStep(null);
     }
   };
 
   const stopAudio = async () => {
     try {
-      if (Platform.OS !== 'web') {
-        if (soundRef.current) {
-          await soundRef.current.stopAsync();
-        }
-      } else {
-        speechSynthesis.cancel();
-      }
-      setIsPlaying(false);
-      setCurrentPlayingStep(null);
+      await ttsService.stop();
     } catch (error) {
       console.error('Error stopping audio:', error);
     }
   };
 
-  // Clean up audio on unmount
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
-      if (Platform.OS === 'web') {
-        speechSynthesis.cancel();
-      }
-    };
-  }, []);
   useEffect(() => {
     if (onProgressUpdate) {
       const percent = Math.round((completedSteps.size / steps.length) * 100);
@@ -312,7 +582,7 @@ const [sound, setSound] = useState(null);
     );
   };
 
-    const SectionCard = ({ children, stepId, title, isUnlocked, style = {}, contentText }) => {
+  const SectionCard = ({ children, stepId, title, isUnlocked, style = {}, contentText }) => {
     const isCompleted = isStepCompleted(stepId);
     const isCurrentlyPlaying = currentPlayingStep === stepId && isPlaying;
 
@@ -323,26 +593,37 @@ const [sound, setSound] = useState(null);
         isCompleted && styles.sectionCardCompleted,
         style
       ]}>
-       {isUnlocked && contentText && (
+        {isUnlocked && contentText && (
           <View style={styles.audioControls}>
             <TouchableOpacity
               onPress={() => isCurrentlyPlaying ? stopAudio() : playStepAudio(stepId, contentText)}
-              style={styles.audioButton}
+              style={[
+                styles.audioButton,
+                isCurrentlyPlaying && styles.audioButtonActive
+              ]}
+              disabled={!!ttsError}
             >
               <Ionicons 
                 name={isCurrentlyPlaying ? 'pause' : 'play'} 
                 size={dimensions.iconSize.small} 
-                color={COLORS.primary} 
+                color={ttsError ? COLORS.text.tertiary : COLORS.primary} 
               />
-              <Text style={styles.audioButtonText}>
-                {isCurrentlyPlaying ? 'Pause Audio' : 'Listen to this Step'}
+              <Text style={[
+                styles.audioButtonText,
+                ttsError && styles.audioButtonTextDisabled
+              ]}>
+                {ttsError ? 'Audio unavailable' : 
+                 isCurrentlyPlaying ? 'Pause Audio' : 'Listen to this Step'}
               </Text>
             </TouchableOpacity>
+            
+            {ttsError && (
+              <Text style={styles.ttsErrorText}>{ttsError}</Text>
+            )}
           </View>
         )}
         
         {children}
-        
         
         {isUnlocked && !isCompleted && (
           <TouchableOpacity
@@ -350,7 +631,7 @@ const [sound, setSound] = useState(null);
             onPress={() => handleStepComplete(stepId)}
           >
             <Ionicons 
-              name="play" 
+              name="checkmark" 
               size={dimensions.iconSize.small} 
               color={COLORS.background} 
             />
@@ -363,14 +644,11 @@ const [sound, setSound] = useState(null);
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={[styles.loadingText, { fontSize: dimensions.fontSize.body }]}>
-            Loading study content...
-          </Text>
-        </View>
-      </SafeAreaView>
+      <SplashScreen 
+      onFinish={() => {
+      }}
+      duration={2000} 
+    />
     );
   }
 
@@ -427,9 +705,6 @@ const [sound, setSound] = useState(null);
             {Math.round(progress)}%
           </Text>
         </View>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
-        </View>
       </View>
 
       {/* Step Indicators */}
@@ -458,11 +733,11 @@ const [sound, setSound] = useState(null);
         showsVerticalScrollIndicator={false}
       >
         {/* Main Verse */}
-          <SectionCard 
-              stepId="verse" 
-              isUnlocked={isStepUnlocked(0)}
-              contentText={`Main Verse: ${stark?.main_verse || 'Verse reference'}. ${stark?.explanation || 'Verse text here'}`}
-            >
+        <SectionCard 
+          stepId="verse" 
+          isUnlocked={isStepUnlocked(0)}
+          contentText={`Main Verse: ${stark?.main_verse || 'Verse reference'}. ${stark?.verse_text || stark?.explanation || 'Verse text here'}`}
+        >
           <View style={styles.verseCard}>
             <View style={styles.verseContent}>
               <Ionicons 
@@ -475,7 +750,7 @@ const [sound, setSound] = useState(null);
                   {stark?.main_verse || 'Verse reference'}
                 </Text>
                 <Text style={[styles.verseText, { fontSize: dimensions.fontSize.body }]}>
-                  "{stark?.explanation || 'Verse text here'}"
+                  "{stark?.verse_text || stark?.explanation || 'Verse text here'}"
                 </Text>
               </View>
             </View>
@@ -483,7 +758,7 @@ const [sound, setSound] = useState(null);
         </SectionCard>
 
         {/* Explanation */}
-          <SectionCard 
+        <SectionCard 
           stepId="explanation" 
           isUnlocked={isStepUnlocked(1)}
           contentText={`Explanation: ${stark?.explanation || 'Detailed explanation of the verse'}`}
@@ -506,7 +781,13 @@ const [sound, setSound] = useState(null);
         </SectionCard>
 
         {/* Related Verses */}
-        <SectionCard stepId="related" isUnlocked={isStepUnlocked(2)}>
+        <SectionCard 
+          stepId="related" 
+          isUnlocked={isStepUnlocked(2)}
+          contentText={`Related Verses: ${(stark?.related_verses && Array.isArray(stark.related_verses)) ? 
+            stark.related_verses.map(verse => `${verse.reference}: ${verse.text}`).join('. ') : 
+            'No related verses available'}`}
+        >
           <View style={styles.cardContent}>
             <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}>
               Related Verses
@@ -536,6 +817,7 @@ const [sound, setSound] = useState(null);
           stepId="knowledge" 
           isUnlocked={isStepUnlocked(3)} 
           style={styles.knowledgeCard}
+          contentText={`Did You Know? ${stark?.did_you_know || 'Interesting facts and historical context will appear here.'}`}
         >
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
@@ -559,6 +841,7 @@ const [sound, setSound] = useState(null);
           stepId="activity" 
           isUnlocked={isStepUnlocked(4)} 
           style={styles.activityCard}
+          contentText={`Activity of the Day: ${stark?.activity || 'Practical activity or exercise will appear here.'}`}
         >
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
@@ -772,11 +1055,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     overflow: 'hidden',
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 3,
-  },
+  
 stepsContainer: {
   backgroundColor: COLORS.surfaceElevated,
   borderBottomWidth: 1,
@@ -827,7 +1106,7 @@ stepsContainer: {
     backgroundColor: COLORS.semantic.success,
   },
  content: {
-  flex: 1,
+
   backgroundColor: COLORS.surface,
   marginTop: 0
 },

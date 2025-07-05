@@ -15,6 +15,8 @@ import { fetchCategories } from '../api/categoryService';
 import { fetchStarks } from '../api/starksService';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import SplashScreen from '../components/SplashScreen';
+
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -168,14 +170,13 @@ const BibleStudyApp = () => {
 
   if (loading && starks.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={[styles.loadingText, { fontSize: dimensions.fontSize.body }]}>
-            Loading Bible studies...
-          </Text>
-        </View>
-      </SafeAreaView>
+        <SplashScreen 
+      onFinish={() => {
+        // This will be called when splash finishes, but loading state 
+        // is controlled by fetchUserData, so no action needed here
+      }}
+      duration={2000} 
+    />
     );
   }
 
@@ -211,9 +212,6 @@ const BibleStudyApp = () => {
               size={dimensions.iconSize.medium} 
               color={showSearch ? COLORS.background : COLORS.primary} 
             />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addButton}>
-            <Ionicons name="add" size={dimensions.iconSize.medium} color={COLORS.background} />
           </TouchableOpacity>
         </View>
       </View>

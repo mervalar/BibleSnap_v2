@@ -84,7 +84,7 @@ const CATEGORY_COLORS = [
 // API function
 export const fetchNoteCategories = async () => {
   try {
-    const response = await fetch(`http://localhost:8000/api/note-categories`);
+    const response = await fetch(`http://biblesnap.bellatis.com/api/note-categories`);
     if (!response.ok) {
       throw new Error('Failed to fetch note categories');
     }
@@ -356,7 +356,7 @@ const UserNoteModal = ({
             <View style={styles.inputContainer}>
               <Ionicons name="book-outline" size={dimensions.iconSize.small} color={COLORS.primary} />
               <TextInput
-                style={[styles.verseInput, { fontSize: dimensions.fontSize.body }]}
+                style={[styles.verseInput, { fontSize: dimensions.fontSize.body}]}
                 placeholder="Enter a Bible verse (optional)..."
                 placeholderTextColor={COLORS.text.tertiary}
                 value={verse}

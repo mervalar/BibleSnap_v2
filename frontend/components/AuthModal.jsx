@@ -15,13 +15,15 @@ import {
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+
 
 WebBrowser.maybeCompleteAuthSession();
 
 const { height: screenHeight } = Dimensions.get('window');
 
 // Configure your API base URL
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'http://biblesnap.bellatis.com/api';
 
 export default function AuthModal({ visible, onClose, navigation }) {
   const slideAnimation = React.useRef(new Animated.Value(screenHeight)).current;
@@ -94,6 +96,31 @@ export default function AuthModal({ visible, onClose, navigation }) {
       setLoading(false);
     }
   }, [response]);
+
+  // keyboard 
+
+  useEffect(() => {
+  const keyboardDidShow = Keyboard.addListener('keyboardDidShow', () => {
+    Animated.timing(slideAnimation, {
+      toValue: -70, 
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  });
+
+  const keyboardDidHide = Keyboard.addListener('keyboardDidHide', () => {
+    Animated.timing(slideAnimation, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  });
+
+  return () => {
+    keyboardDidShow.remove();
+    keyboardDidHide.remove();
+  };
+}, []);
 
   // API call functions
   const apiCall = async (endpoint, method = 'POST', data = null) => {
@@ -345,13 +372,13 @@ export default function AuthModal({ visible, onClose, navigation }) {
   const renderMainView = () => (
     <View style={styles.content}>
       <Text style={styles.title}>
-        Your ideas, amplified
+        BibleSnap
       </Text>
       <Text style={styles.subtitle}>
-        Privacy-first AI that helps you create in confidence.
+        Grow your faith. Stay inspired.
       </Text>
 
-      {/* Google Login Button */}
+      {/* Google Login Button
       <TouchableOpacity
         disabled={!request || loading}
         onPress={handleGoogleAuth}
@@ -369,13 +396,13 @@ export default function AuthModal({ visible, onClose, navigation }) {
         <Text style={styles.googleButtonText}>
           {loading ? 'Authenticating...' : !request ? 'Loading...' : 'Continue with Google'}
         </Text>
-      </TouchableOpacity>
-
+      </TouchableOpacity> */}
+{/* 
       <View style={styles.orContainer}>
         <View style={styles.orLine} />
         <Text style={styles.orText}>OR</Text>
         <View style={styles.orLine} />
-      </View>
+      </View> */}
 
       <TextInput
         style={styles.emailInput}
@@ -410,10 +437,10 @@ export default function AuthModal({ visible, onClose, navigation }) {
         </Text>
       </TouchableOpacity>
 
-      <Text style={styles.privacyText}>
+      {/* <Text style={styles.privacyText}>
         By continuing, you acknowledge Anthropic's{' '}
         <Text style={styles.privacyLink}>Privacy Policy</Text>.
-      </Text>
+      </Text> */}
     </View>
   );
 
@@ -483,8 +510,8 @@ export default function AuthModal({ visible, onClose, navigation }) {
 
   const renderSignUpView = () => (
     <View style={styles.content}>
-      <Text style={styles.title}>Create your account</Text>
-      <Text style={styles.subtitle}>Join thousands of users creating with AI</Text>
+      <Text style={styles.title}>Create account</Text>
+      <Text style={styles.subtitle}>Log in to your account</Text>
       
       <TextInput
         style={styles.input}
@@ -568,11 +595,11 @@ export default function AuthModal({ visible, onClose, navigation }) {
 
   return (
     <Modal
-      visible={visible}
-      transparent={true}
-      animationType="none"
-      onRequestClose={handleClose}
-    >
+    transparent
+     animationType="none"
+    visible={visible}
+    onRequestClose={handleClose}
+  >
       <TouchableWithoutFeedback onPress={!loading ? handleClose : null}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
@@ -618,6 +645,10 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
     minHeight: 500,
     shadowColor: '#000',
+    flex: 1,
+    backgroundColor: 'hsla(0, 0.70%, 27.30%, 0.80)', 
+    justifyContent: 'center',
+    alignItems: 'center',
     shadowOffset: {
       width: 0,
       height: -4,
@@ -625,6 +656,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 10,
+
+  },
+    modalContent: {
+    width: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    elevation: 10,
+    marginHorizontal: 20,
+     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
   },
   handleBar: {
     width: 36,
@@ -658,7 +704,7 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   title: {
-    color: '#111827',
+    color: 'white',
     fontSize: 32,
     fontWeight: '700',
     textAlign: 'center',
@@ -667,7 +713,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   subtitle: {
-    color: '#6B7280',
+    color: 'white',
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 32,
@@ -748,7 +794,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   orText: {
-    color: '#9CA3AF',
+    color: '#white',
     fontSize: 14,
     fontWeight: '500',
     paddingHorizontal: 16,
@@ -796,7 +842,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: '#6B7280',
+    color: 'white',
     fontSize: 14,
     fontWeight: '500',
   },
