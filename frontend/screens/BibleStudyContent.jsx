@@ -19,6 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
+import SplashScreen from '../components/SplashScreen';
+
 
 // Responsive dimensions (matching Journal app)
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -642,14 +644,11 @@ const BibleStudyContent = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={[styles.loadingText, { fontSize: dimensions.fontSize.body }]}>
-            Loading study content...
-          </Text>
-        </View>
-      </SafeAreaView>
+      <SplashScreen 
+      onFinish={() => {
+      }}
+      duration={2000} 
+    />
     );
   }
 

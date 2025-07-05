@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import SplashScreen from '../components/SplashScreen';
+
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -131,14 +133,11 @@ const ChaptersListPage = () => {
 
   if (loading && chapters.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={[styles.loadingText, { fontSize: dimensions.fontSize.body }]}>
-            Loading Chapters...
-          </Text>
-        </View>
-      </SafeAreaView>
+      <SplashScreen 
+      onFinish={() => {
+      }}
+      duration={2000}
+    />
     );
   }
 

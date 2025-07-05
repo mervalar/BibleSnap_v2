@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart } from 'react-native-chart-kit';
+import { fetchJournals } from '../api/journalApi'; 
+import SplashScreen from '../components/SplashScreen';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -84,6 +86,7 @@ const ProfilePage = () => {
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [updateLoading, setUpdateLoading] = useState(false);
+  const [journalCount, setJournalCount] = useState(0);
 
   const dimensions = getResponsiveDimensions();
 
@@ -150,6 +153,34 @@ const ProfilePage = () => {
       fetchUserData();
     }, [])
   );
+const getUserId = async () => {
+  try {
+    const userData = await AsyncStorage.getItem('user');
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      return parsedUser?.id;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting user ID:', error);
+    return null;
+  }
+};
+
+  useEffect(() => {
+  const loadJournalCount = async () => {
+    try {
+      const userId = await getUserId();
+      const journals = await fetchJournals(userId);
+      setJournalCount(journals.length);
+    } catch (error) {
+      console.error('Failed to load journal count:', error);
+    }
+  };
+
+  loadJournalCount();
+}, []);
+
 
   const handleLogout = async () => {
     Alert.alert(
@@ -227,18 +258,15 @@ const ProfilePage = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={[styles.loadingText, { fontSize: dimensions.fontSize.body }]}>
-            Loading profile...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+if (loading) {
+  return (
+    <SplashScreen 
+      onFinish={() => {
+      }}
+      duration={2000} 
+    />
+  );
+}
 
   if (!user) {
     return (
@@ -329,7 +357,7 @@ const ProfilePage = () => {
         </View>
 
         {/* Stats Cards */}
-        <View style={styles.statsGrid}>
+        {/* <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <View style={styles.statIconContainer}>
               <Ionicons name="flame" size={dimensions.iconSize.medium} color={COLORS.semantic.warning} />
@@ -350,13 +378,14 @@ const ProfilePage = () => {
             <View style={styles.statIconContainer}>
               <Ionicons name="journal" size={dimensions.iconSize.medium} color={COLORS.semantic.info} />
             </View>
-            <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>12</Text>
+            <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>{journalCount}</Text>
             <Text style={[styles.statLabel, { fontSize: dimensions.fontSize.caption }]}>Journals</Text>
           </View>
-        </View>
+
+        </View> */}
 
         {/* Growth Chart */}
-        <View style={styles.chartCard}>
+        {/* <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
             <View>
               <Text style={[styles.chartTitle, { fontSize: dimensions.fontSize.subtitle }]}>
@@ -381,47 +410,7 @@ const ProfilePage = () => {
               style={styles.chart}
             />
           </View>
-        </View>
-
-        {/* Activity Cards */}
-        <View style={styles.sectionContainer}>
-          <Text style={[styles.sectionTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-            Recent Activity
-          </Text>
-          
-          <View style={styles.activityCard}>
-            <View style={styles.activityIcon}>
-              <Ionicons name="flame" size={dimensions.iconSize.medium} color={COLORS.semantic.warning} />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={[styles.activityTitle, { fontSize: dimensions.fontSize.body }]}>
-                Current Streak
-              </Text>
-              <Text style={[styles.activitySubtitle, { fontSize: dimensions.fontSize.caption }]}>
-                7 days in a row - Keep it up!
-              </Text>
-            </View>
-            <View style={styles.streakBadge}>
-              <Text style={[styles.streakNumber, { fontSize: dimensions.fontSize.caption }]}>🔥 7</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.activityCard}>
-            <View style={styles.activityIcon}>
-              <Ionicons name="checkmark-circle" size={dimensions.iconSize.medium} color={COLORS.semantic.success} />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={[styles.activityTitle, { fontSize: dimensions.fontSize.body }]}>
-                Last Challenge
-              </Text>
-              <Text style={[styles.activitySubtitle, { fontSize: dimensions.fontSize.caption }]}>
-                Completed yesterday
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={dimensions.iconSize.small} color={COLORS.text.tertiary} />
-          </TouchableOpacity>
-        </View>
-
+        </View> */}
         {/* Account Section */}
         <View style={styles.sectionContainer}>
           <Text style={[styles.sectionTitle, { fontSize: dimensions.fontSize.subtitle }]}>
@@ -429,7 +418,7 @@ const ProfilePage = () => {
           </Text>
           
           <View style={styles.menuCard}>
-            <TouchableOpacity style={styles.menuItem}>
+            {/* <TouchableOpacity style={styles.menuItem}>
               <View style={styles.menuIcon}>
                 <Ionicons name="bookmark" size={dimensions.iconSize.medium} color={COLORS.primary} />
               </View>
@@ -438,7 +427,7 @@ const ProfilePage = () => {
                 <Text style={[styles.menuSubtext, { fontSize: dimensions.fontSize.caption }]}>37 verses saved</Text>
               </View>
               <Ionicons name="chevron-forward" size={dimensions.iconSize.small} color={COLORS.text.tertiary} />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             <View style={styles.menuDivider} />
 
@@ -448,7 +437,7 @@ const ProfilePage = () => {
               </View>
               <View style={styles.menuContent}>
                 <Text style={[styles.menuText, { fontSize: dimensions.fontSize.body }]}>My Journals</Text>
-                <Text style={[styles.menuSubtext, { fontSize: dimensions.fontSize.caption }]}>12 journal entries</Text>
+                <Text style={[styles.menuSubtext, { fontSize: dimensions.fontSize.caption }]}>{journalCount} journal entries</Text>
               </View>
               <Ionicons name="chevron-forward" size={dimensions.iconSize.small} color={COLORS.text.tertiary} />
             </TouchableOpacity>
@@ -806,51 +795,7 @@ const styles = StyleSheet.create({
   chart: {
     borderRadius: 16,
   },
-  activitySection: {
-    marginTop: 10,
-  },
-  activityCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    marginBottom: 1,
-  },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#AE796D',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  iconText: {
-    fontSize: 16,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-    marginBottom: 2,
-  },
-  activitySubtitle: {
-    fontSize: 12,
-    color: '#666',
-  },
-  activityBadge: {
-    backgroundColor: '#A07553',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  badgeText: {
-    fontSize: 12,
-  },
+  
   chevron: {
     fontSize: 18,
     color: '#CCC',

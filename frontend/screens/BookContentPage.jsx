@@ -10,7 +10,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
+import SplashScreen from '../components/SplashScreen';
+
 
 const BookContent = () => {
   const route = useRoute();
@@ -26,6 +29,10 @@ const BookContent = () => {
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [speechRate, setSpeechRate] = useState(0.8);
   const [speechPitch, setSpeechPitch] = useState(1.0);
+  const [highlights, setHighlights] = useState({});
+  const [selectedVerse, setSelectedVerse] = useState(null);
+  const [showToolbox, setShowToolbox] = useState(false);
+  const highlightColors = ['#FFD700', '#90EE90', '#ADD8E6', '#FFB6C1'];
   
   // Audio progress state
   const [currentTime, setCurrentTime] = useState(0);
@@ -59,14 +66,29 @@ const BookContent = () => {
       fetchChapterContent(currentChapter);
     }
   }, [currentChapter, chapters]);
+    useEffect(() => {
+      initializeTTS();
+      fetchChapters();
+      loadHighlights(); 
+      
+      return () => {
+        cleanupTTS();
+        saveHighlights(); 
+      };
+    }, []);
 
+    useEffect(() => {
+      saveHighlights();
+    }, [highlights]);
+
+useEffect(() => {
+  saveHighlights();
+}, [highlights]);
   const initializeTTS = async () => {
     try {
       // Get available voices
       const voices = await Speech.getAvailableVoicesAsync();
       setAvailableVoices(voices);
-      
-      // Set default voice (prefer first English voice)
       const englishVoice = voices.find(voice => 
         voice.language.startsWith('en') || voice.language.includes('en')
       );
@@ -75,6 +97,24 @@ const BookContent = () => {
       console.log('TTS initialization error:', error);
     }
   };
+     const saveHighlights = async () => {
+        try {
+          await AsyncStorage.setItem(`highlights_${book.id}`, JSON.stringify(highlights));
+        } catch (e) {
+          console.error('Failed to save highlights', e);
+        }
+      };
+
+        const loadHighlights = async () => {
+        try {
+          const saved = await AsyncStorage.getItem(`highlights_${book.id}`);
+          if (saved) {
+            setHighlights(JSON.parse(saved));
+          }
+        } catch (e) {
+          console.error('Failed to load highlights', e);
+        }
+      };
 
   const cleanupTTS = async () => {
     try {
@@ -334,15 +374,63 @@ const BookContent = () => {
 
   if (loading && verses.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9E795D" />
-          <Text style={styles.loadingText}>Loading {book.name}...</Text>
-        </View>
-      </SafeAreaView>
+      <SplashScreen 
+      onFinish={() => {
+      }}
+      duration={2000} 
+    />
     );
   }
 
+  const handleVersePress = (verse) => {
+  setSelectedVerse(verse);
+  setShowToolbox(true);
+};
+
+const handleHighlight = (color) => {
+  if (!selectedVerse) return;
+  
+  setHighlights(prev => ({
+    ...prev,
+    [selectedVerse.id]: {
+      color,
+      text: stripHtml(selectedVerse.text)
+    }
+  }));
+  setShowToolbox(false);
+};
+
+const removeHighlight = (verseId) => {
+  setHighlights(prev => {
+    const newHighlights = {...prev};
+    delete newHighlights[verseId];
+    return newHighlights;
+  });
+};
+
+const HighlightToolbox = ({ visible, onSelectColor, onClose }) => {
+  if (!visible) return null;
+
+  return (
+    <View style={styles.toolboxContainer}>
+      <View style={styles.toolbox}>
+        {highlightColors.map((color) => (
+          <TouchableOpacity
+            key={color}
+            style={[styles.colorButton, { backgroundColor: color }]}
+            onPress={() => onSelectColor(color)}
+          />
+        ))}
+        <TouchableOpacity 
+          style={styles.closeButton}
+          onPress={onClose}
+        >
+          <Text style={styles.closeButtonText}>×</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -391,20 +479,26 @@ const BookContent = () => {
 
       {/* Content */}
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {verses.map((verse, index) => (
-          <View 
-            key={verse.id} 
-            style={[
-              styles.verse, 
-              currentVerseIndex === index && isPlaying && styles.activeVerse
-            ]}
-          >
-            <Text style={styles.verseNumber}>{verse.number}</Text>
-            <Text style={styles.verseText}>
-              {verse.text ? stripHtml(verse.text) : 'Verse text not available'}
-            </Text>
-          </View>
-        ))}
+        {verses.map((verse, index) => {
+          const isHighlighted = highlights[verse.id];
+          return (
+            <TouchableOpacity 
+              key={verse.id} 
+              style={[
+                styles.verse, 
+                currentVerseIndex === index && isPlaying && styles.activeVerse,
+                isHighlighted && { backgroundColor: isHighlighted.color }
+              ]}
+              onPress={() => handleVersePress(verse)}
+              onLongPress={() => removeHighlight(verse.id)}
+            >
+              <Text style={styles.verseNumber}>{verse.number}</Text>
+              <Text style={styles.verseText}>
+                {verse.text ? stripHtml(verse.text) : 'Verse text not available'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
         
         {verses.length === 0 && !loading && (
           <View style={styles.emptyContainer}>
@@ -500,6 +594,11 @@ const BookContent = () => {
           {isPaused && ' • Paused'}
         </Text>
       </View>
+      <HighlightToolbox 
+        visible={showToolbox && selectedVerse}
+        onSelectColor={handleHighlight}
+        onClose={() => setShowToolbox(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -749,6 +848,44 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.9,
   },
+  toolboxContainer: {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: 'rgba(0,0,0,0.2)',
+},
+toolbox: {
+  flexDirection: 'row',
+  backgroundColor: 'white',
+  borderRadius: 8,
+  padding: 10,
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+  elevation: 5,
+},
+colorButton: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  marginHorizontal: 5,
+  borderWidth: 1,
+  borderColor: '#ddd',
+},
+closeButton: {
+  marginLeft: 10,
+  padding: 8,
+},
+closeButtonText: {
+  fontSize: 20,
+  color: '#333',
+},
 });
 
 export default BookContent;

@@ -704,7 +704,7 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   title: {
-    color: '#111827',
+    color: 'white',
     fontSize: 32,
     fontWeight: '700',
     textAlign: 'center',
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   subtitle: {
-    color: '#6B7280',
+    color: 'white',
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 32,
@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   orText: {
-    color: '#9CA3AF',
+    color: '#white',
     fontSize: 14,
     fontWeight: '500',
     paddingHorizontal: 16,
@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: '#6B7280',
+    color: 'white',
     fontSize: 14,
     fontWeight: '500',
   },
