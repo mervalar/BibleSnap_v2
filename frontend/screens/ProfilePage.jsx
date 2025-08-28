@@ -431,7 +431,7 @@ if (loading) {
 
             <View style={styles.menuDivider} />
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('JournalPage')}>
               <View style={styles.menuIcon}>
                 <Ionicons name="journal" size={dimensions.iconSize.medium} color={COLORS.semantic.info} />
               </View>

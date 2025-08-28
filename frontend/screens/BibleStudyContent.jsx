@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import SplashScreen from '../components/SplashScreen';
-
+import { Video } from 'expo-av';
 
 // Responsive dimensions (matching Journal app)
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -30,7 +30,7 @@ const getResponsiveDimensions = () => {
   const isLargePhone = screenWidth >= 414;
   
   return {
-    headerHeight: isTablet ? 80 : 60,
+    headerHeight: isTablet ? 64 : 48, 
     cardPadding: isTablet ? 24 : 16,
     fontSize: {
       title: isTablet ? 20 : 18,
@@ -52,6 +52,9 @@ const getResponsiveDimensions = () => {
     }
   };
 };
+
+// Initialize dimensions
+const dimensions = getResponsiveDimensions();
 
 // Professional color palette (matching Journal app)
 const COLORS = {
@@ -85,462 +88,151 @@ class TTSService {
   constructor() {
     this.isPlaying = false;
     this.currentUtterance = null;
-    this.onStatusChange = null;
-  }
-
-  // Initialize TTS for the current platform
-  async initialize() {
-    if (Platform.OS === 'web') {
-      // Check if Web Speech API is supported
-      if (!('speechSynthesis' in window)) {
-        throw new Error('Text-to-Speech not supported in this browser');
-      }
-      
-      // Load voices (they might not be available immediately)
-      return new Promise((resolve) => {
-        const loadVoices = () => {
-          const voices = speechSynthesis.getVoices();
-          if (voices.length > 0) {
-            resolve(voices);
-          } else {
-            // Voices might load asynchronously
-            speechSynthesis.onvoiceschanged = () => {
-              resolve(speechSynthesis.getVoices());
-            };
-          }
-        };
-        loadVoices();
-      });
-    } else {
-      // For React Native (iOS/Android), expo-speech handles initialization
-      const voices = await Speech.getAvailableVoicesAsync();
-      return voices;
-    }
-  }
-
-  // Get available voices for the platform
-  async getVoices() {
-    if (Platform.OS === 'web') {
-      return speechSynthesis.getVoices();
-    } else {
-      return await Speech.getAvailableVoicesAsync();
-    }
-  }
-
-  // Speak text with options
-  async speak(text, options = {}) {
-    const defaultOptions = {
-      language: 'en-US',
-      pitch: 1.0,
-      rate: 0.8,
-      voice: null,
-    };
-
-    const ttsOptions = { ...defaultOptions, ...options };
-
-    try {
-      // Stop any current speech
-      await this.stop();
-
-      if (Platform.OS === 'web') {
-        return this._speakWeb(text, ttsOptions);
-      } else {
-        return this._speakNative(text, ttsOptions);
-      }
-    } catch (error) {
-      console.error('TTS Error:', error);
-      throw error;
-    }
-  }
-
-  // Web Speech API implementation
-  _speakWeb(text, options) {
-    return new Promise((resolve, reject) => {
-      try {
-        const utterance = new SpeechSynthesisUtterance(text);
-        
-        // Set voice options
-        utterance.lang = options.language;
-        utterance.pitch = options.pitch;
-        utterance.rate = options.rate;
-        
-        // Set voice if specified
-        if (options.voice) {
-          const voices = speechSynthesis.getVoices();
-          const selectedVoice = voices.find(voice => 
-            voice.name === options.voice || voice.lang.includes(options.language)
-          );
-          if (selectedVoice) {
-            utterance.voice = selectedVoice;
-          }
-        }
-
-        // Event handlers
-        utterance.onstart = () => {
-          this.isPlaying = true;
-          if (this.onStatusChange) {
-            this.onStatusChange({ isPlaying: true });
-          }
-        };
-
-        utterance.onend = () => {
-          this.isPlaying = false;
-          this.currentUtterance = null;
-          if (this.onStatusChange) {
-            this.onStatusChange({ isPlaying: false });
-          }
-          resolve();
-        };
-
-        utterance.onerror = (event) => {
-          this.isPlaying = false;
-          this.currentUtterance = null;
-          if (this.onStatusChange) {
-            this.onStatusChange({ isPlaying: false, error: event.error });
-          }
-          reject(new Error(`TTS Error: ${event.error}`));
-        };
-
-        this.currentUtterance = utterance;
-        speechSynthesis.speak(utterance);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  // React Native (iOS/Android) implementation
-  async _speakNative(text, options) {
-    const speechOptions = {
-      language: options.language,
-      pitch: options.pitch,
-      rate: options.rate,
-    };
-
-    // Set voice if specified
-    if (options.voice) {
-      speechOptions.voice = options.voice;
-    }
-
-    // Set up status listener
-    this.isPlaying = true;
-    if (this.onStatusChange) {
-      this.onStatusChange({ isPlaying: true });
-    }
-
-    try {
-      await Speech.speak(text, {
-        ...speechOptions,
-        onStart: () => {
-          this.isPlaying = true;
-          if (this.onStatusChange) {
-            this.onStatusChange({ isPlaying: true });
-          }
-        },
-        onDone: () => {
-          this.isPlaying = false;
-          if (this.onStatusChange) {
-            this.onStatusChange({ isPlaying: false });
-          }
-        },
-        onStopped: () => {
-          this.isPlaying = false;
-          if (this.onStatusChange) {
-            this.onStatusChange({ isPlaying: false });
-          }
-        },
-        onError: (error) => {
-          this.isPlaying = false;
-          if (this.onStatusChange) {
-            this.onStatusChange({ isPlaying: false, error });
-          }
-        },
-      });
-    } catch (error) {
-      this.isPlaying = false;
-      if (this.onStatusChange) {
-        this.onStatusChange({ isPlaying: false, error });
-      }
-      throw error;
-    }
-  }
-
-  // Stop current speech
-  async stop() {
-    try {
-      if (Platform.OS === 'web') {
-        if (speechSynthesis.speaking) {
-          speechSynthesis.cancel();
-        }
-      } else {
-        await Speech.stop();
-      }
-      
-      this.isPlaying = false;
-      this.currentUtterance = null;
-      
-      if (this.onStatusChange) {
-        this.onStatusChange({ isPlaying: false });
-      }
-    } catch (error) {
-      console.error('Error stopping TTS:', error);
-    }
-  }
-
-  // Pause speech (Web only - React Native doesn't support pause/resume)
-  pause() {
-    if (Platform.OS === 'web' && speechSynthesis.speaking && !speechSynthesis.paused) {
-      speechSynthesis.pause();
-      if (this.onStatusChange) {
-        this.onStatusChange({ isPlaying: false, isPaused: true });
-      }
-    }
-  }
-
-  // Resume speech (Web only)
-  resume() {
-    if (Platform.OS === 'web' && speechSynthesis.paused) {
-      speechSynthesis.resume();
-      if (this.onStatusChange) {
-        this.onStatusChange({ isPlaying: true, isPaused: false });
-      }
-    }
-  }
-
-  // Check if TTS is currently playing
-  getIsPlaying() {
-    return this.isPlaying;
   }
 
   // Set status change callback
   setOnStatusChange(callback) {
     this.onStatusChange = callback;
   }
+
+  getPlayingStatus() {
+    return this.isPlaying;
+  }
 }
 
+// Video Background Component
+const VideoBackground = () => {
+  return (
+    <View style={styles.sectionVideoBackground}>
+      <Video
+        source={require('../assets/view.mp4')}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+        shouldPlay
+        isLooping
+        muted
+        rate={1.0}
+        ignoreSilentSwitch="obey"
+      />
+    </View>
+  );
+};
+
+// Progress Bar Component
+const ProgressBar = ({ progress }) => {
+  return (
+    <View style={styles.progressContainer}>
+      <View style={styles.progressHeader}>
+        <Text style={[styles.progressLabel, { fontSize: dimensions.fontSize.caption }]}> 
+          Progress
+        </Text>
+        <Text style={[styles.progressPercent, { fontSize: dimensions.fontSize.caption }]}> 
+          {progress}%
+        </Text>
+      </View>
+      <View style={styles.progressBar}>
+        <View style={[styles.progressFill, { width: `${progress}%` }]} />
+      </View>
+    </View>
+  );
+};
+
+// Section Card Component
+const SectionCard = ({ stepId, title, isUnlocked, contentText, children, style }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const ttsService = useRef(new TTSService()).current;
+
+  const handleAudioPress = () => {
+    if (isPlaying) {
+      Speech.stop();
+      setIsPlaying(false);
+    } else {
+      Speech.speak(contentText, {
+        onStart: () => setIsPlaying(true),
+        onDone: () => setIsPlaying(false),
+        onError: () => setIsPlaying(false),
+      });
+    }
+  };
+
+  return (
+    <View style={[styles.sectionContent, style]}>
+      <View style={styles.audioControls}>
+        <TouchableOpacity
+          style={[styles.audioButton, isPlaying && styles.audioButtonActive]}
+          onPress={handleAudioPress}
+        >
+          <Ionicons
+            name={isPlaying ? "pause" : "play"}
+            size={dimensions.iconSize.small}
+            color={COLORS.text.primary}
+          />
+          <Text style={[styles.audioButtonText, { fontSize: dimensions.fontSize.caption }]}>
+            {isPlaying ? "Pause" : "Listen"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      {children}
+    </View>
+  );
+};
+
 const BibleStudyContent = () => {
+  const navigation = useNavigation();
+  const route = useRoute();
   const [showJournal, setShowJournal] = useState(false);
   const [journalText, setJournalText] = useState('');
   const [completedSteps, setCompletedSteps] = useState(new Set());
   const [currentStep, setCurrentStep] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationAnim] = useState(new Animated.Value(0));
-  const [loading, setLoading] = useState(false);
-  const route = useRoute();
-  const { stark, onProgressUpdate } = route.params || {};
-  const dimensions = getResponsiveDimensions();
-  const navigation = useNavigation();
+  const [isLoading, setIsLoading] = useState(false);
+  const sectionRefs = useRef([]);
+  // Accept initial progress from route params
+  const initialProgress = route?.params?.progress || 0;
+  const onProgressUpdate = route?.params?.onProgressUpdate;
+  const [progress, setProgress] = useState(initialProgress);
 
-  // TTS-related state
-  const [ttsService] = useState(() => new TTSService());
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentPlayingStep, setCurrentPlayingStep] = useState(null);
-  const [ttsError, setTtsError] = useState(null);
-  const [availableVoices, setAvailableVoices] = useState([]);
-  const [selectedVoice, setSelectedVoice] = useState(null);
-  const [ttsSettings, setTtsSettings] = useState({
-    rate: 0.8,
-    pitch: 1.0,
-    language: 'en-US'
-  });
+  // Get data from route params
+  const stark = route?.params?.stark || {};
 
-  // Initialize TTS service
-  useEffect(() => {
-    const initializeTTS = async () => {
-      try {
-        const voices = await ttsService.initialize();
-        setAvailableVoices(voices);
-        
-        // Select a default voice (prefer English)
-        const englishVoice = voices.find(voice => 
-          voice.lang && voice.lang.includes('en')
-        );
-        if (englishVoice) {
-          setSelectedVoice(englishVoice);
-        }
-
-        // Set up status change listener
-        ttsService.setOnStatusChange((status) => {
-          setIsPlaying(status.isPlaying);
-          if (status.error) {
-            setTtsError(status.error);
-          }
-          if (!status.isPlaying) {
-            setCurrentPlayingStep(null);
-          }
-        });
-      } catch (error) {
-        console.error('Failed to initialize TTS:', error);
-        setTtsError('Text-to-speech not available on this device');
-      }
-    };
-
-    initializeTTS();
-
-    // Cleanup on unmount
-    return () => {
-      ttsService.stop();
-    };
-  }, []);
-
-  // Function to play audio for a specific step
-  const playStepAudio = async (stepId, textToRead) => {
-    try {
-      setTtsError(null);
-      
-      if (isPlaying && currentPlayingStep === stepId) {
-        // If already playing this step, stop it
-        await ttsService.stop();
-        return;
-      }
-
-      // Stop any current playback
-      await ttsService.stop();
-
-      // Prepare TTS options
-      const ttsOptions = {
-        language: ttsSettings.language,
-        rate: ttsSettings.rate,
-        pitch: ttsSettings.pitch,
-      };
-
-      // Add voice selection for web
-      if (Platform.OS === 'web' && selectedVoice) {
-        ttsOptions.voice = selectedVoice.name;
-      } else if (Platform.OS !== 'web' && selectedVoice) {
-        ttsOptions.voice = selectedVoice.identifier;
-      }
-
-      setCurrentPlayingStep(stepId);
-      await ttsService.speak(textToRead, ttsOptions);
-      
-    } catch (error) {
-      console.error('Error playing audio:', error);
-      setTtsError('Failed to play audio');
-      setIsPlaying(false);
-      setCurrentPlayingStep(null);
-    }
-  };
-
-  const stopAudio = async () => {
-    try {
-      await ttsService.stop();
-    } catch (error) {
-      console.error('Error stopping audio:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (onProgressUpdate) {
-      const percent = Math.round((completedSteps.size / steps.length) * 100);
-      onProgressUpdate(percent);
-    }
-  }, [completedSteps]);
-
-  // Define the study steps
+  // Steps configuration
   const steps = [
-    { id: 'verse', title: 'Read Main Verse', icon: 'book-outline' },
-    { id: 'explanation', title: 'Study Explanation', icon: 'bulb-outline' },
-    { id: 'related', title: 'Related Verses', icon: 'book-outline' },
-    { id: 'knowledge', title: 'Did You Know?', icon: 'bulb-outline' },
-    { id: 'activity', title: 'Complete Activity', icon: 'checkmark-circle-outline' },
-    { id: 'reflection', title: 'Personal Reflection', icon: 'heart-outline' }
+    { id: 'verse', title: 'Main Verse', icon: 'book-outline' },
+    { id: 'explanation', title: 'Explanation', icon: 'bulb-outline' },
+    { id: 'related', title: 'Related Verses', icon: 'library-outline' },
+    { id: 'knowledge', title: 'Did You Know?', icon: 'lightbulb-outline' },
+    { id: 'activity', title: 'Activity', icon: 'checkmark-circle-outline' },
   ];
 
-  const progress = (completedSteps.size / steps.length) * 100;
-
-  const saveProgress = async (completedSteps, currentStep) => {
-    try {
-      const today = new Date().toDateString();
-      const progress = {
-        date: today,
-        percent: Math.round((completedSteps.size / steps.length) * 100),
-        currentStep,
-        completedSteps: Array.from(completedSteps)
-      };
-      
-      await AsyncStorage.setItem('challengeProgress', JSON.stringify(progress));
-      await AsyncStorage.setItem('challengeProgressDate', today);
-      
-      if (onProgressUpdate) {
-        onProgressUpdate(progress.percent);
+  // Handle scroll for progress tracking
+  const handleScroll = (event) => {
+    const yOffset = event.nativeEvent.contentOffset.y;
+    // Each section is roughly screenHeight * 0.85 tall
+    const sectionHeight = screenHeight * 0.85;
+    // Calculate which section is most visible
+    let sectionIndex = Math.round(yOffset / sectionHeight);
+    // Clamp to valid range
+    sectionIndex = Math.max(0, Math.min(sectionIndex, steps.length - 1));
+    setCurrentStep(sectionIndex);
+    // Calculate progress percentage
+    const percent = Math.round(((sectionIndex + 1) / steps.length) * 100);
+    // Only increase progress, never decrease
+    setProgress(prev => {
+      const newProgress = percent > prev ? percent : prev;
+      if (onProgressUpdate && typeof onProgressUpdate === 'function' && newProgress !== prev) {
+        onProgressUpdate(newProgress);
       }
-    } catch (error) {
-      console.error('Error saving progress:', error);
-    }
+      return newProgress;
+    });
   };
 
+  // Handle step completion
   const handleStepComplete = (stepId) => {
-    const newCompleted = new Set(completedSteps);
-    newCompleted.add(stepId);
-    setCompletedSteps(newCompleted);
-    
-    const stepIndex = steps.findIndex(step => step.id === stepId);
-    if (stepIndex < steps.length - 1) {
-      setCurrentStep(stepIndex + 1);
-    }
-    
-    saveProgress(newCompleted, stepIndex + 1);
-    
-    if (newCompleted.size === steps.length) {
-      setShowCelebration(true);
-      Animated.sequence([
-        Animated.timing(celebrationAnim, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(celebrationAnim, {
-          toValue: 0,
-          duration: 500,
-          delay: 2000,
-          useNativeDriver: true,
-        }),
-      ]).start(() => setShowCelebration(false));
-    }
+    setCompletedSteps(prev => new Set([...prev, stepId]));
   };
 
-  useEffect(() => {
-    const loadProgress = async () => {
-      try {
-        setLoading(true);
-        const today = new Date().toDateString();
-        const progress = await AsyncStorage.getItem('challengeProgress');
-        const progressDate = await AsyncStorage.getItem('challengeProgressDate');
-        
-        if (progress && progressDate === today) {
-          const progressData = JSON.parse(progress);
-          setCompletedSteps(new Set(progressData.completedSteps));
-          setCurrentStep(progressData.currentStep);
-          
-          if (onProgressUpdate) {
-            onProgressUpdate(progressData.percent);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading progress:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadProgress();
-  }, []);
-
-  const isStepUnlocked = (stepIndex) => {
-    if (stepIndex === 0) return true;
-    return completedSteps.has(steps[stepIndex - 1].id);
-  };
-
-  const isStepCompleted = (stepId) => completedSteps.has(stepId);
-
-  const handleSaveJournal = () => {
-    if (journalText.trim()) {
-      handleStepComplete('reflection');
-    }
-    setShowJournal(false);
-  };
-
+  // Step Indicator Component
   const StepIndicator = ({ step, index, isActive, isCompleted, isUnlocked }) => {
     return (
       <View style={styles.stepIndicatorContainer}>
@@ -571,7 +263,6 @@ const BibleStudyContent = () => {
             />
           )}
         </View>
-        
         {index < steps.length - 1 && (
           <View style={[
             styles.stepConnector,
@@ -582,432 +273,367 @@ const BibleStudyContent = () => {
     );
   };
 
-  const SectionCard = ({ children, stepId, title, isUnlocked, style = {}, contentText }) => {
-    const isCompleted = isStepCompleted(stepId);
-    const isCurrentlyPlaying = currentPlayingStep === stepId && isPlaying;
-
+  if (isLoading) {
     return (
-      <View style={[
-        styles.sectionCard,
-        !isUnlocked && styles.sectionCardLocked,
-        isCompleted && styles.sectionCardCompleted,
-        style
-      ]}>
-        {isUnlocked && contentText && (
-          <View style={styles.audioControls}>
-            <TouchableOpacity
-              onPress={() => isCurrentlyPlaying ? stopAudio() : playStepAudio(stepId, contentText)}
-              style={[
-                styles.audioButton,
-                isCurrentlyPlaying && styles.audioButtonActive
-              ]}
-              disabled={!!ttsError}
-            >
-              <Ionicons 
-                name={isCurrentlyPlaying ? 'pause' : 'play'} 
-                size={dimensions.iconSize.small} 
-                color={ttsError ? COLORS.text.tertiary : COLORS.primary} 
-              />
-              <Text style={[
-                styles.audioButtonText,
-                ttsError && styles.audioButtonTextDisabled
-              ]}>
-                {ttsError ? 'Audio unavailable' : 
-                 isCurrentlyPlaying ? 'Pause Audio' : 'Listen to this Step'}
-              </Text>
-            </TouchableOpacity>
-            
-            {ttsError && (
-              <Text style={styles.ttsErrorText}>{ttsError}</Text>
-            )}
-          </View>
-        )}
-        
-        {children}
-        
-        {isUnlocked && !isCompleted && (
-          <TouchableOpacity
-            style={styles.completeButton}
-            onPress={() => handleStepComplete(stepId)}
-          >
-            <Ionicons 
-              name="checkmark" 
-              size={dimensions.iconSize.small} 
-              color={COLORS.background} 
-            />
-            <Text style={styles.completeButtonText}>Mark Complete</Text>
-          </TouchableOpacity>
-        )}
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={[styles.loadingText, { fontSize: dimensions.fontSize.body }]}>
+          Loading...
+        </Text>
       </View>
-    );
-  };
-
-  if (loading) {
-    return (
-      <SplashScreen 
-      onFinish={() => {
-      }}
-      duration={2000} 
-    />
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-      
-      {/* Celebration Modal */}
-      <Modal visible={showCelebration} transparent>
-        <View style={styles.celebrationOverlay}>
-          <Animated.View style={[
-            styles.celebrationContent,
-            { opacity: celebrationAnim, transform: [{ scale: celebrationAnim }] }
-          ]}>
-            <Text style={styles.celebrationEmoji}>🎉</Text>
-            <Text style={styles.celebrationTitle}>Congratulations!</Text>
-            <Text style={styles.celebrationText}>You've completed all steps!</Text>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {/* Header */}
-      <View style={[styles.header, { height: dimensions.headerHeight }]}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons 
-            name="arrow-back" 
-            size={dimensions.iconSize.medium} 
-            color={COLORS.primary} 
-          />
-        </TouchableOpacity>
+    <>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" />
         
-        <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}>
-            {stark?.title || 'Bible Study'}
-          </Text>
-          <Text style={[styles.headerSubtitle, { fontSize: dimensions.fontSize.caption }]}>
-            {stark?.category?.name || 'Study'}
-          </Text>
-        </View>
+        {/* Video Background */}
+        <VideoBackground />
         
-        <View style={styles.headerSpacer} />
-      </View>
-
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <View style={styles.progressHeader}>
-          <Text style={[styles.progressLabel, { fontSize: dimensions.fontSize.caption }]}>
-            Progress
-          </Text>
-          <Text style={[styles.progressPercent, { fontSize: dimensions.fontSize.caption }]}>
-            {Math.round(progress)}%
-          </Text>
-        </View>
-      </View>
-
-      {/* Step Indicators */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false} 
-        style={styles.stepsContainer}
-        contentContainerStyle={styles.stepsContent}
-      >
-        {steps.map((step, index) => (
-          <StepIndicator
-            key={step.id}
-            step={step}
-            index={index}
-            isActive={currentStep === index}
-            isCompleted={isStepCompleted(step.id)}
-            isUnlocked={isStepUnlocked(index)}
-          />
-        ))}
-      </ScrollView>
-
-      {/* Content */}
-      <ScrollView 
-        style={styles.content} 
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Main Verse */}
-        <SectionCard 
-          stepId="verse" 
-          isUnlocked={isStepUnlocked(0)}
-          contentText={`Main Verse: ${stark?.main_verse || 'Verse reference'}. ${stark?.verse_text || stark?.explanation || 'Verse text here'}`}
-        >
-          <View style={styles.verseCard}>
-            <View style={styles.verseContent}>
-              <Ionicons 
-                name="book-outline" 
-                size={dimensions.iconSize.medium} 
-                color={COLORS.background} 
-              />
-              <View style={styles.verseTextContainer}>
-                <Text style={[styles.verseReference, { fontSize: dimensions.fontSize.subtitle }]}>
-                  {stark?.main_verse || 'Verse reference'}
-                </Text>
-                <Text style={[styles.verseText, { fontSize: dimensions.fontSize.body }]}>
-                  "{stark?.verse_text || stark?.explanation || 'Verse text here'}"
-                </Text>
-              </View>
-            </View>
+        {/* Overlay for content readability */}
+        <View style={styles.overlay} />
+        
+        {/* Celebration Modal */}
+        <Modal visible={showCelebration} transparent>
+          <View style={styles.celebrationOverlay}>
+            <Animated.View style={[
+              styles.celebrationContent,
+              { opacity: celebrationAnim, transform: [{ scale: celebrationAnim }] }
+            ]}>
+              <Text style={styles.celebrationEmoji}>🎉</Text>
+              <Text style={styles.celebrationTitle}>Congratulations!</Text>
+              <Text style={styles.celebrationText}>You've completed all steps!</Text>
+            </Animated.View>
           </View>
-        </SectionCard>
+        </Modal>
 
-        {/* Explanation */}
-        <SectionCard 
-          stepId="explanation" 
-          isUnlocked={isStepUnlocked(1)}
-          contentText={`Explanation: ${stark?.explanation || 'Detailed explanation of the verse'}`}
-        >
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Ionicons 
-                name="bulb-outline" 
-                size={dimensions.iconSize.small} 
-                color={COLORS.primary} 
-              />
-              <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                Explanation
-              </Text>
-            </View>
-            <Text style={[styles.cardText, { fontSize: dimensions.fontSize.body }]}>
-              {stark?.explanation || 'Detailed explanation of the verse will appear here.'}
-            </Text>
-          </View>
-        </SectionCard>
-
-        {/* Related Verses */}
-        <SectionCard 
-          stepId="related" 
-          isUnlocked={isStepUnlocked(2)}
-          contentText={`Related Verses: ${(stark?.related_verses && Array.isArray(stark.related_verses)) ? 
-            stark.related_verses.map(verse => `${verse.reference}: ${verse.text}`).join('. ') : 
-            'No related verses available'}`}
-        >
-          <View style={styles.cardContent}>
-            <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-              Related Verses
-            </Text>
-            <View style={styles.versesContainer}>
-              {(stark?.related_verses && Array.isArray(stark.related_verses)) ? 
-                stark.related_verses.map((verse, index) => (
-                  <View key={index} style={styles.relatedVerse}>
-                    <Text style={[styles.relatedVerseReference, { fontSize: dimensions.fontSize.caption }]}>
-                      {verse.reference}
-                    </Text>
-                    <Text style={[styles.relatedVerseText, { fontSize: dimensions.fontSize.body }]}>
-                      "{verse.text}"
-                    </Text>
-                  </View>
-                )) : 
-                <Text style={[styles.emptyText, { fontSize: dimensions.fontSize.body }]}>
-                  No related verses available
-                </Text>
-              }
-            </View>
-          </View>
-        </SectionCard>
-
-        {/* Did You Know */}
-        <SectionCard 
-          stepId="knowledge" 
-          isUnlocked={isStepUnlocked(3)} 
-          style={styles.knowledgeCard}
-          contentText={`Did You Know? ${stark?.did_you_know || 'Interesting facts and historical context will appear here.'}`}
-        >
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Ionicons 
-                name="bulb-outline" 
-                size={dimensions.iconSize.small} 
-                color={COLORS.primary} 
-              />
-              <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                Did You Know?
-              </Text>
-            </View>
-            <Text style={[styles.knowledgeText, { fontSize: dimensions.fontSize.body }]}>
-              {stark?.did_you_know || 'Interesting facts and historical context will appear here.'}
-            </Text>
-          </View>
-        </SectionCard>
-
-        {/* Activity */}
-        <SectionCard 
-          stepId="activity" 
-          isUnlocked={isStepUnlocked(4)} 
-          style={styles.activityCard}
-          contentText={`Activity of the Day: ${stark?.activity || 'Practical activity or exercise will appear here.'}`}
-        >
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Ionicons 
-                name="checkmark-circle-outline" 
-                size={dimensions.iconSize.small} 
-                color={COLORS.primary} 
-              />
-              <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                Activity of the Day
-              </Text>
-            </View>
-            <Text style={[styles.activityText, { fontSize: dimensions.fontSize.body }]}>
-              {stark?.activity || 'Practical activity or exercise will appear here.'}
-            </Text>
-          </View>
-        </SectionCard>
-
-        {/* Personal Reflection */}
-        <SectionCard stepId="reflection" isUnlocked={isStepUnlocked(5)}>
-          <View style={styles.cardContent}>
-            <View style={styles.reflectionHeader}>
-              <View style={styles.cardHeader}>
-                <Ionicons 
-                  name="heart-outline" 
-                  size={dimensions.iconSize.small} 
-                  color={COLORS.primary} 
-                />
-                <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                  Personal Reflection
-                </Text>
-              </View>
-              {isStepUnlocked(5) && (
+        {/* Journal Modal */}
+        <Modal visible={showJournal} transparent>
+          <View style={styles.journalOverlay}>
+            <View style={styles.journalModal}>
+              <View style={styles.journalHeader}>
+                <View>
+                  <Text style={styles.journalTitle}>Personal Reflection</Text>
+                  <Text style={styles.journalDate}>
+                    {new Date().toLocaleDateString()}
+                  </Text>
+                </View>
                 <TouchableOpacity 
-                  style={styles.journalButton}
-                  onPress={() => setShowJournal(true)}
+                  style={styles.journalCloseButton}
+                  onPress={() => setShowJournal(false)}
                 >
                   <Ionicons 
-                    name="create-outline" 
+                    name="close" 
+                    size={dimensions.iconSize.medium} 
+                    color={COLORS.text.primary} 
+                  />
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView style={styles.journalContent}>
+                <TextInput
+                  style={styles.journalTextInput}
+                  multiline
+                  placeholder="Write your thoughts and reflections here..."
+                  value={journalText}
+                  onChangeText={setJournalText}
+                  textAlignVertical="top"
+                />
+              </ScrollView>
+              
+              <View style={styles.journalFooter}>
+                <TouchableOpacity 
+                  style={[styles.journalButton, styles.journalCancelButton]}
+                  onPress={() => setShowJournal(false)}
+                >
+                  <Text style={styles.journalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.journalButton, styles.journalSaveButton]}
+                  onPress={() => {
+                    // Save logic here
+                    setShowJournal(false);
+                  }}
+                >
+                  <Text style={styles.journalSaveText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+        
+        {/* Header */}
+        <View style={[styles.header, { height: dimensions.headerHeight }]}> 
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons 
+              name="arrow-back" 
+              size={dimensions.iconSize.medium} 
+              color={COLORS.primary} 
+            />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}> 
+              {stark?.title || 'Bible Study'}
+            </Text>
+            <Text style={[styles.headerSubtitle, { fontSize: dimensions.fontSize.caption }]}> 
+              {stark?.category?.name || 'Study'}
+            </Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+        
+        {/* Progress Bar just under header */}
+        <View style={{ marginTop: dimensions.headerHeight }}>
+          <ProgressBar progress={progress} />
+        </View>
+        
+        {/* Content */}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          snapToInterval={screenHeight * 0.85}
+          decelerationRate="fast"
+          snapToAlignment="center"
+          scrollEventThrottle={16}
+          onScroll={handleScroll}
+        >
+          {/* Main Verse Section */}
+         <View
+            ref={el => sectionRefs.current[0] = el}
+            style={[styles.centeredSection, { backgroundColor: 'rgba(160,117,83,0.15)', padding: dimensions.spacing.md, maxWidth: '100%', width: '100%' }]}
+          >
+            <SectionCard 
+              stepId="verse" 
+              title="Main Verse"
+              isUnlocked={true}
+              contentText={`Main Verse: ${stark?.main_verse || 'Verse reference'}. ${stark?.verse_text || stark?.explanation || 'Verse text here'}`}
+            >
+              <View style={styles.verseCard}>
+                <View style={styles.verseContent}>
+                  <Ionicons 
+                    name="book-outline" 
+                    size={dimensions.iconSize.medium} 
+                    color={COLORS.background} 
+                  />
+                  <View style={styles.verseTextContainer}>
+                    <Text style={[styles.verseReference, { fontSize: dimensions.fontSize.subtitle }]}> 
+                      {stark?.main_verse || 'Verse reference'}
+                    </Text>
+                    <Text style={[styles.verseText, { fontSize: dimensions.fontSize.body }]}> 
+                      "{stark?.verse_text || stark?.explanation || 'Verse text here'}"
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </SectionCard>
+          </View>
+
+          {/* Explanation Section */}
+          <View
+            ref={el => sectionRefs.current[1] = el}
+            style={[styles.centeredSection, { backgroundColor: 'rgba(122, 88, 54, 0.12)', padding: dimensions.spacing.xl }]}
+          >
+            <SectionCard 
+              stepId="explanation" 
+              title="Explanation"
+              isUnlocked={true}
+              contentText={`Explanation: ${stark?.explanation || 'Detailed explanation of the verse'}`}
+              style={[styles.explanationCard, { backgroundColor: 'rgba(80, 53, 26, 0.85)', padding: dimensions.spacing.xl }]}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.cardHeader}>
+                  <Ionicons 
+                    name="bulb-outline" 
                     size={dimensions.iconSize.small} 
                     color={COLORS.primary} 
                   />
-                  <Text style={[styles.journalButtonText, { fontSize: dimensions.fontSize.caption }]}>
-                    Journal
+                  <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}> 
+                    Explanation
                   </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <Text style={[styles.reflectionText, { fontSize: dimensions.fontSize.body }]}>
-              Click the Journal button to record your personal reflections and thoughts about today's lesson.
-            </Text>
-          </View>
-        </SectionCard>
-
-        {/* Completion Status */}
-        {completedSteps.size === steps.length && (
-          <View style={styles.completionCard}>
-            <Ionicons 
-              name="checkmark-circle" 
-              size={dimensions.iconSize.large} 
-              color={COLORS.background} 
-            />
-            <Text style={[styles.completionTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-              Lesson Completed! 🎉
-            </Text>
-            <Text style={[styles.completionText, { fontSize: dimensions.fontSize.body }]}>
-              You've successfully completed all steps of this lesson.
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Journal Modal */}
-      <Modal visible={showJournal} animationType="slide" transparent>
-        <View style={styles.journalOverlay}>
-          <View style={styles.journalModal}>
-            <View style={styles.journalHeader}>
-              <View>
-                <Text style={[styles.journalTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                  Personal Journal
-                </Text>
-                <Text style={[styles.journalDate, { fontSize: dimensions.fontSize.caption }]}>
-                  {new Date().toLocaleDateString()} • {stark?.title}
+                </View>
+                <Text style={[styles.cardText, { fontSize: dimensions.fontSize.body }]}> 
+                  {stark?.explanation || 'Detailed explanation of the verse will appear here.'}
                 </Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => setShowJournal(false)}
-                style={styles.journalCloseButton}
-              >
-                <Ionicons 
-                  name="close" 
-                  size={dimensions.iconSize.medium} 
-                  color={COLORS.text.secondary} 
-                />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.journalContent}>
-              <TextInput
-                value={journalText}
-                onChangeText={setJournalText}
-                placeholder="Write your thoughts, prayers, and reflections about today's lesson..."
-                placeholderTextColor={COLORS.text.tertiary}
-                multiline
-                style={[
-                  styles.journalTextInput, 
-                  { 
-                    fontSize: dimensions.fontSize.body,
-                    height: screenHeight * 0.4 
-                  }
-                ]}
-                textAlignVertical="top"
-              />
-            </View>
-            
-            <View style={styles.journalFooter}>
-              <TouchableOpacity 
-                onPress={() => setShowJournal(false)}
-                style={[styles.journalButton, styles.journalCancelButton]}
-              >
-                <Text style={[styles.journalCancelText, { fontSize: dimensions.fontSize.body }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={handleSaveJournal}
-                style={[styles.journalButton, styles.journalSaveButton]}
-              >
-                <Text style={[styles.journalSaveText, { fontSize: dimensions.fontSize.body }]}>
-                  Save & Complete
-                </Text>
-              </TouchableOpacity>
-            </View>
+            </SectionCard>
           </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+
+          {/* Related Verses Section */}
+          <View
+            ref={el => sectionRefs.current[2] = el}
+            style={[styles.centeredSection, { backgroundColor: 'rgba(245,222,179,0.10)', padding: dimensions.spacing.xl }]}
+          >
+            <SectionCard 
+              stepId="related" 
+              title="Related Verses"
+              isUnlocked={true}
+              contentText={`Related Verses: ${(stark?.related_verses && Array.isArray(stark.related_verses)) ? 
+                stark.related_verses.map(verse => `${verse.reference}: ${verse.text}`).join('. ') : 
+                'No related verses available'}`}
+            >
+              <View style={styles.cardContent}>
+                <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}> 
+                  Related Verses
+                </Text>
+                <View style={styles.versesContainer}>
+                  {(stark?.related_verses && Array.isArray(stark.related_verses)) ? 
+                    stark.related_verses.map((verse, index) => (
+                      <View key={index} style={styles.relatedVerse}>
+                        <Text style={[styles.relatedVerseReference, { fontSize: dimensions.fontSize.caption }]}> 
+                          {verse.reference}
+                        </Text>
+                        <Text style={[styles.relatedVerseText, { fontSize: dimensions.fontSize.body }]}> 
+                          "{verse.text}"
+                        </Text>
+                      </View>
+                    )) : 
+                    <Text style={[styles.emptyText, { fontSize: dimensions.fontSize.body }]}> 
+                      No related verses available
+                    </Text>
+                  }
+                </View>
+              </View>
+            </SectionCard>
+          </View>
+
+          {/* Did You Know Section */}
+          <View
+            ref={el => sectionRefs.current[3] = el}
+            style={[styles.centeredSection, { backgroundColor: 'rgba(106, 142, 35, 0.12)', padding: dimensions.spacing.xl }]}
+          >
+            <SectionCard 
+              stepId="knowledge" 
+              title="Did You Know?"
+              isUnlocked={true}
+              style={[styles.knowledgeCard, { backgroundColor: 'rgba(67, 87, 29, 0.81)', padding: dimensions.spacing.xl }]}
+              contentText={`Did You Know? ${stark?.did_you_know || 'Interesting facts and historical context will appear here.'}`}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.cardHeader}>
+                  <Ionicons 
+                    name="bulb-outline" 
+                    size={dimensions.iconSize.small} 
+                    color={COLORS.primary} 
+                  />
+                  <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}> 
+                    Did You Know?
+                  </Text>
+                </View>
+                <Text style={[styles.knowledgeText, { fontSize: dimensions.fontSize.body }]}> 
+                  {stark?.did_you_know || 'Interesting facts and historical context will appear here.'}
+                </Text>
+              </View>
+            </SectionCard>
+          </View>
+
+          {/* Activity Section */}
+          <View
+            ref={el => sectionRefs.current[4] = el}
+            style={[styles.centeredSection, { backgroundColor: 'rgba(139,69,19,0.10)', padding: dimensions.spacing.xl }]}
+          >
+            <SectionCard 
+              stepId="activity" 
+              title="Activity of the Day"
+              isUnlocked={true}
+              style={[styles.activityCard, { backgroundColor: 'rgba(139, 69, 19, 0.89)', padding: dimensions.spacing.xl }]}
+              contentText={`Activity of the Day: ${stark?.activity || 'Practical activity or exercise will appear here.'}`}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.cardHeader}>
+                  <Ionicons 
+                    name="checkmark-circle-outline" 
+                    size={dimensions.iconSize.small} 
+                    color={COLORS.primary} 
+                  />
+                  <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}> 
+                    Activity of the Day
+                  </Text>
+                </View>
+                <Text style={[styles.activityText, { fontSize: dimensions.fontSize.body }]}> 
+                  {stark?.activity || 'Practical activity or exercise will appear here.'}
+                </Text>
+                {/* Take a Note Button */}
+                <TouchableOpacity
+                  style={styles.takeNoteButton}
+                  onPress={() => {
+                    navigation.navigate('Journal', {
+                      verse: stark?.main_verse || '',
+                      verseText: stark?.verse_text || '',
+                      category: stark?.category || null,
+                      fromBibleStudy: true,
+                    });
+                  }}
+                >
+                  <Text style={styles.takeNoteButtonText}>Take a Note</Text>
+                </TouchableOpacity>
+              </View>
+            </SectionCard>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </>
   );
 };
 
-const dimensions = getResponsiveDimensions();
-
 const styles = StyleSheet.create({
+  takeNoteButton: {
+    marginTop: dimensions.spacing.lg,
+    backgroundColor: COLORS.primary,
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.xl,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.primaryDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  takeNoteButtonText: {
+    color: COLORS.background,
+    fontWeight: '700',
+    fontSize: dimensions.fontSize.body,
+    letterSpacing: 0.5,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    // backgroundColor: 'rgba(101, 67, 33, 0.4)', // Brownish overlay
+  },
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#8B4513', 
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: '#D2B48C', 
   },
   loadingText: {
     marginTop: dimensions.spacing.md,
-    color: COLORS.text.secondary,
+    color: '#654321',
     fontWeight: '500',
   },
   header: {
-    backgroundColor: COLORS.surfaceElevated,
+    backgroundColor: 'rgba(101, 67, 33, 0.95)',
     paddingHorizontal: dimensions.spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
+    borderBottomColor: 'rgba(160, 117, 83, 0.3)',
+    zIndex: 2,
+    position: 'absolute',
+    top: 35, // Move header up
+    left: 0,
+    right: 0,
   },
   backButton: {
     padding: dimensions.spacing.sm,
@@ -1018,10 +644,10 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontWeight: '700',
-    color: COLORS.text.primary,
+    color: '#F5DEB3',
   },
   headerSubtitle: {
-    color: COLORS.primary,
+    color: 'rgba(245, 222, 179, 0.8)',
     marginTop: dimensions.spacing.xs,
   },
   headerSpacer: {
@@ -1030,9 +656,14 @@ const styles = StyleSheet.create({
   progressContainer: {
     paddingHorizontal: dimensions.spacing.md,
     paddingVertical: dimensions.spacing.sm,
-    backgroundColor: COLORS.surfaceElevated,
+    backgroundColor: 'rgba(139, 69, 19, 0.9)', 
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
+    borderBottomColor: 'rgba(160, 117, 83, 0.3)',
+    zIndex: 2,
+    position: 'absolute',
+    top: dimensions.headerHeight + -50, 
+    left: 0,
+    right: 0,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -1042,27 +673,42 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontWeight: '500',
-    color: COLORS.text.secondary,
+    color: '#F5DEB3',
   },
   progressPercent: {
     fontWeight: '500',
-    color: COLORS.primary,
+    color: '#F5DEB3',
   },
   progressBar: {
     width: '100%',
     height: 6,
-    backgroundColor: COLORS.border.light,
+    backgroundColor: 'rgba(160, 117, 83, 0.3)',
     borderRadius: 3,
     overflow: 'hidden',
   },
-  
-stepsContainer: {
-  backgroundColor: COLORS.surfaceElevated,
-  borderBottomWidth: 1,
-  borderBottomColor: COLORS.border.light,
-  paddingVertical: dimensions.spacing.md,
-  paddingHorizontal: dimensions.spacing.md,
-},
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#228B22', 
+    borderRadius: 3,
+  },
+  centeredSection: {
+    minHeight: screenHeight * 0.85,
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    width: '100%',
+  },
+  stepsContainer: {
+    backgroundColor: 'rgba(160, 117, 83, 0.9)', 
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(101, 67, 33, 0.3)',
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.md,
+    zIndex: 2,
+    position: 'absolute',
+    top: dimensions.headerHeight + 60,
+    left: 0,
+    right: 0,
+  },
   stepsContent: {
     paddingHorizontal: dimensions.spacing.md,
     flexDirection: 'row',
@@ -1081,271 +727,345 @@ stepsContainer: {
     justifyContent: 'center',
   },
   stepCompleted: {
-    backgroundColor: COLORS.semantic.success,
-    borderColor: COLORS.semantic.success,
+    backgroundColor: '#228B22',
+    borderColor: '#228B22',
   },
   stepActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.overlay,
+    borderColor: '#F5DEB3',
+    backgroundColor: 'rgba(245, 222, 179, 0.2)',
   },
   stepUnlocked: {
-    borderColor: COLORS.border.medium,
-    backgroundColor: COLORS.surface,
+    borderColor: 'rgba(245, 222, 179, 0.6)',
+    backgroundColor: 'rgba(245, 222, 179, 0.1)',
   },
   stepLocked: {
-    borderColor: COLORS.border.light,
-    backgroundColor: COLORS.surface,
+    borderColor: 'rgba(245, 222, 179, 0.3)',
+    backgroundColor: 'rgba(245, 222, 179, 0.05)',
   },
   stepConnector: {
     width: dimensions.spacing.lg,
     height: 2,
-    backgroundColor: COLORS.border.light,
+    backgroundColor: 'rgba(245, 222, 179, 0.3)',
     marginHorizontal: dimensions.spacing.sm,
   },
   stepConnectorCompleted: {
-    backgroundColor: COLORS.semantic.success,
+    backgroundColor: '#228B22',
   },
- content: {
-
-  backgroundColor: COLORS.surface,
-  marginTop: 0
-},
+  content: {
+    flex: 1,
+    paddingTop: dimensions.headerHeight + 50, 
+  },
   contentContainer: {
-  paddingTop: dimensions.spacing.sm, 
-  paddingBottom: dimensions.spacing.md,
-  paddingHorizontal: dimensions.spacing.md,
-},
-
+    flexGrow: 1,
+    paddingTop: 0, 
+    marginTop: -50,
+  },
   sectionCard: {
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 12,
-    marginBottom: dimensions.spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
+    minHeight: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: dimensions.spacing.lg,
+    marginBottom: 0,
     position: 'relative',
+    marginTop: dimensions.spacing.xs, 
   },
-  sectionCardLocked: {
-    opacity: 0.7,
-  },
-  sectionCardCompleted: {
-    borderWidth: 1,
-    borderColor: COLORS.semantic.success,
-  },
-  lockedOverlay: {
+  sectionVideoBackground: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    zIndex: 10,
+    zIndex: -2,
   },
-  lockedText: {
-    color: COLORS.text.secondary,
-    fontWeight: '500',
-    marginTop: dimensions.spacing.sm,
-    textAlign: 'center',
-    fontSize: dimensions.fontSize.caption,
-  },
-  completedBadge: {
+  sectionOverlay: {
     position: 'absolute',
-    top: dimensions.spacing.md,
-    right: dimensions.spacing.md,
-    width: dimensions.iconSize.medium,
-    height: dimensions.iconSize.medium,
-    backgroundColor: COLORS.semantic.success,
-    borderRadius: dimensions.iconSize.medium / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 20,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(101, 67, 33, 0.6)',
+    zIndex: -1,
   },
+ sectionContent: {
+  borderRadius: 20,
+  padding: dimensions.spacing.lg,
+  maxWidth: '95%',
+  width: '100%',
+  alignItems: 'center',
+},
   completeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    alignSelf: 'flex-end',
-    marginTop: dimensions.spacing.sm,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    backgroundColor: 'rgba(245, 222, 179, 0.9)',
+    borderRadius: 25,
+    marginTop: dimensions.spacing.lg,
+    borderWidth: 1,
+    borderColor: '#A0754B',
   },
   completeButtonText: {
-    color: COLORS.background,
+    color: '#654321', 
     marginLeft: dimensions.spacing.sm,
-    fontWeight: '500',
-    fontSize: dimensions.fontSize.caption,
+    fontWeight: '600',
+    fontSize: dimensions.fontSize.body,
   },
+  // Verse card with brownish theme
   verseCard: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
+    backgroundColor: 'rgba(160, 117, 83, 0.95)', 
+    borderRadius: 20,
     padding: dimensions.spacing.lg,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(210, 180, 140, 0.5)',
+    minHeight: 200,
   },
   verseContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    textAlign: 'center',
   },
   verseTextContainer: {
-    flex: 1,
-    marginLeft: dimensions.spacing.md,
+    alignItems: 'center',
+    marginTop: dimensions.spacing.md,
   },
   verseReference: {
-    color: COLORS.background,
-    fontWeight: '600',
-    marginBottom: dimensions.spacing.sm,
+    color: '#F5DEB3',
+    fontWeight: '700',
+    marginBottom: dimensions.spacing.md,
+    textAlign: 'center',
+    fontSize: dimensions.fontSize.title,
   },
   verseText: {
-    color: COLORS.background,
-    lineHeight: 24,
+    color: '#F5DEB3', 
+    lineHeight: 28,
     fontStyle: 'italic',
+    textAlign: 'center',
+    fontSize: dimensions.fontSize.body,
   },
+  // Card content with brownish theme
   cardContent: {
-    padding: dimensions.spacing.lg,
+    alignItems: 'center',
+    width: '100%',
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.lg,
   },
   cardTitle: {
-    fontWeight: '600',
-    color: COLORS.text.primary,
+    fontWeight: '700',
+    color: '#F5DEB3', // Wheat
     marginLeft: dimensions.spacing.sm,
+    fontSize: dimensions.fontSize.title,
+    textAlign: 'center',
   },
   cardText: {
-    color: COLORS.text.secondary,
-    lineHeight: 24,
+    color: '#F5DEB3', // Wheat
+    lineHeight: 26,
+    textAlign: 'center',
+    fontSize: dimensions.fontSize.body,
   },
+  // Reflection styles
   reflectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.lg,
+    width: '100%',
   },
   journalButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    backgroundColor: COLORS.overlay,
-    borderRadius: 8,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    backgroundColor: 'rgba(245, 222, 179, 0.9)', // Light wheat
+    borderRadius: 25,
+    marginTop: dimensions.spacing.md,
+    borderWidth: 1,
+    borderColor: '#A0754B',
   },
   journalButtonText: {
-    color: COLORS.primary,
+    color: '#654321', // Dark brown
     marginLeft: dimensions.spacing.sm,
-    fontWeight: '500',
+    fontWeight: '600',
+    fontSize: dimensions.fontSize.body,
   },
   reflectionText: {
-    color: COLORS.text.secondary,
+    color: '#F5DEB3', // Wheat
+    textAlign: 'center',
+    fontSize: dimensions.fontSize.body,
+    lineHeight: 24,
   },
+  // Explanation card - add specific background
+  explanationCard: {
+    backgroundColor: 'rgba(101,67,33,0.18)', // Keep card background
+    borderRadius: 20,
+  },
+  // Knowledge card with darker brown
   knowledgeCard: {
-    backgroundColor: '#f8f9ff',
-    borderWidth: 1,
-    borderColor: '#e8eeff',
+    backgroundColor: 'rgba(107,142,35,0.18)', // Keep card background
+    borderRadius: 20,
   },
   knowledgeText: {
-    color: COLORS.text.secondary,
-    lineHeight: 24,
+    color: '#F5DEB3', // Wheat
+    lineHeight: 26,
+    textAlign: 'center',
+    fontSize: dimensions.fontSize.body,
   },
+  
+  // Activity card with medium brown
   activityCard: {
-    backgroundColor: '#f8fff8',
-    borderWidth: 1,
-    borderColor: '#e8ffe8',
+    backgroundColor: 'rgba(139,69,19,0.18)', // Keep card background
+    borderRadius: 20,
   },
   activityText: {
-    color: COLORS.text.secondary,
-    lineHeight: 24,
+    color: '#F5DEB3', // Wheat
+    lineHeight: 26,
+    textAlign: 'center',
+    fontSize: dimensions.fontSize.body,
   },
+  
+  // Related verses with brownish theme
   versesContainer: {
-    marginTop: dimensions.spacing.sm,
+    marginTop: dimensions.spacing.md,
+    width: '100%',
   },
   relatedVerse: {
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.overlay,
-    paddingLeft: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
+    backgroundColor: 'rgba(245, 222, 179, 0.15)', 
+    borderRadius: 12,
+    padding: dimensions.spacing.md,
     marginBottom: dimensions.spacing.md,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F5DEB3', // Wheat
   },
   relatedVerseReference: {
-    color: COLORS.primary,
-    fontWeight: '500',
-    marginBottom: dimensions.spacing.xs,
+    color: '#F5DEB3', // Wheat
+    fontWeight: '600',
+    marginBottom: dimensions.spacing.sm,
+    textAlign: 'center',
+    fontSize: dimensions.fontSize.subtitle,
   },
   relatedVerseText: {
-    color: COLORS.text.secondary,
+    color: '#F5DEB3', // Wheat
     fontStyle: 'italic',
+    textAlign: 'center',
+    fontSize: dimensions.fontSize.body,
+    lineHeight: 24,
   },
   emptyText: {
-    color: COLORS.text.tertiary,
+    color: 'rgba(245, 222, 179, 0.7)', // Light wheat
     fontStyle: 'italic',
+    textAlign: 'center',
   },
+  
+  // Completion card with green-brown theme
   completionCard: {
-    backgroundColor: COLORS.semantic.success,
-    borderRadius: 12,
-    padding: dimensions.spacing.lg,
+    backgroundColor: 'rgba(107, 142, 35, 0.9)', // Olive drab green
+    borderRadius: 20,
+    padding: dimensions.spacing.xl,
     alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
+    height: screenHeight - (dimensions.headerHeight + 180),
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(245, 222, 179, 0.5)',
   },
   completionTitle: {
-    color: COLORS.background,
-    fontWeight: 'bold',
-    marginTop: dimensions.spacing.md,
-    marginBottom: dimensions.spacing.sm,
+    color: '#F5DEB3', // Wheat
+    fontWeight: '700',
+    marginTop: dimensions.spacing.lg,
+    marginBottom: dimensions.spacing.md,
+    fontSize: dimensions.fontSize.title,
+    textAlign: 'center',
   },
   completionText: {
-    color: COLORS.background,
+    color: '#F5DEB3', // Wheat
     textAlign: 'center',
-    opacity: 0.9,
+    fontSize: dimensions.fontSize.body,
+    lineHeight: 24,
   },
+  
+  // Audio controls with brownish theme
+  audioControls: {
+    marginBottom: dimensions.spacing.lg,
+    alignItems: 'center',
+  },
+  audioButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    backgroundColor: 'rgba(245, 222, 179, 0.2)', // Light wheat
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 222, 179, 0.4)',
+  },
+  audioButtonActive: {
+    backgroundColor: 'rgba(245, 222, 179, 0.9)',
+  },
+  audioButtonText: {
+    color: '#F5DEB3', // Wheat
+    marginLeft: dimensions.spacing.sm,
+    fontSize: dimensions.fontSize.caption,
+    fontWeight: '500',
+  },
+  audioButtonTextDisabled: {
+    color: 'rgba(245, 222, 179, 0.5)',
+  },
+  ttsErrorText: {
+    color: 'rgba(245, 222, 179, 0.7)',
+    fontSize: dimensions.fontSize.caption,
+    marginTop: dimensions.spacing.sm,
+    textAlign: 'center',
+  },
+  
+  // Modal styles with brownish theme
   celebrationOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(101, 67, 33, 0.8)', // Dark brown overlay
     alignItems: 'center',
     justifyContent: 'center',
   },
   celebrationContent: {
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 12,
+    backgroundColor: 'rgba(245, 222, 179, 0.95)', // Wheat background
+    borderRadius: 20,
     padding: dimensions.spacing.xl,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#654321',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 8,
+    borderWidth: 2,
+    borderColor: '#A0754B',
   },
   celebrationEmoji: {
-    fontSize: 48,
-    marginBottom: dimensions.spacing.md,
+    fontSize: 64,
+    marginBottom: dimensions.spacing.lg,
   },
   celebrationTitle: {
     fontSize: dimensions.fontSize.title,
-    fontWeight: 'bold',
-    color: COLORS.semantic.success,
-    marginBottom: dimensions.spacing.sm,
+    fontWeight: '700',
+    color: '#654321', // Dark brown
+    marginBottom: dimensions.spacing.md,
   },
   celebrationText: {
-    color: COLORS.text.secondary,
+    color: '#8B4513', // Saddle brown
     textAlign: 'center',
     fontSize: dimensions.fontSize.body,
   },
+  
+  // Journal modal with brownish theme
   journalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(101, 67, 33, 0.8)', // Dark brown overlay
     justifyContent: 'center',
     paddingHorizontal: dimensions.spacing.md,
   },
   journalModal: {
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 12,
+    backgroundColor: 'rgba(245, 222, 179, 0.98)', // Wheat background
+    borderRadius: 20,
     maxHeight: '80%',
+    borderWidth: 2,
+    borderColor: '#A0754B',
   },
   journalHeader: {
     flexDirection: 'row',
@@ -1353,14 +1073,16 @@ stepsContainer: {
     alignItems: 'center',
     padding: dimensions.spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
+    borderBottomColor: 'rgba(160, 117, 83, 0.3)',
+    backgroundColor: 'rgba(160, 117, 83, 0.1)',
   },
   journalTitle: {
-    fontWeight: '600',
-    color: COLORS.text.primary,
+    fontWeight: '700',
+    color: '#654321', // Dark brown
+    fontSize: dimensions.fontSize.subtitle,
   },
   journalDate: {
-    color: COLORS.text.secondary,
+    color: '#8B4513', // Saddle brown
     marginTop: dimensions.spacing.xs,
   },
   journalCloseButton: {
@@ -1372,58 +1094,42 @@ stepsContainer: {
   },
   journalTextInput: {
     borderWidth: 1,
-    borderColor: COLORS.border.light,
-    borderRadius: 8,
+    borderColor: 'rgba(160, 117, 83, 0.4)',
+    borderRadius: 12,
     padding: dimensions.spacing.md,
     fontSize: dimensions.fontSize.body,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    color: '#654321', // Dark brown text
   },
   journalFooter: {
     flexDirection: 'row',
     padding: dimensions.spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border.light,
+    borderTopColor: 'rgba(160, 117, 83, 0.3)',
+    backgroundColor: 'rgba(160, 117, 83, 0.1)',
   },
   journalButton: {
     flex: 1,
     paddingVertical: dimensions.spacing.md,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
   },
   journalCancelButton: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'rgba(160, 117, 83, 0.2)',
     marginRight: dimensions.spacing.md,
+    borderWidth: 1,
+    borderColor: '#A0754B',
   },
   journalSaveButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: 'rgba(139, 69, 19, 0.8)',
   },
   journalCancelText: {
-    color: COLORS.text.secondary,
-    fontWeight: '500',
+    color: '#654321', 
+    fontWeight: '600',
   },
   journalSaveText: {
-    color: COLORS.background,
-    fontWeight: '500',
-  },
-   
-  audioControls: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
-    paddingBottom: dimensions.spacing.md,
-    marginBottom: dimensions.spacing.md,
-  },
-  audioButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: dimensions.spacing.sm,
-    backgroundColor: COLORS.overlay,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  audioButtonText: {
-    color: COLORS.primary,
-    marginLeft: dimensions.spacing.sm,
-    fontSize: dimensions.fontSize.caption,
+    color: '#F5DEB3', 
+    fontWeight: '600',
   },
 });
-
 export default BibleStudyContent;
