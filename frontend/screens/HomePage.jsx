@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Video } from 'expo-av'; // Add this import for video component
+import { Video } from 'expo-av'; 
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import ViewShot from 'react-native-view-shot';
@@ -101,7 +101,7 @@ const loadChallengeProgress = async () => {
       const challenge = JSON.parse(cachedChallenge);
       setTodaysChallenge({
         ...challenge,
-        progress: progressData // Add progress data to the challenge
+        progress: progressData 
       });
     } else {
       // Fetch new random study

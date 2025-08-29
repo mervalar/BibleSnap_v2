@@ -1,5 +1,5 @@
 // starksService.js
-const BASE_URL = 'http://biblesnap.bellatis.com/api'; // Replace with your actual API URL
+const BASE_URL = 'https://biblesnap.bellatis.com/api';
 
 export const fetchStarks = async () => {
   try {
