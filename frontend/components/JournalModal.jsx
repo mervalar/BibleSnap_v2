@@ -84,7 +84,7 @@ const CATEGORY_COLORS = [
 // API function
 export const fetchNoteCategories = async () => {
   try {
-    const response = await fetch(`http://biblesnap.bellatis.com/api/note-categories`);
+    const response = await fetch(`https://biblesnap.bellatis.com/api/note-categories`);
     if (!response.ok) {
       throw new Error('Failed to fetch note categories');
     }

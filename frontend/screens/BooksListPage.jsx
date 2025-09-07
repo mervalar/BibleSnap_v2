@@ -10,10 +10,13 @@ import {
   TextInput,
   SafeAreaView,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import SplashScreen from '../components/SplashScreen';
+import CustomPicker from '../components/CustomPicker';
+import biblePreferences from '../api/biblePreferences';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -77,6 +80,12 @@ const COLORS = {
   }
 };
 
+const LANGUAGE_OPTIONS = [
+  { label: 'English', value: 'english', bibleId: '65eec8e0b60e656b-01' },
+  { label: 'French', value: 'french', bibleId: 'a93a92589195411f-01' },
+  { label: 'Swahili', value: 'swahili', bibleId: '611f8eb23aec8f13-01' },
+];
+
 const BooksListPage = () => {
   const navigation = useNavigation();
   const [books, setBooks] = useState([]);
@@ -84,13 +93,15 @@ const BooksListPage = () => {
   const [selectedTestament, setSelectedTestament] = useState('old');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [language, setLanguage] = useState('english');
+  const [bibleId, setBibleId] = useState(LANGUAGE_OPTIONS[0].bibleId);
 
   const dimensions = getResponsiveDimensions();
 
   // Bible API configuration
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
-  const BIBLE_ID = 'de4e12af7f28f599-01';
-  const API_URL = `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/books`;
+  const BIBLE_ID = '65eec8e0b60e656b-01';
+  const API_URL = `https://api.scripture.api.bible/v1/bibles/${bibleId}/books`;
 
   // Old Testament books (first 39 books)
   const OLD_TESTAMENT_BOOKS = [
@@ -101,8 +112,22 @@ const BooksListPage = () => {
   ];
 
   useEffect(() => {
+    // Load saved language preference when component mounts
+    const loadLanguagePreference = async () => {
+      try {
+        const { language: savedLanguage, bibleId: savedBibleId } = await biblePreferences.getLanguagePreference();
+        if (savedLanguage && savedBibleId) {
+          setLanguage(savedLanguage);
+          setBibleId(savedBibleId);
+        }
+      } catch (error) {
+        console.error('Error loading language preference:', error);
+      }
+    };
+
+    loadLanguagePreference();
     fetchBooks();
-  }, []);
+  }, [bibleId]);
 
   const fetchBooks = async () => {
     try {
@@ -146,12 +171,21 @@ const BooksListPage = () => {
   };
 
   const handleBookPress = (book) => {
-    navigation.navigate('BookChapters', { book });
-    console.log('Selected book:', book);
+    navigation.navigate('BookChapters', { book, bibleId, language });
+    console.log('Selected book:', book, 'with bibleId:', bibleId);
   };
 
   const handleBackPress = () => {
     navigation.goBack();
+  };
+
+  const handleLanguageChange = (langValue) => {
+    setLanguage(langValue);
+    const selected = LANGUAGE_OPTIONS.find(opt => opt.value === langValue);
+    setBibleId(selected.bibleId);
+    
+    // Save language preference
+    biblePreferences.storeLanguagePreference(langValue, selected.bibleId);
   };
 
   if (loading && books.length === 0) {
@@ -204,9 +238,13 @@ const BooksListPage = () => {
               color={showSearch ? COLORS.background : COLORS.primary} 
             />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.refreshButton} onPress={fetchBooks}>
-            <Ionicons name="refresh" size={dimensions.iconSize.medium} color={COLORS.background} />
-          </TouchableOpacity>
+          <CustomPicker
+            options={LANGUAGE_OPTIONS}
+            selectedValue={language}
+            onValueChange={handleLanguageChange}
+            containerStyle={styles.languagePickerContainer}
+            colors={COLORS}
+          />
         </View>
       </View>
 
@@ -357,18 +395,11 @@ const BooksListPage = () => {
                   <Text style={[styles.bookName, { fontSize: dimensions.fontSize.subtitle }]}>
                     {book.name}
                   </Text>
-                  <View style={styles.bookMeta}>
-                    <View style={styles.abbreviationBadge}>
-                      <Text style={[styles.bookAbbreviation, { fontSize: dimensions.fontSize.caption }]}>
-                        {book.abbreviation || book.id}
-                      </Text>
-                    </View>
-                    <Ionicons 
-                      name="chevron-forward" 
-                      size={dimensions.iconSize.small} 
-                      color={COLORS.primary} 
-                    />
-                  </View>
+                  <Ionicons 
+                    name="chevron-forward" 
+                    size={dimensions.iconSize.medium} 
+                    color={COLORS.primary} 
+                  />
                 </View>
               </TouchableOpacity>
             ))
@@ -701,6 +732,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
+  },
+  languagePickerContainer: {
+    width: 120,
+    marginLeft: 8,
   },
 });
 

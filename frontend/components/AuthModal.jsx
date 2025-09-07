@@ -23,7 +23,7 @@ WebBrowser.maybeCompleteAuthSession();
 const { height: screenHeight } = Dimensions.get('window');
 
 // Configure your API base URL
-const API_BASE_URL = 'http://biblesnap.bellatis.com/api';
+const API_BASE_URL = 'https://biblesnap.bellatis.com/api';
 
 export default function AuthModal({ visible, onClose, navigation }) {
   const slideAnimation = React.useRef(new Animated.Value(screenHeight)).current;

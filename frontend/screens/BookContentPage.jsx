@@ -10,25 +10,35 @@ import {
   ActivityIndicator,
   StatusBar,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import SplashScreen from '../components/SplashScreen';
 import { Video } from 'expo-av';
+import CustomPicker from '../components/CustomPicker';
+import biblePreferences from '../api/biblePreferences';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Language options for the Bible
+const LANGUAGE_OPTIONS = [
+  { label: 'English', value: 'english', bibleId: '65eec8e0b60e656b-01' },
+  { label: 'French', value: 'french', bibleId: 'a93a92589195411f-01' },
+  { label: 'Swahili', value: 'swahili', bibleId: '611f8eb23aec8f13-01' },
+];
 
 const BookContent = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { book } = route.params;
+  const { book, chapter: initialChapter, bibleId: routeBibleId, language: routeLanguage } = route.params;
   const [videoRef, setVideoRef] = useState(null);
   const [verses, setVerses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [currentChapter, setCurrentChapter] = useState(1);
+  const [currentChapter, setCurrentChapter] = useState(initialChapter ? parseInt(initialChapter.number) : 1);
   const [chapters, setChapters] = useState([]);
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [speechRate, setSpeechRate] = useState(0.8);
@@ -37,6 +47,10 @@ const BookContent = () => {
   const [selectedVerse, setSelectedVerse] = useState(null);
   const [showToolbox, setShowToolbox] = useState(false);
   const highlightColors = ['#FFD700', '#90EE90', '#ADD8E6', '#FFB6C1'];
+  
+  // Language state
+  const [language, setLanguage] = useState(routeLanguage || 'english');
+  const [bibleId, setBibleId] = useState(routeBibleId || '65eec8e0b60e656b-01');
   
   // Audio progress state
   const [currentTime, setCurrentTime] = useState(0);
@@ -49,8 +63,7 @@ const BookContent = () => {
   const [selectedVoice, setSelectedVoice] = useState(null);
 
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
-  const BIBLE_ID = 'de4e12af7f28f599-01';
-
+  
   // Refs for tracking
   const progressInterval = useRef(null);
   const startTime = useRef(null);
@@ -67,15 +80,30 @@ const BookContent = () => {
     };
   }, []);
 
+  // This effect runs when chapters are loaded or when currentChapter changes
   useEffect(() => {
     if (chapters.length > 0) {
       fetchChapterContent(currentChapter);
     }
   }, [currentChapter, chapters]);
 
+  // Handle initial chapter if provided in navigation
   useEffect(() => {
-    saveHighlights();
-  }, [highlights]);
+    if (initialChapter && chapters.length > 0) {
+      // Find the chapter in the loaded chapters
+      const chapterNum = parseInt(initialChapter.number);
+      if (!isNaN(chapterNum)) {
+        setCurrentChapter(chapterNum);
+      }
+    }
+  }, [initialChapter, chapters]);
+  
+  // Re-fetch chapters when bibleId changes
+  useEffect(() => {
+    if (book && book.id) {
+      fetchChapters();
+    }
+  }, [bibleId]);
 
   const initializeTTS = async () => {
     try {
@@ -131,7 +159,7 @@ const BookContent = () => {
     try {
       setLoading(true);
       const response = await fetch(
-        `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/books/${book.id}/chapters`,
+        `https://api.scripture.api.bible/v1/bibles/${bibleId}/books/${book.id}/chapters`,
         { headers: { 'api-key': API_KEY } }
       );
       const data = await response.json();
@@ -147,6 +175,17 @@ const BookContent = () => {
     }
   };
 
+  // Handle language change
+  const handleLanguageChange = (langValue) => {
+    setLanguage(langValue);
+    const selected = LANGUAGE_OPTIONS.find(opt => opt.value === langValue);
+    if (selected) {
+      setBibleId(selected.bibleId);
+      // Save language preference
+      biblePreferences.storeLanguagePreference(langValue, selected.bibleId);
+    }
+  };
+
   const fetchChapterContent = async (chapterNum) => {
     try {
       setLoading(true);
@@ -159,7 +198,7 @@ const BookContent = () => {
 
       // Fetch verses for the chapter
       const versesResponse = await fetch(
-        `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/chapters/${chapter.id}/verses`,
+        `https://api.scripture.api.bible/v1/bibles/${bibleId}/chapters/${chapter.id}/verses`,
         { headers: { 'api-key': API_KEY } }
       );
       const versesData = await versesResponse.json();
@@ -170,7 +209,7 @@ const BookContent = () => {
         chapterVerses.map(async (verse) => {
           try {
             const verseDetailResponse = await fetch(
-              `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/verses/${verse.id}`,
+              `https://api.scripture.api.bible/v1/bibles/${bibleId}/verses/${verse.id}`,
               { headers: { 'api-key': API_KEY } }
             );
             const verseDetailData = await verseDetailResponse.json();
@@ -463,6 +502,24 @@ const BookContent = () => {
             <Text style={styles.compactTitle}>
               {book.name} {currentChapter}
             </Text>
+            <CustomPicker
+              options={LANGUAGE_OPTIONS}
+              selectedValue={language}
+              onValueChange={handleLanguageChange}
+              containerStyle={styles.languagePickerContainer}
+              colors={{
+                primary: '#FFFFFF',
+                background: 'rgba(0, 0, 0, 0.7)',
+                text: {
+                  primary: '#FFFFFF',
+                  secondary: '#CCCCCC',
+                },
+                border: {
+                  light: 'rgba(255, 255, 255, 0.3)',
+                },
+              }}
+              labelStyle={styles.languagePickerLabel}
+            />
           </View>
 
           
@@ -864,6 +921,16 @@ const styles = StyleSheet.create({
   closeButtonText: {
     fontSize: 20,
     color: '#333',
+  },
+  languagePickerContainer: {
+    width: 100,
+    marginTop: 8,
+    alignSelf: 'center',
+  },
+  languagePickerLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 

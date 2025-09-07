@@ -220,7 +220,7 @@ const getUserId = async () => {
     try {
       setUpdateLoading(true);
       
-      const response = await fetch('http://biblesnap.bellatis.com/api/user/update', {
+      const response = await fetch('https://biblesnap.bellatis.com/api/user/update', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -431,7 +431,7 @@ if (loading) {
 
             <View style={styles.menuDivider} />
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('JournalPage')}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Journal')}>
               <View style={styles.menuIcon}>
                 <Ionicons name="journal" size={dimensions.iconSize.medium} color={COLORS.semantic.info} />
               </View>

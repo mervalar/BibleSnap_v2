@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Video } from 'expo-av'; 
@@ -10,10 +10,12 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import AuthModal from '../components/AuthModal';
 import { fetchRandomStudy } from '../api/starksService'; 
+import SharedPreferences from 'react-native-shared-preferences'; 
 
 const HomePage = () => {
   const navigation = useNavigation();
   const verseCardRef = useRef();
+  const [isSharing, setIsSharing] = useState(false);
   // Copy verse to clipboard
   const handleCopyVerse = () => {
     if (verse) {
@@ -25,13 +27,18 @@ const HomePage = () => {
   // Share verse card as image
   const handleShareVerse = async () => {
     try {
+      setIsSharing(true); // Hide buttons
+      // Wait for UI to update
+      await new Promise(resolve => setTimeout(resolve, 100));
       const uri = await verseCardRef.current.capture();
+      setIsSharing(false); // Show buttons again
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri);
       } else {
         Alert.alert('Sharing not available', 'Cannot share image on this device.');
       }
     } catch (error) {
+      setIsSharing(false);
       Alert.alert('Error', 'Could not share verse.');
     }
   };
@@ -52,6 +59,12 @@ const HomePage = () => {
       .then(data => {
         setVerse(data.verse.details);
         setLoading(false);
+
+        // Save verse for widget
+        SharedPreferences.setItem(
+          'verseOfTheDay',
+          JSON.stringify(data.verse.details)
+        );
       })
       .catch(() => setLoading(false));
 
@@ -62,11 +75,24 @@ const HomePage = () => {
     checkUserAuth();
   }, []);
 
-  // Re-check authentication when screen comes into focus
+    // Re-check authentication and reload challenge progress when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       checkUserAuth();
-    }, [])
+      // Reload challenge progress when returning to the home screen
+      if (todaysChallenge && todaysChallenge.id) {
+        setTimeout(() => {
+          loadChallengeProgress().then(progressData => {
+            if (progressData && progressData.studyId === todaysChallenge.id) {
+              setTodaysChallenge(prev => ({
+                ...prev,
+                progress: progressData
+              }));
+            }
+          });
+        }, 0);  // Use setTimeout to avoid React state update during render
+      }
+    }, [todaysChallenge?.id])
   );
 
 const loadChallengeProgress = async () => {
@@ -190,21 +216,34 @@ const loadChallengeProgress = async () => {
     });
   };
 
+  // Safe function for updating today's challenge progress
+  const updateChallengeProgress = (percent, studyId) => {
+    setTimeout(() => {
+      setTodaysChallenge(prev => ({
+        ...prev,
+        progress: {
+          ...prev.progress,
+          percent,
+          studyId,
+          lastUpdated: Date.now()
+        }
+      }));
+    }, 0);
+  };
+  
   const handleChallengePress = () => {
     handleAuthenticatedAction(() => {
       if (todaysChallenge && todaysChallenge.id) {
+        // Get the current progress
+        const currentProgress = todaysChallenge.progress?.percent || 0;
+        
         // Navigate to the specific bible study
         navigation.navigate('BibleStudyContent', {
           stark: todaysChallenge,
+          progress: currentProgress, // Pass current progress to the study screen
           onProgressUpdate: (percent) => {
-            // Update local state when progress changes
-            setTodaysChallenge(prev => ({
-              ...prev,
-              progress: {
-                ...prev.progress,
-                percent
-              }
-            }));
+            // Use the safe update method
+            updateChallengeProgress(percent, todaysChallenge.id);
           }
         });
       } else {
@@ -273,19 +312,26 @@ const loadChallengeProgress = async () => {
       {/* Main Content */}
       <View style={styles.mainContent}>
         {/* Verse of the Day Card with Video Background */}
-  <ViewShot ref={verseCardRef} options={{ format: 'png', quality: 0.9 }} style={styles.verseCard}>
-          {/* Background Video */}
-          <Video
-            source={require('../assets/view.mp4')}
-            style={styles.backgroundVideo}
-            shouldPlay
-            isLooping
-            isMuted
-            resizeMode="cover"
-          />
-          
+  <ViewShot ref={verseCardRef} options={{ format: 'png', quality:0.9 }} style={styles.verseCard}>
+          {/* Show video when not sharing, image when sharing */}
+          {!isSharing ? (
+            <Video
+              source={require('../assets/view.mp4')}
+              style={styles.backgroundVideo}
+              shouldPlay
+              isLooping
+              isMuted
+              resizeMode="cover"
+            />
+          ) : (
+            <Image
+              source={require('../assets/images/img4.jpg')}
+              style={styles.backgroundVideo}
+              resizeMode="cover"
+            />
+          )}
           {/* Overlay for better text readability */}
-          <View style={styles.videoOverlay} />
+          {!isSharing && <View style={styles.videoOverlay} />}
           
           <View style={styles.verseContent}>
             <View style={styles.verseHeader}>
@@ -314,14 +360,16 @@ const loadChallengeProgress = async () => {
                   </View>
                 </View>
                 {/* Icons row just under the verse */}
-                <View style={styles.verseIconRow}>
-                  <TouchableOpacity onPress={handleCopyVerse} style={styles.iconButtonRow}>
-                    <Ionicons name="copy-outline" size={24} color="#fff" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleShareVerse} style={styles.iconButtonRow}>
-                    <Ionicons name="share-social-outline" size={24} color="#fff" />
-                  </TouchableOpacity>
-                </View>
+                {!isSharing && (
+                  <View style={styles.verseIconRow}>
+                    <TouchableOpacity onPress={handleCopyVerse} style={styles.iconButtonRow}>
+                      <Ionicons name="copy-outline" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleShareVerse} style={styles.iconButtonRow}>
+                      <Ionicons name="share-social-outline" size={24} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             ) : (
               <View style={styles.verseErrorContainer}>
@@ -353,7 +401,7 @@ const loadChallengeProgress = async () => {
             onPress={handleJournalPress}
           >
             <Text style={styles.quickActionIcon}>✍️</Text>
-            <Text style={styles.quickActionTitle}>NOtes</Text>
+            <Text style={styles.quickActionTitle}>Notes</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={[styles.quickActionCard, styles.assistantCard]}

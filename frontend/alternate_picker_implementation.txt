@@ -1,0 +1,54 @@
+// If the standard Picker doesn't work, replace the Picker implementation with this:
+
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  TextInput,
+  SafeAreaView,
+  Dimensions,
+  Platform,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import SplashScreen from '../components/SplashScreen';
+// Comment out the original picker import
+// import { Picker } from '@react-native-picker/picker';
+// And import the custom one
+import CustomPicker from '../components/CustomPicker';
+
+// ... rest of your component code ...
+
+// When it's time to render the picker, replace:
+/*
+<View style={styles.languagePickerContainer}>
+  <Picker
+    selectedValue={language}
+    style={[styles.languagePicker, Platform.OS === 'android' && styles.androidPicker]}
+    onValueChange={handleLanguageChange}
+    dropdownIconColor={COLORS.primary}
+    mode="dropdown"
+    itemStyle={styles.pickerItem}
+  >
+    {LANGUAGE_OPTIONS.map(opt => (
+      <Picker.Item key={opt.value} label={opt.label} value={opt.value} color={COLORS.text.primary} />
+    ))}
+  </Picker>
+</View>
+*/
+
+// With:
+/*
+<CustomPicker
+  options={LANGUAGE_OPTIONS}
+  selectedValue={language}
+  onValueChange={handleLanguageChange}
+  containerStyle={styles.languagePickerContainer}
+  colors={COLORS}
+/>
+*/

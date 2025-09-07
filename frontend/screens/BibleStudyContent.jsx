@@ -21,6 +21,7 @@ import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import SplashScreen from '../components/SplashScreen';
 import { Video } from 'expo-av';
+// Ensure all dependencies are installed
 
 // Responsive dimensions (matching Journal app)
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -56,31 +57,44 @@ const getResponsiveDimensions = () => {
 // Initialize dimensions
 const dimensions = getResponsiveDimensions();
 
-// Professional color palette (matching Journal app)
+// Professional color palette (refined for Bible Study)
 const COLORS = {
-  primary: '#A07553',
-  primaryLight: '#B8956D',
-  primaryDark: '#8A6344',
+  primary: '#8B5D33', // Richer brown as primary color
+  primaryLight: '#A67C52', // Lighter brown for highlights
+  primaryDark: '#6A4424', // Darker brown for shadows and text
+  accent: '#4A6741', // Sage green as accent color
+  accentLight: '#7D9A73', // Light sage for highlights
+  accentDark: '#32472C', // Dark sage for contrast elements
+  highlight: '#E2C9A0', // Warm cream highlight color
+  
   background: '#FFFFFF',
   surface: '#FAFAFA',
   surfaceElevated: '#FFFFFF',
+  card: {
+    verse: 'rgba(139, 93, 51, 0.92)',
+    explanation: 'rgba(74, 103, 65, 0.92)',
+    related: 'rgba(106, 68, 36, 0.92)',
+    knowledge: 'rgba(50, 71, 44, 0.92)',
+    activity: 'rgba(128, 84, 47, 0.92)',
+  },
   text: {
-    primary: '#1A1A1A',
-    secondary: '#666666',
-    tertiary: '#999999',
+    primary: '#2D2417', // Very dark brown
+    secondary: '#5A4A33', // Medium brown
+    tertiary: '#8B7355', // Light brown
+    light: '#F7F0E3', // Off-white cream for dark backgrounds
   },
   border: {
-    light: '#E0E0E0',
-    medium: '#CCCCCC',
-    strong: '#B0B0B0',
+    light: '#E7DBC8', // Light cream border
+    medium: '#CCBDA6', // Medium tan border
+    strong: '#A8926D', // Strong brown border
   },
   semantic: {
-    success: '#4CAF50',
-    warning: '#FF9800',
-    error: '#F44336',
-    info: '#2196F3',
+    success: '#4A7742', // Green with brown undertone
+    warning: '#D6A23C', // Warm gold
+    error: '#C25B4A', // Earthy red
+    info: '#5B87A8', // Muted blue
   },
-  overlay: 'rgba(160, 117, 83, 0.1)',
+  overlay: 'rgba(45, 36, 23, 0.65)', // Darker, more opaque overlay
 };
 
 // Cross-platform TTS Service
@@ -163,11 +177,11 @@ const SectionCard = ({ stepId, title, isUnlocked, contentText, children, style }
           onPress={handleAudioPress}
         >
           <Ionicons
-            name={isPlaying ? "pause" : "play"}
-            size={dimensions.iconSize.small}
-            color={COLORS.text.primary}
+            name={isPlaying ? "pause-circle" : "play-circle"}
+            size={dimensions.iconSize.medium}
+            color={COLORS.primary}
           />
-          <Text style={[styles.audioButtonText, { fontSize: dimensions.fontSize.caption }]}>
+          <Text style={styles.audioButtonText}>
             {isPlaying ? "Pause" : "Listen"}
           </Text>
         </TouchableOpacity>
@@ -205,6 +219,67 @@ const BibleStudyContent = () => {
     { id: 'activity', title: 'Activity', icon: 'checkmark-circle-outline' },
   ];
 
+  // Save progress to AsyncStorage
+  const saveProgress = async (progressValue) => {
+    if (!stark || !stark.id) return;
+    
+    try {
+      const today = new Date().toDateString();
+      await AsyncStorage.setItem('challengeProgress', JSON.stringify({
+        percent: progressValue,
+        studyId: stark.id,
+        lastUpdated: Date.now()
+      }));
+      await AsyncStorage.setItem('challengeProgressDate', today);
+    } catch (error) {
+      console.error('Error saving progress:', error);
+    }
+  };
+
+  // Function to safely update progress in parent component
+  const safeProgressUpdate = useRef(null);
+  
+  // Setup the safe update function
+  useEffect(() => {
+    safeProgressUpdate.current = (percent) => {
+      if (onProgressUpdate && typeof onProgressUpdate === 'function') {
+        setTimeout(() => {
+          onProgressUpdate(percent);
+        }, 0);
+      }
+    };
+  }, [onProgressUpdate]);
+  
+  // Load existing progress
+  useEffect(() => {
+    const loadSavedProgress = async () => {
+      try {
+        if (!stark || !stark.id) return;
+        
+        const today = new Date().toDateString();
+        const progressDate = await AsyncStorage.getItem('challengeProgressDate');
+        
+        if (progressDate === today) {
+          const savedProgress = await AsyncStorage.getItem('challengeProgress');
+          if (savedProgress) {
+            const progressData = JSON.parse(savedProgress);
+            if (progressData.studyId === stark.id && progressData.percent > initialProgress) {
+              setProgress(progressData.percent);
+              // Use the safe update method
+              if (safeProgressUpdate.current) {
+                safeProgressUpdate.current(progressData.percent);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading saved progress:', error);
+      }
+    };
+    
+    loadSavedProgress();
+  }, [stark?.id, initialProgress]);
+
   // Handle scroll for progress tracking
   const handleScroll = (event) => {
     const yOffset = event.nativeEvent.contentOffset.y;
@@ -220,9 +295,17 @@ const BibleStudyContent = () => {
     // Only increase progress, never decrease
     setProgress(prev => {
       const newProgress = percent > prev ? percent : prev;
-      if (onProgressUpdate && typeof onProgressUpdate === 'function' && newProgress !== prev) {
-        onProgressUpdate(newProgress);
+      
+      // Save progress to AsyncStorage when it changes
+      if (newProgress !== prev) {
+        saveProgress(newProgress);
+        
+        // Use the safe update method with a timeout to avoid state updates during render
+        if (safeProgressUpdate.current) {
+          safeProgressUpdate.current(newProgress);
+        }
       }
+      
       return newProgress;
     });
   };
@@ -365,26 +448,27 @@ const BibleStudyContent = () => {
         </Modal>
         
         {/* Header */}
-        <View style={[styles.header, { height: dimensions.headerHeight }]}> 
+        <View style={styles.header}> 
           <TouchableOpacity 
             style={styles.backButton} 
             onPress={() => navigation.goBack()}
           >
             <Ionicons 
               name="arrow-back" 
-              size={dimensions.iconSize.medium} 
+              size={dimensions.iconSize.small} 
               color={COLORS.primary} 
             />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}> 
+            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail"> 
               {stark?.title || 'Bible Study'}
             </Text>
-            <Text style={[styles.headerSubtitle, { fontSize: dimensions.fontSize.caption }]}> 
+            <Text style={styles.headerSubtitle} numberOfLines={1} ellipsizeMode="tail"> 
               {stark?.category?.name || 'Study'}
             </Text>
           </View>
-          <View style={styles.headerSpacer} />
+          {/* Empty View to maintain layout balance */}
+          <View style={styles.emptyRightSpace} />
         </View>
         
         {/* Progress Bar just under header */}
@@ -406,7 +490,7 @@ const BibleStudyContent = () => {
           {/* Main Verse Section */}
          <View
             ref={el => sectionRefs.current[0] = el}
-            style={[styles.centeredSection, { backgroundColor: 'rgba(160,117,83,0.15)', padding: dimensions.spacing.md, maxWidth: '100%', width: '100%' }]}
+            style={[styles.centeredSection, { backgroundColor: 'rgba(160,117,83,0.15)', padding: dimensions.spacing.md, width: '100%' }]}
           >
             <SectionCard 
               stepId="verse" 
@@ -416,16 +500,20 @@ const BibleStudyContent = () => {
             >
               <View style={styles.verseCard}>
                 <View style={styles.verseContent}>
-                  <Ionicons 
-                    name="book-outline" 
-                    size={dimensions.iconSize.medium} 
-                    color={COLORS.background} 
-                  />
+                  <View style={styles.verseHeader}>
+                    <Ionicons 
+                      name="book-outline" 
+                      size={dimensions.iconSize.medium} 
+                      color={COLORS.background} 
+                    />
+                    <Text style={styles.verseSectionTitle}>Scripture</Text>
+                  </View>
+                  <View style={styles.verseDivider} />
                   <View style={styles.verseTextContainer}>
-                    <Text style={[styles.verseReference, { fontSize: dimensions.fontSize.subtitle }]}> 
+                    <Text style={styles.verseReference}> 
                       {stark?.main_verse || 'Verse reference'}
                     </Text>
-                    <Text style={[styles.verseText, { fontSize: dimensions.fontSize.body }]}> 
+                    <Text style={styles.verseText}> 
                       "{stark?.verse_text || stark?.explanation || 'Verse text here'}"
                     </Text>
                   </View>
@@ -444,20 +532,21 @@ const BibleStudyContent = () => {
               title="Explanation"
               isUnlocked={true}
               contentText={`Explanation: ${stark?.explanation || 'Detailed explanation of the verse'}`}
-              style={[styles.explanationCard, { backgroundColor: 'rgba(80, 53, 26, 0.85)', padding: dimensions.spacing.xl }]}
+              style={styles.explanationCard}
             >
               <View style={styles.cardContent}>
                 <View style={styles.cardHeader}>
                   <Ionicons 
                     name="bulb-outline" 
-                    size={dimensions.iconSize.small} 
-                    color={COLORS.primary} 
+                    size={dimensions.iconSize.medium} 
+                    color="#F5DEB3" 
                   />
-                  <Text style={[styles.cardTitle, { fontSize: dimensions.fontSize.subtitle }]}> 
+                  <Text style={styles.cardTitle}> 
                     Explanation
                   </Text>
                 </View>
-                <Text style={[styles.cardText, { fontSize: dimensions.fontSize.body }]}> 
+                <View style={styles.cardDivider} />
+                <Text style={styles.cardText}> 
                   {stark?.explanation || 'Detailed explanation of the verse will appear here.'}
                 </Text>
               </View>
@@ -467,7 +556,7 @@ const BibleStudyContent = () => {
           {/* Related Verses Section */}
           <View
             ref={el => sectionRefs.current[2] = el}
-            style={[styles.centeredSection, { backgroundColor: 'rgba(245,222,179,0.10)', padding: dimensions.spacing.xl }]}
+            style={[styles.centeredSection, { backgroundColor: 'rgba(160, 117, 83, 0.2)', padding: dimensions.spacing.xl }]}
           >
             <SectionCard 
               stepId="related" 
@@ -622,36 +711,60 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   header: {
-    backgroundColor: 'rgba(101, 67, 33, 0.95)',
+    backgroundColor: COLORS.background, // White background to match other pages
     paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(160, 117, 83, 0.3)',
+    borderBottomColor: COLORS.border.light,
     zIndex: 2,
     position: 'absolute',
-    top: 35, // Move header up
+    top: Platform.OS === 'ios' ? 50 : 35, // Adjusted for platform
     left: 0,
     right: 0,
+    height: dimensions.headerHeight + 20, // Increased height by 20
+    paddingLeft: dimensions.spacing.sm,
+    paddingRight: dimensions.spacing.sm,
   },
   backButton: {
     padding: dimensions.spacing.sm,
+    marginRight: dimensions.spacing.xs,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+    borderRadius: 20,
+    height: 36,
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: dimensions.spacing.xs,
+  },
+  emptyRightSpace: {
+    width: 36, // Same width as back button for balance
   },
   headerTitle: {
     fontWeight: '700',
-    color: '#F5DEB3',
+    color: COLORS.text.primary,
+    fontSize: Math.min(dimensions.fontSize.title * 0.9, 16), // Reduce font size and cap at 16
+    textAlign: 'center',
+    marginHorizontal: dimensions.spacing.md,
+    letterSpacing: 0.5,
   },
   headerSubtitle: {
-    color: 'rgba(245, 222, 179, 0.8)',
-    marginTop: dimensions.spacing.xs,
+    color: COLORS.text.secondary,
+    marginTop: 2, // Reduced spacing
+    fontSize: Math.min(dimensions.fontSize.caption * 0.9, 12), // Smaller subtitle size, capped at 12
+    textAlign: 'center',
   },
-  headerSpacer: {
-    width: dimensions.iconSize.medium + dimensions.spacing.sm * 2,
+  journalButton: {
+    padding: dimensions.spacing.xs,
+    marginLeft: dimensions.spacing.xs,
   },
   progressContainer: {
     paddingHorizontal: dimensions.spacing.md,
@@ -661,7 +774,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(160, 117, 83, 0.3)',
     zIndex: 2,
     position: 'absolute',
-    top: dimensions.headerHeight + -50, 
+    top: dimensions.headerHeight + -30, 
     left: 0,
     right: 0,
   },
@@ -694,8 +807,10 @@ const styles = StyleSheet.create({
   centeredSection: {
     minHeight: screenHeight * 0.85,
     justifyContent: 'center',
-    alignItems: 'stretch',
+    alignItems: 'center',
     width: '100%',
+    paddingHorizontal: dimensions.spacing.sm, // Add horizontal padding
+    paddingBottom: dimensions.spacing.xl, // Add bottom padding
   },
   stepsContainer: {
     backgroundColor: 'rgba(160, 117, 83, 0.9)', 
@@ -753,7 +868,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingTop: dimensions.headerHeight + 50, 
+    paddingTop: dimensions.headerHeight + 70, // Adjusted for the new header height
   },
   contentContainer: {
     flexGrow: 1,
@@ -789,9 +904,15 @@ const styles = StyleSheet.create({
  sectionContent: {
   borderRadius: 20,
   padding: dimensions.spacing.lg,
-  maxWidth: '95%',
-  width: '100%',
+  width: '94%', // Wider cards that make better use of space
+  maxWidth: screenWidth > 600 ? 600 : '94%', // Limit max width on larger screens
   alignItems: 'center',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3,
+  shadowRadius: 6,
+  elevation: 8,
+  marginHorizontal: 'auto',
 },
   completeButton: {
     flexDirection: 'row',
@@ -812,22 +933,47 @@ const styles = StyleSheet.create({
   },
   // Verse card with brownish theme
   verseCard: {
-    backgroundColor: 'rgba(160, 117, 83, 0.95)', 
+    backgroundColor: 'rgba(101, 67, 33, 0.95)', 
     borderRadius: 20,
     padding: dimensions.spacing.lg,
     width: '100%',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(210, 180, 140, 0.5)',
-    minHeight: 200,
+    borderWidth: 1,
+    borderColor: 'rgba(210, 180, 140, 0.8)',
+    minHeight: 180, // Slightly reduced height
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, // Slightly reduced shadow
+    shadowRadius: 6,
+    elevation: 8,
   },
   verseContent: {
     alignItems: 'center',
-    textAlign: 'center',
+    width: '100%', // Ensure content takes full width
+  },
+  verseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: dimensions.spacing.sm,
+  },
+  verseSectionTitle: {
+    color: '#F5DEB3',
+    fontSize: dimensions.fontSize.title,
+    fontWeight: '700',
+    marginLeft: dimensions.spacing.sm,
+    letterSpacing: 0.7,
+  },
+  verseDivider: {
+    height: 1,
+    width: '80%',
+    backgroundColor: 'rgba(245, 222, 179, 0.4)',
+    marginVertical: dimensions.spacing.md,
   },
   verseTextContainer: {
     alignItems: 'center',
-    marginTop: dimensions.spacing.md,
+    width: '100%', // Full width for text container
+    paddingHorizontal: dimensions.spacing.md,
   },
   verseReference: {
     color: '#F5DEB3',
@@ -835,6 +981,7 @@ const styles = StyleSheet.create({
     marginBottom: dimensions.spacing.md,
     textAlign: 'center',
     fontSize: dimensions.fontSize.title,
+    letterSpacing: 0.5,
   },
   verseText: {
     color: '#F5DEB3', 
@@ -842,16 +989,27 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     fontSize: dimensions.fontSize.body,
+    letterSpacing: 0.3, // Improved letter spacing for readability
+    maxWidth: '95%', // Prevent text from touching edges
   },
   // Card content with brownish theme
   cardContent: {
     alignItems: 'center',
     width: '100%',
+    paddingHorizontal: dimensions.spacing.sm, // Add some horizontal padding
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: dimensions.spacing.md,
+    justifyContent: 'center',
+  },
+  cardDivider: {
+    height: 1,
+    width: '80%',
+    backgroundColor: 'rgba(245, 222, 179, 0.4)',
     marginBottom: dimensions.spacing.lg,
+    alignSelf: 'center',
   },
   cardTitle: {
     fontWeight: '700',
@@ -859,12 +1017,14 @@ const styles = StyleSheet.create({
     marginLeft: dimensions.spacing.sm,
     fontSize: dimensions.fontSize.title,
     textAlign: 'center',
+    letterSpacing: 0.7, // Improved letter spacing
   },
   cardText: {
     color: '#F5DEB3', // Wheat
     lineHeight: 26,
-    textAlign: 'center',
+    textAlign: 'justify', // Justified text for better reading
     fontSize: dimensions.fontSize.body,
+    paddingHorizontal: dimensions.spacing.sm, // Add horizontal padding
   },
   // Reflection styles
   reflectionHeader: {
@@ -897,8 +1057,17 @@ const styles = StyleSheet.create({
   },
   // Explanation card - add specific background
   explanationCard: {
-    backgroundColor: 'rgba(101,67,33,0.18)', // Keep card background
+    backgroundColor: 'rgba(101,67,33,0.95)', // Rich brown background
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(210, 180, 140, 0.6)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+    paddingVertical: dimensions.spacing.lg,
+    paddingHorizontal: dimensions.spacing.md,
   },
   // Knowledge card with darker brown
   knowledgeCard: {
@@ -926,30 +1095,40 @@ const styles = StyleSheet.create({
   
   // Related verses with brownish theme
   versesContainer: {
-    marginTop: dimensions.spacing.md,
+    marginTop: dimensions.spacing.lg,
     width: '100%',
+    marginBottom: dimensions.spacing.md,
   },
   relatedVerse: {
-    backgroundColor: 'rgba(245, 222, 179, 0.15)', 
+    backgroundColor: 'rgba(160, 117, 83, 0.3)', 
     borderRadius: 12,
     padding: dimensions.spacing.md,
     marginBottom: dimensions.spacing.md,
     borderLeftWidth: 4,
     borderLeftColor: '#F5DEB3', // Wheat
+    width: '97%', // Wider to use more space
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   relatedVerseReference: {
     color: '#F5DEB3', // Wheat
     fontWeight: '600',
     marginBottom: dimensions.spacing.sm,
-    textAlign: 'center',
+    textAlign: 'left', // Left-aligned for better reading
     fontSize: dimensions.fontSize.subtitle,
+    letterSpacing: 0.3,
   },
   relatedVerseText: {
     color: '#F5DEB3', // Wheat
     fontStyle: 'italic',
-    textAlign: 'center',
+    textAlign: 'justify', // Justified text for better reading
     fontSize: dimensions.fontSize.body,
     lineHeight: 24,
+    letterSpacing: 0.2,
   },
   emptyText: {
     color: 'rgba(245, 222, 179, 0.7)', // Light wheat
@@ -985,27 +1164,34 @@ const styles = StyleSheet.create({
   
   // Audio controls with brownish theme
   audioControls: {
-    marginBottom: dimensions.spacing.lg,
-    alignItems: 'center',
+    alignSelf: 'flex-end', // Position at top right
+    marginBottom: dimensions.spacing.md,
+    marginRight: dimensions.spacing.md,
   },
   audioButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-    backgroundColor: 'rgba(245, 222, 179, 0.2)', // Light wheat
-    borderRadius: 25,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)', // Semi-transparent white
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(245, 222, 179, 0.4)',
+    borderColor: 'rgba(245, 222, 179, 0.6)', // Subtle border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   audioButtonActive: {
-    backgroundColor: 'rgba(245, 222, 179, 0.9)',
+    backgroundColor: 'rgba(139, 93, 51, 0.7)', // Brown when active
   },
   audioButtonText: {
     color: '#F5DEB3', // Wheat
     marginLeft: dimensions.spacing.sm,
     fontSize: dimensions.fontSize.caption,
-    fontWeight: '500',
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   audioButtonTextDisabled: {
     color: 'rgba(245, 222, 179, 0.5)',
