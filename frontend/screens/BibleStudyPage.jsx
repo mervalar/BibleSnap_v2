@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Dimensions,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchCategories } from '../api/categoryService';
@@ -17,17 +18,32 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SplashScreen from '../components/SplashScreen';
 
-
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Responsive dimensions (matching Journal app)
+// Bible study images
+const BIBLE_STUDY_IMAGES = [
+  require('../assets/images/img1.jpg'),
+  require('../assets/images/img2.jpg'),
+  require('../assets/images/img3.jpg'),
+  require('../assets/images/img5.jpg'),
+  require('../assets/images/img6.jpg'),
+  require('../assets/images/img4.jpg'),
+];
+
+// Function to get random image for each study
+const getRandomImage = (studyId) => {
+  const index = studyId % BIBLE_STUDY_IMAGES.length;
+  return BIBLE_STUDY_IMAGES[index];
+};
+
+// Responsive dimensions
 const getResponsiveDimensions = () => {
   const isTablet = screenWidth >= 768;
-  const isLargePhone = screenWidth >= 414;
   
   return {
     headerHeight: isTablet ? 80 : 60,
     cardPadding: isTablet ? 24 : 16,
+    imageHeight: isTablet ? 180 : 140,
     fontSize: {
       title: isTablet ? 20 : 18,
       subtitle: isTablet ? 16 : 14,
@@ -49,7 +65,7 @@ const getResponsiveDimensions = () => {
   };
 };
 
-// Professional color palette (matching Journal app)
+// Professional color palette
 const COLORS = {
   primary: '#A07553',
   primaryLight: '#B8956D',
@@ -83,20 +99,89 @@ const CATEGORY_COLORS = [
   '#FFEB3B', '#795548', '#607D8B', '#FFC107', '#009688'
 ];
 
-const BibleStudyApp = () => {
-  const navigation = useNavigation();
+// Single study card component
+const StudyCard = ({ item, progress, isCompleted, categoryColor, handleNavigate, handleRestart }) => {
   const dimensions = getResponsiveDimensions();
   
+  return (
+    <TouchableOpacity
+      style={[styles.entryCard, isCompleted && styles.completedEntryCard]}
+      onPress={() => handleNavigate(item, progress)}
+      activeOpacity={0.7}
+    >
+      {/* Image Container */}
+      <View style={styles.imageContainer}>
+        <Image 
+          source={getRandomImage(item.id)} 
+          style={[styles.cardImage, { height: dimensions.imageHeight }]}
+          resizeMode="cover"
+        />
+        <View style={styles.imageOverlay} />
+        {/* Category Badge on Image */}
+        <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}> 
+          <Text style={[styles.categoryBadgeText, { fontSize: dimensions.fontSize.caption }]}> 
+            {item.category?.name || 'STUDY'}
+          </Text>
+        </View>
+        {/* Progress/Completed Badge - Top Right */}
+        <View style={[styles.progressBadge, isCompleted && styles.completedBadge]}>
+          <Text style={[styles.progressBadgeText, { fontSize: dimensions.fontSize.caption }]}> 
+            {isCompleted ? 'FINISHED' : `${progress}%`}
+          </Text>
+        </View>
+      </View>
+      {/* Content Container - Simplified */}
+      <View style={styles.cardContent}>
+        <Text style={[styles.entryTitle, { fontSize: dimensions.fontSize.subtitle }]} numberOfLines={2}>
+          {item.title}
+        </Text>
+        {/* Progress Bar */}
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${progress}%` },
+                isCompleted && styles.completedProgressFill
+              ]}
+            />
+          </View>
+        </View>
+        
+        {/* Restart button for completed studies */}
+        {isCompleted && (
+          <TouchableOpacity 
+            style={styles.restartButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleRestart(item.id);
+            }}
+          >
+            <Ionicons name="refresh-outline" size={dimensions.iconSize.small} color="#FFFFFF" />
+            <Text style={styles.restartButtonText}>Restart</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// Main component
+const BibleStudyApp = () => {
+  const navigation = useNavigation();
+  const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [starks, setStarks] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [progressMap, setProgressMap] = useState({}); 
-  const [openedStarks, setOpenedStarks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [progressMap, setProgressMap] = useState({});
+  const [completedStudies, setCompletedStudies] = useState(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const lessonsPerPage = 5;
+  const dimensions = getResponsiveDimensions();
 
-  // Function to get category color by ID
+  // Get category color based on category ID
   const getCategoryColor = (categoryId) => {
     const categoryIndex = categories.findIndex(cat => cat.id === categoryId);
     return categoryIndex >= 0 ? CATEGORY_COLORS[categoryIndex % CATEGORY_COLORS.length] : COLORS.primary;
@@ -126,24 +211,36 @@ const BibleStudyApp = () => {
     AsyncStorage.getItem('bibleProgress').then(data => {
       if (data) setProgressMap(JSON.parse(data));
     });
+    
+    // Load completed studies
+    AsyncStorage.getItem('completedStudies').then(data => {
+      if (data) {
+        const completedIds = JSON.parse(data);
+        setCompletedStudies(new Set(completedIds));
+      }
+    });
   }, []);
 
   // Save progress to storage whenever it changes
   useEffect(() => {
     AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
-  }, [progressMap]);
-
-  // Load opened starks from storage on mount
-  useEffect(() => {
-    AsyncStorage.getItem('openedStarks').then(data => {
-      if (data) setOpenedStarks(JSON.parse(data));
+    
+    // Check for completed studies (100% progress)
+    const newCompleted = new Set(completedStudies);
+    let hasChanges = false;
+    
+    Object.entries(progressMap).forEach(([id, progress]) => {
+      if (progress === 100 && !completedStudies.has(Number(id))) {
+        newCompleted.add(Number(id));
+        hasChanges = true;
+      }
     });
-  }, []);
-
-  // Save opened starks to storage whenever it changes
-  useEffect(() => {
-    AsyncStorage.setItem('openedStarks', JSON.stringify(openedStarks));
-  }, [openedStarks]);
+    
+    if (hasChanges) {
+      setCompletedStudies(newCompleted);
+      AsyncStorage.setItem('completedStudies', JSON.stringify([...newCompleted]));
+    }
+  }, [progressMap, completedStudies]);
 
   // Filter starks based on category and search query
   const filteredStarks = starks.filter(item => {
@@ -154,11 +251,8 @@ const BibleStudyApp = () => {
       (item.main_verse && item.main_verse.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
-
-  const recentStarks = starks
-    .filter(item => openedStarks.includes(item.id))
-    .slice(-3)
-    .reverse();
+  const totalPages = Math.ceil(filteredStarks.length / lessonsPerPage);
+  const paginatedStarks = filteredStarks.slice((currentPage - 1) * lessonsPerPage, currentPage * lessonsPerPage);
 
   const handleGoBack = () => {
     navigation.goBack();
@@ -166,19 +260,50 @@ const BibleStudyApp = () => {
 
   const handleCategoryFilter = (categoryId) => {
     setSelectedCategory(categoryId);
+    setCurrentPage(1);
+  };
+  
+  // Function to restart a completed study
+  const handleRestartStudy = (studyId) => {
+    // Set progress to 0%
+    setProgressMap(prev => ({...prev, [studyId]: 0}));
+    
+    // Remove from completed studies
+    const newCompleted = new Set(completedStudies);
+    newCompleted.delete(studyId);
+    setCompletedStudies(newCompleted);
+    AsyncStorage.setItem('completedStudies', JSON.stringify([...newCompleted]));
+  };
+
+  const handleNavigateToStudy = (study, progress) => {
+    navigation.navigate('BibleStudyContent', {
+      stark: study,
+      progress,
+      onProgressUpdate: (percent) => {
+        setProgressMap((prev) => ({ ...prev, [study.id]: percent }));
+      }
+    });
   };
 
   if (loading && starks.length === 0) {
     return (
-        <SplashScreen 
-      onFinish={() => {
-        // This will be called when splash finishes, but loading state 
-        // is controlled by fetchUserData, so no action needed here
-      }}
-      duration={2000} 
-    />
+      <SplashScreen 
+        onFinish={() => {}}
+        duration={2000} 
+      />
     );
   }
+
+  // Separate studies into ongoing and completed
+  const ongoingStudies = paginatedStarks.filter(item => {
+    const progress = progressMap[item.id] || 0;
+    return !(progress === 100 || completedStudies.has(item.id));
+  });
+  
+  const completedStudiesList = paginatedStarks.filter(item => {
+    const progress = progressMap[item.id] || 0;
+    return progress === 100 || completedStudies.has(item.id);
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -226,13 +351,19 @@ const BibleStudyApp = () => {
               placeholder="Search studies, titles, verses..."
               placeholderTextColor={COLORS.text.tertiary}
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                setCurrentPage(1); 
+              }}
               autoFocus={true}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity 
                 style={styles.clearSearchButton}
-                onPress={() => setSearchQuery('')}
+                onPress={() => {
+                  setSearchQuery('');
+                  setCurrentPage(1);
+                }}
               >
                 <Ionicons name="close" size={dimensions.iconSize.small} color={COLORS.text.secondary} />
               </TouchableOpacity>
@@ -299,192 +430,148 @@ const BibleStudyApp = () => {
           </View>
         )}
 
-        {/* Bible Studies Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-            Bible Studies
-          </Text>
-          <Text style={[styles.studyCount, { fontSize: dimensions.fontSize.caption }]}>
-            {filteredStarks.length} studies
-          </Text>
-        </View>
-
-        {/* Bible Study Entries */}
-        <View style={styles.entriesContainer}>
-          {filteredStarks.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconContainer}>
-                <Ionicons name="book-outline" size={64} color={COLORS.border.medium} />
-              </View>
-              <Text style={[styles.emptyTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                {searchQuery.trim() 
-                  ? 'No matches found' 
-                  : selectedCategory === 'all' 
-                    ? 'Start your study' 
-                    : 'No studies in this category'
-                }
-              </Text>
-              <Text style={[styles.emptyText, { fontSize: dimensions.fontSize.body }]}>
-                {searchQuery.trim() 
-                  ? `No studies found matching "${searchQuery}"` 
-                  : selectedCategory === 'all' 
-                    ? 'Begin your journey with Bible studies to deepen your understanding and faith.' 
-                    : `No studies found in "${categories.find(c => c.id === selectedCategory)?.name}" category. Try a different category or explore all studies.`
-                }
-              </Text>
-              {(searchQuery.trim() || selectedCategory !== 'all') && (
-                <TouchableOpacity 
-                  style={styles.clearFiltersButton}
-                  onPress={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('all');
-                  }}
-                >
-                  <Text style={[styles.clearFiltersText, { fontSize: dimensions.fontSize.caption }]}>
-                    Clear filters
-                  </Text>
-                </TouchableOpacity>
-              )}
+        {/* Check if we have any filtered studies */}
+        {filteredStarks.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconContainer}>
+              <Ionicons name="book-outline" size={64} color={COLORS.border.medium} />
             </View>
-          ) : (
-            filteredStarks.map((item) => {
-              const categoryColor = getCategoryColor(item.category?.id);
-              const progress = progressMap[item.id] || 0;
-              
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.entryCard, { borderLeftColor: categoryColor }]}
-                  onPress={() => {
-                    if (!openedStarks.includes(item.id)) {
-                      setOpenedStarks(prev => [...prev, item.id]);
-                    }
-                    navigation.navigate('BibleStudyContent', {
-                      stark: item,
-                      onProgressUpdate: (percent) => {
-                        setProgressMap((prev) => ({ ...prev, [item.id]: percent }));
-                      }
-                    });
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.entryHeader}>
-                    <View style={styles.categoryContainer}>
-                      <View style={[styles.categoryIndicator, { backgroundColor: categoryColor }]} />
-                      <Text style={[styles.categoryText, { fontSize: dimensions.fontSize.caption }]}>
-                        {item.category?.name || 'STUDY'}
-                      </Text>
-                    </View>
-                    <Text style={[styles.entryDate, { fontSize: dimensions.fontSize.caption }]}>
-                      {item.date || 'Today'}
-                    </Text>
-                  </View>
-                  
-                  <Text style={[styles.entryTitle, { fontSize: dimensions.fontSize.subtitle }]} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-                  
-                  {item.main_verse && (
-                    <View style={styles.verseContainer}>
-                      <Ionicons name="book-outline" size={dimensions.iconSize.small} color={COLORS.primary} />
-                      <Text style={[styles.verseText, { fontSize: dimensions.fontSize.caption }]} numberOfLines={2}>
-                        {item.main_verse}
-                      </Text>
-                    </View>
-                  )}
-
-                  <View style={styles.entryFooter}>
-                    <View style={styles.progressContainer}>
-                      <View style={styles.progressBar}>
-                        <View
-                          style={[
-                            styles.progressFill,
-                            { width: `${progress}%` },
-                          ]}
-                        />
-                      </View>
-                      <Text style={[styles.progressText, { fontSize: dimensions.fontSize.caption }]}>
-                        {progress}%
-                      </Text>
-                    </View>
-                   
-                  
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </View>
-              {/* Continue Reading Section */}
-        {recentStarks.length > 0 && (
+            <Text style={[styles.emptyTitle, { fontSize: dimensions.fontSize.subtitle }]}>
+              {searchQuery.trim() 
+                ? 'No matches found' 
+                : selectedCategory === 'all' 
+                  ? 'Start your study' 
+                  : 'No studies in this category'
+              }
+            </Text>
+            <Text style={[styles.emptyText, { fontSize: dimensions.fontSize.body }]}>
+              {searchQuery.trim() 
+                ? `No studies found matching "${searchQuery}"` 
+                : selectedCategory === 'all' 
+                  ? 'Begin your journey with Bible studies to deepen your understanding and faith.' 
+                  : `No studies found in "${categories.find(c => c.id === selectedCategory)?.name}" category. Try a different category or explore all studies.`
+              }
+            </Text>
+            {(searchQuery.trim() || selectedCategory !== 'all') && (
+              <TouchableOpacity 
+                style={styles.clearFiltersButton}
+                onPress={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('all');
+                  setCurrentPage(1);
+                }}
+              >
+                <Text style={[styles.clearFiltersText, { fontSize: dimensions.fontSize.caption }]}>
+                  Clear filters
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
           <>
+            {/* Ongoing Studies Section */}
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                Continue Reading
+                Ongoing Studies
               </Text>
               <Text style={[styles.studyCount, { fontSize: dimensions.fontSize.caption }]}>
-                {recentStarks.length} recent
+                {ongoingStudies.length} studies
               </Text>
             </View>
-            
+
+            {/* Ongoing Studies Entries */}
             <View style={styles.entriesContainer}>
-              {recentStarks.map((item) => {
-                const categoryColor = getCategoryColor(item.category?.id);
-                const progress = progressMap[item.id] || 0;
-                
-                return (
-                  <TouchableOpacity
-                    key={`recent-${item.id}`}
-                    style={[styles.entryCard, styles.recentCard, { borderLeftColor: categoryColor }]}
-                    onPress={() => {
-                      navigation.navigate('BibleStudyContent', {
-                        stark: item,
-                        progress: progress,
-                        onProgressUpdate: (percent) => {
-                          setProgressMap((prev) => ({ ...prev, [item.id]: percent }));
-                        }
-                      });
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.entryHeader}>
-                      <View style={styles.categoryContainer}>
-                        <View style={[styles.categoryIndicator, { backgroundColor: categoryColor }]} />
-                        <Text style={[styles.categoryText, { fontSize: dimensions.fontSize.caption }]}>
-                          CONTINUE
-                        </Text>
-                      </View>
-                      <Text style={[styles.progressText, { fontSize: dimensions.fontSize.caption }]}>
-                        {progress}%
-                      </Text>
-                    </View>
-                    
-                    <Text style={[styles.entryTitle, { fontSize: dimensions.fontSize.subtitle }]} numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                    
-                    {item.main_verse && (
-                      <View style={styles.verseContainer}>
-                        <Ionicons name="book-outline" size={dimensions.iconSize.small} color={COLORS.primary} />
-                        <Text style={[styles.verseText, { fontSize: dimensions.fontSize.caption }]} numberOfLines={1}>
-                          {item.main_verse}
-                        </Text>
-                      </View>
-                    )}
-                    
-                    <View style={styles.progressContainer}>
-                      <View style={styles.progressBar}>
-                        <View
-                          style={[
-                            styles.progressFill,
-                            { width: `${progress}%` },
-                          ]}
-                        />
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+              {ongoingStudies.length === 0 ? (
+                <View style={styles.emptySectionContainer}>
+                  <Text style={[styles.emptySectionText, { fontSize: dimensions.fontSize.body }]}>
+                    No ongoing studies. Start a new study or check your completed studies below.
+                  </Text>
+                </View>
+              ) : (
+                ongoingStudies.map((item) => {
+                  const categoryColor = getCategoryColor(item.category?.id);
+                  const progress = progressMap[item.id] || 0;
+                  
+                  return (
+                    <StudyCard
+                      key={item.id}
+                      item={item}
+                      progress={progress}
+                      isCompleted={false}
+                      categoryColor={categoryColor}
+                      handleNavigate={handleNavigateToStudy}
+                      handleRestart={handleRestartStudy}
+                    />
+                  );
+                })
+              )}
+            </View>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16 }}>
+                <TouchableOpacity
+                  onPress={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  style={{ padding: 8, opacity: currentPage === 1 ? 0.5 : 1 }}
+                >
+                  <Text style={{ fontSize: 18, color: COLORS.primary }}>{'<'}</Text>
+                </TouchableOpacity>
+                <Text style={{ marginHorizontal: 16, fontSize: 16 }}>
+                  Page {currentPage} of {totalPages}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  style={{ padding: 8, opacity: currentPage === totalPages ? 0.5 : 1 }}
+                >
+                  <Text style={{ fontSize: 18, color: COLORS.primary }}>{'>'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            
+            {/* Divider */}
+            <View style={styles.sectionDivider} />
+
+            {/* Completed Studies Section */}
+            <View style={[styles.sectionHeader, styles.completedSectionHeader]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="checkmark-circle" size={20} color={COLORS.semantic.success} style={{ marginRight: 8 }} />
+                <Text style={[styles.sectionTitle, { fontSize: dimensions.fontSize.subtitle }]}>
+                  Completed Studies
+                </Text>
+              </View>
+              <Text style={[styles.studyCount, { fontSize: dimensions.fontSize.caption }]}>
+                {completedStudiesList.length} studies
+              </Text>
+            </View>
+
+            {/* Completed Studies Entries */}
+            <View style={styles.entriesContainer}>
+              {completedStudiesList.length === 0 ? (
+                <View style={styles.emptySectionContainer}>
+                  <Text style={[styles.emptySectionText, { fontSize: dimensions.fontSize.body }]}>
+                    You haven't completed any studies yet. Complete a study to see it here.
+                  </Text>
+                </View>
+              ) : (
+                completedStudiesList.map((item) => {
+                  const categoryColor = getCategoryColor(item.category?.id);
+                  const progress = progressMap[item.id] || 0;
+                  
+                  return (
+                    <StudyCard
+                      key={item.id}
+                      item={item}
+                      progress={progress}
+                      isCompleted={true}
+                      categoryColor={categoryColor}
+                      handleNavigate={handleNavigateToStudy}
+                      handleRestart={handleRestartStudy}
+                    />
+                  );
+                })
+              )}
             </View>
           </>
         )}
@@ -493,23 +580,10 @@ const BibleStudyApp = () => {
   );
 };
 
-const dimensions = getResponsiveDimensions();
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-  },
-  loadingText: {
-    marginTop: dimensions.spacing.md,
-    color: COLORS.text.secondary,
-    fontWeight: '500',
   },
   loadingOverlay: {
     position: 'absolute',
@@ -524,7 +598,7 @@ const styles = StyleSheet.create({
   },
   loadingContent: {
     backgroundColor: COLORS.surfaceElevated,
-    padding: dimensions.spacing.xl,
+    padding: getResponsiveDimensions().spacing.xl,
     borderRadius: 16,
     alignItems: 'center',
     shadowColor: '#000',
@@ -534,14 +608,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   loadingOverlayText: {
-    marginTop: dimensions.spacing.md,
+    marginTop: getResponsiveDimensions().spacing.md,
     color: COLORS.text.primary,
     fontWeight: '500',
   },
   header: {
     backgroundColor: COLORS.surfaceElevated,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: getResponsiveDimensions().spacing.md,
+    paddingVertical: getResponsiveDimensions().spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -566,7 +640,7 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: dimensions.spacing.sm,
+    gap: getResponsiveDimensions().spacing.sm,
   },
   headerActionButton: {
     width: 44,
@@ -582,23 +656,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  addButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: COLORS.primary,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
   searchContainer: {
     backgroundColor: COLORS.surfaceElevated,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: getResponsiveDimensions().spacing.md,
+    paddingVertical: getResponsiveDimensions().spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.light,
   },
@@ -607,50 +668,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.surface,
     borderRadius: 12,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
+    paddingHorizontal: getResponsiveDimensions().spacing.md,
+    paddingVertical: getResponsiveDimensions().spacing.sm,
     borderWidth: 1,
     borderColor: COLORS.border.light,
     minHeight: 48,
   },
   searchInput: {
     flex: 1,
-    marginLeft: dimensions.spacing.sm,
+    marginLeft: getResponsiveDimensions().spacing.sm,
     color: COLORS.text.primary,
-    fontWeight: '400',
   },
   clearSearchButton: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.border.light,
-    borderRadius: 12,
-    marginLeft: dimensions.spacing.sm,
+    padding: getResponsiveDimensions().spacing.xs,
   },
   content: {
     flex: 1,
-    backgroundColor: COLORS.surface,
   },
   filterContainer: {
     backgroundColor: COLORS.surfaceElevated,
+    paddingHorizontal: getResponsiveDimensions().spacing.md,
+    paddingVertical: getResponsiveDimensions().spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.light,
   },
   filterContentContainer: {
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.md,
-    alignItems: 'center',
+    paddingVertical: getResponsiveDimensions().spacing.sm,
+    gap: getResponsiveDimensions().spacing.sm,
   },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: 20,
-    marginRight: dimensions.spacing.sm,
+    paddingHorizontal: getResponsiveDimensions().spacing.md,
+    paddingVertical: getResponsiveDimensions().spacing.xs,
+    borderRadius: 16,
     borderWidth: 1,
-    minHeight: 36,
+    marginRight: getResponsiveDimensions().spacing.sm,
   },
   activeFilter: {
     backgroundColor: COLORS.primary,
@@ -658,11 +711,16 @@ const styles = StyleSheet.create({
   },
   inactiveFilter: {
     backgroundColor: COLORS.surface,
-    borderColor: COLORS.border.medium,
+    borderColor: COLORS.border.light,
+  },
+  categoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: getResponsiveDimensions().spacing.xs,
   },
   filterText: {
-    fontWeight: '600',
-    letterSpacing: 0.2,
+    fontWeight: '500',
   },
   activeFilterText: {
     color: COLORS.background,
@@ -670,45 +728,91 @@ const styles = StyleSheet.create({
   inactiveFilterText: {
     color: COLORS.text.secondary,
   },
-  categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: dimensions.spacing.xs,
-  },
   resultsInfo: {
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    backgroundColor: COLORS.surfaceElevated,
+    paddingHorizontal: getResponsiveDimensions().spacing.md,
+    paddingVertical: getResponsiveDimensions().spacing.sm,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
   },
   resultsText: {
     color: COLORS.text.secondary,
-    fontWeight: '500',
+    fontStyle: 'italic',
   },
   sectionHeader: {
+    paddingHorizontal: getResponsiveDimensions().spacing.md,
+    paddingVertical: getResponsiveDimensions().spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.md,
-    backgroundColor: COLORS.surfaceElevated,
   },
   sectionTitle: {
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.text.primary,
   },
   studyCount: {
     color: COLORS.text.secondary,
-    fontWeight: '500',
   },
   entriesContainer: {
-    padding: dimensions.spacing.md,
+    paddingHorizontal: getResponsiveDimensions().spacing.md,
+  },
+  entryCard: {
+    marginBottom: getResponsiveDimensions().spacing.md,
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  imageContainer: {
+    position: 'relative',
+  },
+  cardImage: {
+    width: '100%',
+  },
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  categoryBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    paddingHorizontal: getResponsiveDimensions().spacing.sm,
+    paddingVertical: getResponsiveDimensions().spacing.xs,
+    borderRadius: 12,
+  },
+  categoryBadgeText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  progressBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    paddingHorizontal: getResponsiveDimensions().spacing.sm,
+    paddingVertical: getResponsiveDimensions().spacing.xs,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryDark,
+  },
+  progressBadgeText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  cardContent: {
+    padding: getResponsiveDimensions().spacing.md,
+  },
+  entryTitle: {
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginBottom: getResponsiveDimensions().spacing.md,
   },
   emptyContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: dimensions.spacing.xl * 2,
-    paddingHorizontal: dimensions.spacing.lg,
+    padding: getResponsiveDimensions().spacing.xl,
   },
   emptyIconContainer: {
     width: 120,
@@ -717,137 +821,101 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.surface,
     borderRadius: 60,
-    marginBottom: dimensions.spacing.lg,
-    borderWidth: 2,
+    marginBottom: getResponsiveDimensions().spacing.lg,
+    borderWidth: 1,
     borderColor: COLORS.border.light,
   },
   emptyTitle: {
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.text.primary,
-    marginBottom: dimensions.spacing.sm,
+    marginBottom: getResponsiveDimensions().spacing.md,
     textAlign: 'center',
   },
   emptyText: {
     color: COLORS.text.secondary,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: dimensions.spacing.lg,
+    marginBottom: getResponsiveDimensions().spacing.lg,
   },
   clearFiltersButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: 24,
-  },
-  clearFiltersText: {
-    color: COLORS.background,
-    fontWeight: '600',
-  },
-  entryCard: {
-    backgroundColor: COLORS.surfaceElevated,
+    paddingHorizontal: getResponsiveDimensions().spacing.lg,
+    paddingVertical: getResponsiveDimensions().spacing.sm,
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
-    padding: dimensions.cardPadding,
-    marginBottom: dimensions.spacing.md,
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
     borderWidth: 1,
     borderColor: COLORS.border.light,
   },
-  recentCard: {
-    backgroundColor: '#DDBBA1',
-  },
-  entryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
-  },
-  categoryContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  categoryIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: dimensions.spacing.sm,
-  },
-  categoryText: {
+  clearFiltersText: {
+    color: COLORS.primary,
     fontWeight: '600',
-    color: COLORS.text.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  entryDate: {
-    color: COLORS.text.tertiary,
-    fontWeight: '500',
-  },
-  entryTitle: {
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginBottom: dimensions.spacing.sm,
-    lineHeight: 24,
-  },
-  verseContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DDBBA1',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginBottom: dimensions.spacing.md,
-  },
-  verseText: {
-    color: '#333',
-    fontWeight: '500',
-    flex: 1,
-    marginLeft: dimensions.spacing.sm,
-  },
-  entryFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 12,
+    width: '100%',
   },
   progressBar: {
-    flex: 1,
-    height: 4,
+    width: '100%',
+    height: 6,
     backgroundColor: COLORS.border.light,
-    borderRadius: 2,
-    marginRight: dimensions.spacing.sm,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: COLORS.primary,
-    borderRadius: 2,
+    borderRadius: 3,
   },
-  progressText: {
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-    minWidth: 30,
+  completedBadge: {
+    backgroundColor: COLORS.semantic.success,
   },
-  actionButtons: {
+  completedProgressFill: {
+    backgroundColor: COLORS.semantic.success,
+  },
+  restartButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  actionButton: {
-    width: 36,
-    height: 36,
     justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginTop: 10,
+    alignSelf: 'center',
+  },
+  restartButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  completedSectionHeader: {
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border.light,
+    paddingTop: 16,
+    backgroundColor: COLORS.surface,
+  },
+  completedEntryCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.semantic.success,
+  },
+  emptySectionContainer: {
+    padding: 16,
     alignItems: 'center',
-    backgroundColor: '#EEDED2',
-    borderRadius: 18,
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+    marginBottom: 16,
+  },
+  emptySectionText: {
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+  },
+  sectionDivider: {
+    height: 8,
+    backgroundColor: COLORS.border.light,
+    marginVertical: 8,
   },
 });
+
 export default BibleStudyApp;

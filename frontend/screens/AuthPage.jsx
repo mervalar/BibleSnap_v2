@@ -29,7 +29,7 @@ const AuthPage = ({ navigation }) => {
       const user = await res.json();
 
       // Send this to your Laravel backend to log in or register user
-      const response = await fetch('http://biblesnap.bellatis.com/api/auth', {
+      const response = await fetch('https://biblesnap.bellatis.com/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

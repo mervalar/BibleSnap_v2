@@ -8,23 +8,37 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  StatusBar,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import SplashScreen from '../components/SplashScreen';
+import { Video } from 'expo-av';
+import CustomPicker from '../components/CustomPicker';
+import biblePreferences from '../api/biblePreferences';
 
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Language options for the Bible
+const LANGUAGE_OPTIONS = [
+  { label: 'English', value: 'english', bibleId: '65eec8e0b60e656b-01' },
+  { label: 'French', value: 'french', bibleId: 'a93a92589195411f-01' },
+  { label: 'Swahili', value: 'swahili', bibleId: '611f8eb23aec8f13-01' },
+];
 
 const BookContent = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { book } = route.params;
-  
+  const { book, chapter: initialChapter, bibleId: routeBibleId, language: routeLanguage } = route.params;
+  const [videoRef, setVideoRef] = useState(null);
   const [verses, setVerses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [currentChapter, setCurrentChapter] = useState(1);
+  const [currentChapter, setCurrentChapter] = useState(initialChapter ? parseInt(initialChapter.number) : 1);
   const [chapters, setChapters] = useState([]);
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [speechRate, setSpeechRate] = useState(0.8);
@@ -33,6 +47,10 @@ const BookContent = () => {
   const [selectedVerse, setSelectedVerse] = useState(null);
   const [showToolbox, setShowToolbox] = useState(false);
   const highlightColors = ['#FFD700', '#90EE90', '#ADD8E6', '#FFB6C1'];
+  
+  // Language state
+  const [language, setLanguage] = useState(routeLanguage || 'english');
+  const [bibleId, setBibleId] = useState(routeBibleId || '65eec8e0b60e656b-01');
   
   // Audio progress state
   const [currentTime, setCurrentTime] = useState(0);
@@ -45,8 +63,7 @@ const BookContent = () => {
   const [selectedVoice, setSelectedVoice] = useState(null);
 
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
-  const BIBLE_ID = 'de4e12af7f28f599-01';
-
+  
   // Refs for tracking
   const progressInterval = useRef(null);
   const startTime = useRef(null);
@@ -55,35 +72,39 @@ const BookContent = () => {
   useEffect(() => {
     initializeTTS();
     fetchChapters();
+    loadHighlights(); 
     
     return () => {
       cleanupTTS();
+      saveHighlights(); 
     };
   }, []);
 
+  // This effect runs when chapters are loaded or when currentChapter changes
   useEffect(() => {
     if (chapters.length > 0) {
       fetchChapterContent(currentChapter);
     }
   }, [currentChapter, chapters]);
-    useEffect(() => {
-      initializeTTS();
+
+  // Handle initial chapter if provided in navigation
+  useEffect(() => {
+    if (initialChapter && chapters.length > 0) {
+      // Find the chapter in the loaded chapters
+      const chapterNum = parseInt(initialChapter.number);
+      if (!isNaN(chapterNum)) {
+        setCurrentChapter(chapterNum);
+      }
+    }
+  }, [initialChapter, chapters]);
+  
+  // Re-fetch chapters when bibleId changes
+  useEffect(() => {
+    if (book && book.id) {
       fetchChapters();
-      loadHighlights(); 
-      
-      return () => {
-        cleanupTTS();
-        saveHighlights(); 
-      };
-    }, []);
+    }
+  }, [bibleId]);
 
-    useEffect(() => {
-      saveHighlights();
-    }, [highlights]);
-
-useEffect(() => {
-  saveHighlights();
-}, [highlights]);
   const initializeTTS = async () => {
     try {
       // Get available voices
@@ -97,24 +118,25 @@ useEffect(() => {
       console.log('TTS initialization error:', error);
     }
   };
-     const saveHighlights = async () => {
-        try {
-          await AsyncStorage.setItem(`highlights_${book.id}`, JSON.stringify(highlights));
-        } catch (e) {
-          console.error('Failed to save highlights', e);
-        }
-      };
 
-        const loadHighlights = async () => {
-        try {
-          const saved = await AsyncStorage.getItem(`highlights_${book.id}`);
-          if (saved) {
-            setHighlights(JSON.parse(saved));
-          }
-        } catch (e) {
-          console.error('Failed to load highlights', e);
-        }
-      };
+  const saveHighlights = async () => {
+    try {
+      await AsyncStorage.setItem(`highlights_${book.id}`, JSON.stringify(highlights));
+    } catch (e) {
+      console.error('Failed to save highlights', e);
+    }
+  };
+
+  const loadHighlights = async () => {
+    try {
+      const saved = await AsyncStorage.getItem(`highlights_${book.id}`);
+      if (saved) {
+        setHighlights(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load highlights', e);
+    }
+  };
 
   const cleanupTTS = async () => {
     try {
@@ -137,7 +159,7 @@ useEffect(() => {
     try {
       setLoading(true);
       const response = await fetch(
-        `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/books/${book.id}/chapters`,
+        `https://api.scripture.api.bible/v1/bibles/${bibleId}/books/${book.id}/chapters`,
         { headers: { 'api-key': API_KEY } }
       );
       const data = await response.json();
@@ -153,6 +175,17 @@ useEffect(() => {
     }
   };
 
+  // Handle language change
+  const handleLanguageChange = (langValue) => {
+    setLanguage(langValue);
+    const selected = LANGUAGE_OPTIONS.find(opt => opt.value === langValue);
+    if (selected) {
+      setBibleId(selected.bibleId);
+      // Save language preference
+      biblePreferences.storeLanguagePreference(langValue, selected.bibleId);
+    }
+  };
+
   const fetchChapterContent = async (chapterNum) => {
     try {
       setLoading(true);
@@ -165,7 +198,7 @@ useEffect(() => {
 
       // Fetch verses for the chapter
       const versesResponse = await fetch(
-        `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/chapters/${chapter.id}/verses`,
+        `https://api.scripture.api.bible/v1/bibles/${bibleId}/chapters/${chapter.id}/verses`,
         { headers: { 'api-key': API_KEY } }
       );
       const versesData = await versesResponse.json();
@@ -176,7 +209,7 @@ useEffect(() => {
         chapterVerses.map(async (verse) => {
           try {
             const verseDetailResponse = await fetch(
-              `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/verses/${verse.id}`,
+              `https://api.scripture.api.bible/v1/bibles/${bibleId}/verses/${verse.id}`,
               { headers: { 'api-key': API_KEY } }
             );
             const verseDetailData = await verseDetailResponse.json();
@@ -375,231 +408,239 @@ useEffect(() => {
   if (loading && verses.length === 0) {
     return (
       <SplashScreen 
-      onFinish={() => {
-      }}
-      duration={2000} 
-    />
+        onFinish={() => {}}
+        duration={2000} 
+      />
     );
   }
 
   const handleVersePress = (verse) => {
-  setSelectedVerse(verse);
-  setShowToolbox(true);
-};
+    setSelectedVerse(verse);
+    setShowToolbox(true);
+  };
 
-const handleHighlight = (color) => {
-  if (!selectedVerse) return;
-  
-  setHighlights(prev => ({
-    ...prev,
-    [selectedVerse.id]: {
-      color,
-      text: stripHtml(selectedVerse.text)
-    }
-  }));
-  setShowToolbox(false);
-};
+  const handleHighlight = async (color) => {
+    if (!selectedVerse) return;
+    // Stop TTS when highlighting
+    await stopTTS();
+    setHighlights(prev => ({
+      ...prev,
+      [selectedVerse.id]: {
+        color,
+        text: stripHtml(selectedVerse.text)
+      }
+    }));
+    setShowToolbox(false);
+  };
 
-const removeHighlight = (verseId) => {
-  setHighlights(prev => {
-    const newHighlights = {...prev};
-    delete newHighlights[verseId];
-    return newHighlights;
-  });
-};
+  const removeHighlight = (verseId) => {
+    setHighlights(prev => {
+      const newHighlights = {...prev};
+      delete newHighlights[verseId];
+      return newHighlights;
+    });
+  };
 
-const HighlightToolbox = ({ visible, onSelectColor, onClose }) => {
-  if (!visible) return null;
+  const HighlightToolbox = ({ visible, onSelectColor, onClose }) => {
+    if (!visible) return null;
+
+    // Stop TTS when opening toolbox
+    stopTTS();
+
+    return (
+      <View style={styles.toolboxContainer}>
+        <View style={styles.toolbox}>
+          {highlightColors.map((color) => (
+            <TouchableOpacity
+              key={color}
+              style={[styles.colorButton, { backgroundColor: color }]}
+              onPress={() => onSelectColor(color)}
+            />
+          ))}
+          <TouchableOpacity 
+            style={styles.closeButton}
+            onPress={async () => {
+              await stopTTS();
+              onClose();
+            }}
+          >
+            <Text style={styles.closeButtonText}>×</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
 
   return (
-    <View style={styles.toolboxContainer}>
-      <View style={styles.toolbox}>
-        {highlightColors.map((color) => (
-          <TouchableOpacity
-            key={color}
-            style={[styles.colorButton, { backgroundColor: color }]}
-            onPress={() => onSelectColor(color)}
-          />
-        ))}
-        <TouchableOpacity 
-          style={styles.closeButton}
-          onPress={onClose}
-        >
-          <Text style={styles.closeButtonText}>×</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => {
-            cleanupTTS();
-            navigation.goBack();
-          }}
-        >
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>{book.name}</Text>
-        <TouchableOpacity style={styles.menuButton}>
-          <Text style={styles.menuIcon}>⋮</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Chapter Navigation */}
-      <View style={styles.chapterNav}>
-        <TouchableOpacity 
-          style={[styles.navButton, currentChapter === 1 && styles.disabledButton]}
-          onPress={goToPrevChapter}
-          disabled={currentChapter === 1}
-        >
-          <Text style={[styles.navButtonText, currentChapter === 1 && styles.disabledText]}>
-            Previous
-          </Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.chapterIndicator}>
-          Chapter {currentChapter} of {chapters.length}
-        </Text>
-        
-        <TouchableOpacity 
-          style={[styles.navButton, currentChapter === chapters.length && styles.disabledButton]}
-          onPress={goToNextChapter}
-          disabled={currentChapter === chapters.length}
-        >
-          <Text style={[styles.navButtonText, currentChapter === chapters.length && styles.disabledText]}>
-            Next
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {verses.map((verse, index) => {
-          const isHighlighted = highlights[verse.id];
-          return (
-            <TouchableOpacity 
-              key={verse.id} 
-              style={[
-                styles.verse, 
-                currentVerseIndex === index && isPlaying && styles.activeVerse,
-                isHighlighted && { backgroundColor: isHighlighted.color }
-              ]}
-              onPress={() => handleVersePress(verse)}
-              onLongPress={() => removeHighlight(verse.id)}
-            >
-              <Text style={styles.verseNumber}>{verse.number}</Text>
-              <Text style={styles.verseText}>
-                {verse.text ? stripHtml(verse.text) : 'Verse text not available'}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-        
-        {verses.length === 0 && !loading && (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No content available for this chapter</Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Compact Audio Player */}
-      <View style={styles.audioPlayerContainer}>
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-          </View>
-          <Text style={styles.timeText}>{formatTime(duration)}</Text>
-        </View>
-
-        {/* Audio Controls */}
-        <View style={styles.audioControls}>
-          {/* Speed Controls - Left */}
-          <View style={styles.speedControls}>
-            <TouchableOpacity 
-              style={[styles.speedButton, speechRate === 0.5 && styles.activeSpeedButton]}
-              onPress={() => adjustSpeechRate(0.5)}
-            >
-              <Text style={[styles.speedButtonText, speechRate === 0.5 && styles.activeSpeedText]}>0.5×</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.speedButton, speechRate === 0.8 && styles.activeSpeedButton]}
-              onPress={() => adjustSpeechRate(0.8)}
-            >
-              <Text style={[styles.speedButtonText, speechRate === 0.8 && styles.activeSpeedText]}>0.8×</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Center Controls */}
-          <View style={styles.centerControls}>
-            <TouchableOpacity 
-              style={styles.controlButton}
-              onPress={goToPrevChapter}
-              disabled={currentChapter === 1}
-            >
-              <Text style={[styles.controlIcon, currentChapter === 1 && styles.disabledIcon]}>|◀</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.controlButton}
-              onPress={stopTTS}
-            >
-              <Text style={styles.controlIcon}>■</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.playButton} 
-              onPress={togglePlayback}
-            >
-              <Text style={styles.playIcon}>
-                {isPlaying ? '⏸' : '▶'}
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.controlButton}
-              onPress={goToNextChapter}
-              disabled={currentChapter === chapters.length}
-            >
-              <Text style={[styles.controlIcon, currentChapter === chapters.length && styles.disabledIcon]}>▶|</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Speed Controls - Right */}
-          <View style={styles.speedControls}>
-            <TouchableOpacity 
-              style={[styles.speedButton, speechRate === 1.0 && styles.activeSpeedButton]}
-              onPress={() => adjustSpeechRate(1.0)}
-            >
-              <Text style={[styles.speedButtonText, speechRate === 1.0 && styles.activeSpeedText]}>1×</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.speedButton, speechRate === 1.2 && styles.activeSpeedButton]}
-              onPress={() => adjustSpeechRate(1.2)}
-            >
-              <Text style={[styles.speedButtonText, speechRate === 1.2 && styles.activeSpeedText]}>1.2×</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-        <Text style={styles.audioTitle}>
-          {book.name} - Chapter {currentChapter}
-          {isPlaying && ' • Speaking'}
-          {isPaused && ' • Paused'}
-        </Text>
-      </View>
-      <HighlightToolbox 
-        visible={showToolbox && selectedVerse}
-        onSelectColor={handleHighlight}
-        onClose={() => setShowToolbox(false)}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      {/* Full Screen Background Video */}
+      <Video
+        ref={setVideoRef}
+        source={require('../assets/view.mp4')}
+        style={styles.backgroundVideo}
+        shouldPlay
+        isLooping
+        isMuted
+        resizeMode="cover"
       />
-    </SafeAreaView>
+      {/* Full Screen Content Overlay */}
+      <SafeAreaView style={styles.contentOverlay}>
+        {/* Chapter Navigation with Book Name */}
+        <View style={styles.chapterNav}>
+          <TouchableOpacity 
+            style={[styles.navButton, currentChapter === 1 && styles.disabledButton]}
+            onPress={goToPrevChapter}
+            disabled={currentChapter === 1}
+          >
+            <Text style={[styles.navButtonText, currentChapter === 1 && styles.disabledText]}>
+              Previous
+            </Text>
+          </TouchableOpacity>
+          
+          <View style={styles.titleContainer}>
+            <Text style={styles.compactTitle}>
+              {book.name} {currentChapter}
+            </Text>
+            <CustomPicker
+              options={LANGUAGE_OPTIONS}
+              selectedValue={language}
+              onValueChange={handleLanguageChange}
+              containerStyle={styles.languagePickerContainer}
+              colors={{
+                primary: '#FFFFFF',
+                background: 'rgba(0, 0, 0, 0.7)',
+                text: {
+                  primary: '#FFFFFF',
+                  secondary: '#CCCCCC',
+                },
+                border: {
+                  light: 'rgba(255, 255, 255, 0.3)',
+                },
+              }}
+              labelStyle={styles.languagePickerLabel}
+            />
+          </View>
+
+          
+          <TouchableOpacity 
+            style={[styles.navButton, currentChapter === chapters.length && styles.disabledButton]}
+            onPress={goToNextChapter}
+            disabled={currentChapter === chapters.length}
+          >
+            <Text style={[styles.navButtonText, currentChapter === chapters.length && styles.disabledText]}>
+              Next
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Content */}
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+          {verses.map((verse, index) => {
+            const isHighlighted = highlights[verse.id];
+            return (
+              <TouchableOpacity 
+                key={verse.id} 
+                style={[
+                  styles.verse, 
+                  currentVerseIndex === index && isPlaying && styles.activeVerse,
+                  isHighlighted && { backgroundColor: isHighlighted.color }
+                ]}
+                onPress={() => handleVersePress(verse)}
+                onLongPress={() => removeHighlight(verse.id)}
+              >
+                <Text style={styles.verseNumber}>{verse.number}</Text>
+                <Text style={styles.verseText}>
+                  {verse.text ? stripHtml(verse.text) : 'Verse text not available'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+          
+          {verses.length === 0 && !loading && (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No content available for this chapter</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Compact Audio Player */}
+        <View style={styles.audioPlayerContainer}>
+          {/* Progress Bar */}
+          <View style={styles.progressContainer}>
+            <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+            </View>
+            <Text style={styles.timeText}>{formatTime(duration)}</Text>
+          </View>
+
+          {/* Audio Controls */}
+          <View style={styles.audioControls}>
+            {/* Speed Controls - Left */}
+            <View style={styles.speedControls}>
+              <TouchableOpacity 
+                style={[styles.speedButton, speechRate === 0.5 && styles.activeSpeedButton]}
+                onPress={() => adjustSpeechRate(0.5)}
+              >
+                <Text style={[styles.speedButtonText, speechRate === 0.5 && styles.activeSpeedText]}>0.5×</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Center Controls */}
+            <View style={styles.centerControls}>
+              <TouchableOpacity 
+                style={styles.controlButton}
+                onPress={goToPrevChapter}
+                disabled={currentChapter === 1}
+              >
+                <Text style={[styles.controlIcon, currentChapter === 1 && styles.disabledIcon]}>|◀</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.controlButton}
+                onPress={stopTTS}
+              >
+                <Text style={styles.controlIcon}>■</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.playButton} 
+                onPress={togglePlayback}
+              >
+                <Text style={styles.playIcon}>
+                  {isPlaying ? '⏸' : '▶'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.controlButton}
+                onPress={goToNextChapter}
+                disabled={currentChapter === chapters.length}
+              >
+                <Text style={[styles.controlIcon, currentChapter === chapters.length && styles.disabledIcon]}>▶|</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Speed Controls - Right */}
+            <View style={styles.speedControls}>
+              <TouchableOpacity 
+                style={[styles.speedButton, speechRate === 1.0 && styles.activeSpeedButton]}
+                onPress={() => adjustSpeechRate(1.0)}
+              >
+                <Text style={[styles.speedButtonText, speechRate === 1.0 && styles.activeSpeedText]}>1×</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+        
+        <HighlightToolbox 
+          visible={showToolbox && selectedVerse}
+          onSelectColor={handleHighlight}
+          onClose={() => setShowToolbox(false)}
+        />
+      </SafeAreaView>
+    </View>
   );
 };
 
@@ -610,61 +651,62 @@ function stripHtml(html) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EEDED2',
+    height: screenHeight,
+    width: screenWidth,
   },
-  loadingContainer: {
+  backgroundVideo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: screenWidth,
+    height: screenHeight,
+    zIndex: 1,
+  },
+  contentOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)', 
+    zIndex: 2,
+    height: screenHeight,
   },
-  loadingText: {
-    marginTop: 10,
-    color: '#9E795D',
-    fontSize: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  topBar: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   backButton: {
     padding: 8,
+    alignSelf: 'flex-start',
   },
   backArrow: {
     fontSize: 20,
     color: '#A07553',
     fontWeight: 'bold',
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  menuButton: {
-    padding: 8,
-  },
-  menuIcon: {
-    fontSize: 20,
-    color: '#333',
-  },
   chapterNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: 'rgba(224, 224, 224, 0.5)',
+  },
+  titleContainer: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  bookTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  chapterTitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 2,
   },
   navButton: {
     paddingHorizontal: 16,
@@ -685,30 +727,28 @@ const styles = StyleSheet.create({
   disabledText: {
     color: '#999',
   },
-  chapterIndicator: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
   content: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: 'transparent', 
   },
   contentContainer: {
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 10,
     paddingBottom: 20,
+    minHeight: screenHeight * 0.6,
   },
   verse: {
     flexDirection: 'row',
     marginBottom: 16,
     alignItems: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    marginHorizontal: 4,
   },
   activeVerse: {
-    backgroundColor: '#FFF8E1',
+    backgroundColor: 'rgba(255, 248, 225, 0.9)',
     borderLeftWidth: 3,
     borderLeftColor: '#9E795D',
   },
@@ -734,6 +774,8 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 40,
+    minHeight: screenHeight * 0.4,
+    justifyContent: 'center',
   },
   emptyText: {
     color: '#9E795D',
@@ -742,18 +784,31 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   audioPlayerContainer: {
-    backgroundColor: '#9E795D',
+    backgroundColor: 'rgba(158, 117, 93, 0.95)',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
   },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
+  progressBar: {
+    flex: 1,
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginHorizontal: 12,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 2,
   },
   timeText: {
     color: '#FFFFFF',
@@ -762,23 +817,10 @@ const styles = StyleSheet.create({
     minWidth: 35,
     textAlign: 'center',
   },
-  progressBar: {
-    flex: 1,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 2,
-  },
   audioControls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
   },
   speedControls: {
     flexDirection: 'column',
@@ -786,8 +828,8 @@ const styles = StyleSheet.create({
     minWidth: 35,
   },
   speedButton: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 8,
     alignItems: 'center',
@@ -797,7 +839,7 @@ const styles = StyleSheet.create({
   },
   speedButtonText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
   },
   activeSpeedText: {
@@ -823,9 +865,9 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.4)',
   },
   playButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -837,55 +879,59 @@ const styles = StyleSheet.create({
   },
   playIcon: {
     color: '#9E795D',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 1,
   },
-  audioTitle: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '500',
-    textAlign: 'center',
-    opacity: 0.9,
-  },
   toolboxContainer: {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  justifyContent: 'center',
-  alignItems: 'center',
-  backgroundColor: 'rgba(0,0,0,0.2)',
-},
-toolbox: {
-  flexDirection: 'row',
-  backgroundColor: 'white',
-  borderRadius: 8,
-  padding: 10,
-  alignItems: 'center',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.25,
-  shadowRadius: 4,
-  elevation: 5,
-},
-colorButton: {
-  width: 40,
-  height: 40,
-  borderRadius: 20,
-  marginHorizontal: 5,
-  borderWidth: 1,
-  borderColor: '#ddd',
-},
-closeButton: {
-  marginLeft: 10,
-  padding: 8,
-},
-closeButtonText: {
-  fontSize: 20,
-  color: '#333',
-},
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    zIndex: 10,
+  },
+  toolbox: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  colorButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginHorizontal: 5,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  closeButton: {
+    marginLeft: 10,
+    padding: 5,
+  },
+  closeButtonText: {
+    fontSize: 20,
+    color: '#333',
+  },
+  languagePickerContainer: {
+    width: 100,
+    marginTop: 8,
+    alignSelf: 'center',
+  },
+  languagePickerLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    textAlign: 'center',
+  },
 });
 
 export default BookContent;

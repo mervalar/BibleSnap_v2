@@ -76,7 +76,7 @@ const COLORS = {
 const ChaptersListPage = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { book } = route.params;
+  const { book, bibleId, language } = route.params;
   
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +85,8 @@ const ChaptersListPage = () => {
 
   // Bible API configuration
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
-  const BIBLE_ID = 'de4e12af7f28f599-01';
+  // Use bibleId from route.params or fall back to default
+  const BIBLE_ID = bibleId || 'de4e12af7f28f599-01';
   const API_URL = `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/books/${book.id}/chapters`;
 
   useEffect(() => {
@@ -123,8 +124,8 @@ const ChaptersListPage = () => {
   };
 
   const handleChapterPress = (chapter) => {
-    navigation.navigate('BookContent', { book, chapter });
-    console.log('Selected chapter:', chapter);
+    navigation.navigate('BookContent', { book, chapter, bibleId, language });
+    console.log('Selected chapter:', chapter, 'with bibleId:', bibleId);
   };
 
   const handleBackPress = () => {

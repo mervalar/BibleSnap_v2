@@ -1,12 +1,47 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Video } from 'expo-av'; 
+import * as Clipboard from 'expo-clipboard';
+import { Ionicons } from '@expo/vector-icons';
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import AuthModal from '../components/AuthModal';
-import { fetchRandomStudy } from '../api/starksService'; // Import the new service function
+import { fetchRandomStudy } from '../api/starksService'; 
+import SharedPreferences from 'react-native-shared-preferences'; 
 
 const HomePage = () => {
   const navigation = useNavigation();
+  const verseCardRef = useRef();
+  const [isSharing, setIsSharing] = useState(false);
+  // Copy verse to clipboard
+  const handleCopyVerse = () => {
+    if (verse) {
+      Clipboard.setStringAsync(`"${verse.text}"\n${verse.reference}`);
+      Alert.alert('Copied!', 'Verse copied to clipboard.');
+    }
+  };
+
+  // Share verse card as image
+  const handleShareVerse = async () => {
+    try {
+      setIsSharing(true); // Hide buttons
+      // Wait for UI to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const uri = await verseCardRef.current.capture();
+      setIsSharing(false); // Show buttons again
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri);
+      } else {
+        Alert.alert('Sharing not available', 'Cannot share image on this device.');
+      }
+    } catch (error) {
+      setIsSharing(false);
+      Alert.alert('Error', 'Could not share verse.');
+    }
+  };
   const [verse, setVerse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -24,6 +59,12 @@ const HomePage = () => {
       .then(data => {
         setVerse(data.verse.details);
         setLoading(false);
+
+        // Save verse for widget
+        SharedPreferences.setItem(
+          'verseOfTheDay',
+          JSON.stringify(data.verse.details)
+        );
       })
       .catch(() => setLoading(false));
 
@@ -34,11 +75,24 @@ const HomePage = () => {
     checkUserAuth();
   }, []);
 
-  // Re-check authentication when screen comes into focus
+    // Re-check authentication and reload challenge progress when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       checkUserAuth();
-    }, [])
+      // Reload challenge progress when returning to the home screen
+      if (todaysChallenge && todaysChallenge.id) {
+        setTimeout(() => {
+          loadChallengeProgress().then(progressData => {
+            if (progressData && progressData.studyId === todaysChallenge.id) {
+              setTodaysChallenge(prev => ({
+                ...prev,
+                progress: progressData
+              }));
+            }
+          });
+        }, 0);  // Use setTimeout to avoid React state update during render
+      }
+    }, [todaysChallenge?.id])
   );
 
 const loadChallengeProgress = async () => {
@@ -73,7 +127,7 @@ const loadChallengeProgress = async () => {
       const challenge = JSON.parse(cachedChallenge);
       setTodaysChallenge({
         ...challenge,
-        progress: progressData // Add progress data to the challenge
+        progress: progressData 
       });
     } else {
       // Fetch new random study
@@ -162,21 +216,34 @@ const loadChallengeProgress = async () => {
     });
   };
 
+  // Safe function for updating today's challenge progress
+  const updateChallengeProgress = (percent, studyId) => {
+    setTimeout(() => {
+      setTodaysChallenge(prev => ({
+        ...prev,
+        progress: {
+          ...prev.progress,
+          percent,
+          studyId,
+          lastUpdated: Date.now()
+        }
+      }));
+    }, 0);
+  };
+  
   const handleChallengePress = () => {
     handleAuthenticatedAction(() => {
       if (todaysChallenge && todaysChallenge.id) {
+        // Get the current progress
+        const currentProgress = todaysChallenge.progress?.percent || 0;
+        
         // Navigate to the specific bible study
         navigation.navigate('BibleStudyContent', {
           stark: todaysChallenge,
+          progress: currentProgress, // Pass current progress to the study screen
           onProgressUpdate: (percent) => {
-            // Update local state when progress changes
-            setTodaysChallenge(prev => ({
-              ...prev,
-              progress: {
-                ...prev.progress,
-                percent
-              }
-            }));
+            // Use the safe update method
+            updateChallengeProgress(percent, todaysChallenge.id);
           }
         });
       } else {
@@ -244,55 +311,88 @@ const loadChallengeProgress = async () => {
 
       {/* Main Content */}
       <View style={styles.mainContent}>
-        {/* Verse of the Day Card - Enhanced */}
-        <View style={styles.verseCard}>
-          <View style={styles.verseHeader}>
-            <Text style={styles.verseLabel}>VERSE OF THE DAY</Text>
-            <Text style={styles.verseDate}>{new Date().toLocaleDateString('en-US', { 
-              weekday: 'short', 
-              month: 'short', 
-              day: 'numeric' 
-            })}</Text>
-          </View>
-          
-          {loading ? (
-            <View style={styles.verseLoadingContainer}>
-              <ActivityIndicator color="#A07553" size="large" />
-              <Text style={styles.verseLoadingText}>Loading today's verse...</Text>
-            </View>
-          ) : verse ? (
-            <View style={styles.verseContent}>
-              <Text style={styles.verseText}>
-                "{verse.text}"
-              </Text>
-              <View style={styles.verseRefContainer}>
-                <Text style={styles.verseRef}>{verse.reference}</Text>
-                <View style={styles.verseDecorator}>
-                  <Text style={styles.verseDecoratorText}></Text>
-                </View>
-              </View>
-            </View>
+        {/* Verse of the Day Card with Video Background */}
+  <ViewShot ref={verseCardRef} options={{ format: 'png', quality:0.9 }} style={styles.verseCard}>
+          {/* Show video when not sharing, image when sharing */}
+          {!isSharing ? (
+            <Video
+              source={require('../assets/view.mp4')}
+              style={styles.backgroundVideo}
+              shouldPlay
+              isLooping
+              isMuted
+              resizeMode="cover"
+            />
           ) : (
-            <View style={styles.verseErrorContainer}>
-              <Text style={styles.verseErrorText}>Could not load verse.</Text>
-              <Text style={styles.verseErrorSubtext}>Please check your connection</Text>
-            </View>
+            <Image
+              source={require('../assets/images/img4.jpg')}
+              style={styles.backgroundVideo}
+              resizeMode="cover"
+            />
           )}
+          {/* Overlay for better text readability */}
+          {!isSharing && <View style={styles.videoOverlay} />}
           
-          <View style={styles.verseActions}>
-            {/* <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionIcon}>📖</Text>
-              <Text style={styles.actionText}>Read Chapter</Text>
-            </TouchableOpacity> */}
+          <View style={styles.verseContent}>
+            <View style={styles.verseHeader}>
+              <Text style={styles.verseLabel}>VERSE OF THE DAY</Text>
+              <Text style={styles.verseDate}>{new Date().toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric' 
+              })}</Text>
+            </View>
+            
+            {loading ? (
+              <View style={styles.verseLoadingContainer}>
+                <ActivityIndicator color="#fff" size="large" />
+                <Text style={styles.verseLoadingText}>Loading today's verse...</Text>
+              </View>
+            ) : verse ? (
+              <View style={styles.verseTextContainer}>
+                <Text style={styles.verseText}>
+                  "{verse.text}"
+                </Text>
+                <View style={styles.verseRefContainer}>
+                  <Text style={styles.verseRef}>{verse.reference}</Text>
+                  <View style={styles.verseDecorator}>
+                    <Text style={styles.verseDecoratorText}></Text>
+                  </View>
+                </View>
+                {/* Icons row just under the verse */}
+                {!isSharing && (
+                  <View style={styles.verseIconRow}>
+                    <TouchableOpacity onPress={handleCopyVerse} style={styles.iconButtonRow}>
+                      <Ionicons name="copy-outline" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleShareVerse} style={styles.iconButtonRow}>
+                      <Ionicons name="share-social-outline" size={24} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={styles.verseErrorContainer}>
+                <Text style={styles.verseErrorText}>Could not load verse.</Text>
+                <Text style={styles.verseErrorSubtext}>Please check your connection</Text>
+              </View>
+            )}
+            
+            <View style={styles.verseActions}>
+              {/* <TouchableOpacity style={styles.actionButton}>
+                <Text style={styles.actionIcon}>📖</Text>
+                <Text style={styles.actionText}>Read Chapter</Text>
+              </TouchableOpacity> */}
+            </View>
           </View>
-        </View>
+  </ViewShot>
 
         {/* Quick Actions */}
         <View style={styles.quickActionsContainer}>
           <TouchableOpacity style={[styles.quickActionCard, styles.prayerCard]}
             onPress={() => navigation.navigate('BooksList')}
           >
-            <Text style={styles.quickActionIcon}>🔥</Text>
+            <Text style={styles.quickActionIcon}>📖</Text>
             <Text style={styles.quickActionTitle}>Read Bible</Text>
           </TouchableOpacity>
           
@@ -300,20 +400,21 @@ const loadChallengeProgress = async () => {
             style={[styles.quickActionCard, styles.studyCard]}
             onPress={handleJournalPress}
           >
-            <Text style={styles.quickActionIcon}>📚</Text>
-            <Text style={styles.quickActionTitle}>Journal</Text>
+            <Text style={styles.quickActionIcon}>✍️</Text>
+            <Text style={styles.quickActionTitle}>Notes</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={[styles.quickActionCard, styles.assistantCard]}
            onPress={() => navigation.navigate('BibleStudy')}
            >
-            <Text style={styles.quickActionIcon}>👑</Text>
+            <Text style={styles.quickActionIcon}>🎓</Text>
             <Text style={styles.quickActionTitle}>Bible study</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Spiritual Growth Chart */}
-        {/* <View style={styles.chartCard}>
+        {/* Spiritual Growth Chart - COMMENTED OUT */}
+        {/*
+        <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Your Spiritual Growth</Text>
           <View style={styles.chartContainer}>
             <View style={styles.chartArea}>
@@ -336,9 +437,13 @@ const loadChallengeProgress = async () => {
               </View>
             </View>
           </View>
-        </View> */}
+        </View>
+        */}
 
-        {/* Today's Challenge - Now with Random Bible Study */}
+        {/* Spacer to push challenge card to bottom */}
+        <View style={styles.spacer} />
+
+        {/* Today's Challenge - Reduced size and moved to bottom */}
         <TouchableOpacity style={styles.challengeCard} onPress={handleChallengePress}>
           <View style={styles.challengeHeader}>
             <Text style={styles.challengeTitle}>Today's Challenge</Text>
@@ -503,11 +608,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   verseCard: {
-    backgroundColor: '#DDBBA1',
     borderRadius: 20,
-    padding: 24,
     marginBottom: 20,
-    minHeight: 240,
+     minHeight: 420,
+    overflow: 'hidden',
+    position: 'relative',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -517,20 +622,57 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  backgroundVideo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Semi-transparent overlay for text readability
+  },
+  verseContent: {
+    flex: 1,
+    padding: 24,
+    justifyContent: 'space-between',
+    zIndex: 2,
+  },
   verseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
+  verseIconRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 18,
+  },
+  iconButtonRow: {
+    backgroundColor: 'rgba(160,117,83,0.85)',
+    borderRadius: 22,
+    padding: 10,
+    marginHorizontal: 6,
+    elevation: 2,
+  },
   verseLabel: {
-    color: '#9E795D',
+    color: '#fff',
     fontWeight: 'bold',
     fontSize: 12,
     letterSpacing: 1.2,
   },
   verseDate: {
-    color: '#9E795D',
+    color: '#fff',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -541,21 +683,24 @@ const styles = StyleSheet.create({
   },
   verseLoadingText: {
     marginTop: 12,
-    color: '#9E795D',
+    color: '#fff',
     fontSize: 14,
   },
-  verseContent: {
+  verseTextContainer: {
     flex: 1,
     justifyContent: 'center',
   },
   verseText: {
-    color: '#333',
+    color: '#fff',
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '500',
     textAlign: 'center',
     marginBottom: 20,
     fontStyle: 'italic',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: {width: 1, height: 1},
+    textShadowRadius: 2,
   },
   verseRefContainer: {
     flexDirection: 'row',
@@ -563,16 +708,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   verseRef: {
-    color: '#9E795D',
+    color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: {width: 1, height: 1},
+    textShadowRadius: 2,
   },
   verseDecorator: {
     marginLeft: 8,
   },
   verseDecoratorText: {
     fontSize: 16,
+    color: '#fff',
   },
   verseErrorContainer: {
     flex: 1,
@@ -580,17 +729,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   verseErrorText: {
-    color: '#9E795D',
+    color: '#fff',
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: {width: 1, height: 1},
+    textShadowRadius: 2,
   },
   verseErrorSubtext: {
-    color: '#9E795D',
+    color: '#fff',
     fontSize: 12,
     textAlign: 'center',
     marginTop: 4,
     opacity: 0.8,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: {width: 1, height: 1},
+    textShadowRadius: 2,
   },
   verseActions: {
     flexDirection: 'row',
@@ -600,7 +755,7 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
@@ -655,6 +810,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
+  spacer: {
+    flex: 1,
+  },
+  /* Commented out Spiritual Growth Chart styles
   chartCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -701,11 +860,12 @@ const styles = StyleSheet.create({
     color: '#9E795D',
     fontSize: 10,
   },
+  */
   challengeCard: {
     backgroundColor: '#DDBBA1',
     borderRadius: 16,
-    padding: 20,
-    minHeight: 140,
+    padding: 16, // Reduced from 20
+    minHeight: 100, // Reduced from 140
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -719,22 +879,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8, // Reduced from 12
   },
   challengeTitle: {
     color: '#333',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 14, // Reduced from 16
   },
   challengeBadge: {
     backgroundColor: '#A07553',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8, // Reduced from 10
+    paddingVertical: 3, // Reduced from 4
+    borderRadius: 10, // Reduced from 12
   },
   challengeBadgeText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10, // Reduced from 11
     fontWeight: '600',
   },
   challengeLoadingContainer: {
@@ -746,43 +906,43 @@ const styles = StyleSheet.create({
   challengeLoadingText: {
     marginLeft: 8,
     color: '#9E795D',
-    fontSize: 12,
+    fontSize: 11, // Reduced from 12
   },
   challengeDesc: {
     color: '#9E795D',
-    fontSize: 14,
-    marginBottom: 12,
-    lineHeight: 20,
+    fontSize: 13, // Reduced from 14
+    marginBottom: 8, // Reduced from 12
+    lineHeight: 18, // Reduced from 20
   },
   challengeVerse: {
     color: '#9E795D',
-    fontSize: 11,
+    fontSize: 10, // Reduced from 11
     fontStyle: 'italic',
-    marginBottom: 16,
+    marginBottom: 12, // Reduced from 16
   },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10, // Reduced from 12
     marginTop: 'auto',
   },
   progressBar: {
     flex: 1,
-    height: 8,
+    height: 6, // Reduced from 8
     backgroundColor: '#EEDED2',
-    borderRadius: 4,
+    borderRadius: 3, 
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     width: '0%',
     backgroundColor: '#A07553',
-    borderRadius: 4,
+    borderRadius: 3, 
   },
   progressText: {
     color: '#9E795D',
     fontWeight: 'bold',
-    fontSize: 12,
+    fontSize: 11, // Reduced from 12
   },
 });
 
