@@ -11,9 +11,11 @@ import {
   SafeAreaView,
   Dimensions,
   Platform,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import SplashScreen from '../components/SplashScreen';
 import CustomPicker from '../components/CustomPicker';
 import biblePreferences from '../api/biblePreferences';
@@ -77,6 +79,14 @@ const COLORS = {
   testament: {
     old: '#A07553',
     new: '#8A6344',
+  },
+  // Highlighting colors
+  highlight: {
+    yellow: '#FFEB3B',
+    green: '#4CAF50',
+    blue: '#2196F3',
+    pink: '#E91E63',
+    orange: '#FF9800',
   }
 };
 
@@ -95,12 +105,15 @@ const BooksListPage = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [language, setLanguage] = useState('english');
   const [bibleId, setBibleId] = useState(LANGUAGE_OPTIONS[0].bibleId);
+  const [savedVerses, setSavedVerses] = useState([]);
+  const [showSavedVerses, setShowSavedVerses] = useState(true);
+  const [colorFilter, setColorFilter] = useState(null);
+  const [bookFilter, setBookFilter] = useState(null);
 
   const dimensions = getResponsiveDimensions();
 
   // Bible API configuration
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
-  const BIBLE_ID = '65eec8e0b60e656b-01';
   const API_URL = `https://api.scripture.api.bible/v1/bibles/${bibleId}/books`;
 
   // Old Testament books (first 39 books)
@@ -110,6 +123,14 @@ const BooksListPage = () => {
     'ECC', 'SNG', 'ISA', 'JER', 'LAM', 'EZK', 'DAN', 'HOS', 'JOL', 'AMO',
     'OBA', 'JON', 'MIC', 'NAM', 'HAB', 'ZEP', 'HAG', 'ZEC', 'MAL'
   ];
+
+  // Load saved verses whenever the screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSavedVerses();
+      return () => {};
+    }, [])
+  );
 
   useEffect(() => {
     // Load saved language preference when component mounts
@@ -127,7 +148,91 @@ const BooksListPage = () => {
 
     loadLanguagePreference();
     fetchBooks();
+    loadSavedVerses();
   }, [bibleId]);
+
+  // Load saved verses from AsyncStorage
+  const loadSavedVerses = async () => {
+    try {
+      // Get all AsyncStorage keys
+      const keys = await AsyncStorage.getAllKeys();
+      
+      // Filter out highlight keys (they follow the pattern 'highlights_')
+      const highlightKeys = keys.filter(key => key.startsWith('highlights_'));
+      
+      // Load all highlight data
+      const highlightsData = await Promise.all(
+        highlightKeys.map(async (key) => {
+          const bookId = key.replace('highlights_', '');
+          const bookData = await AsyncStorage.getItem(key);
+          const parsed = JSON.parse(bookData);
+          
+          // Get book name from another AsyncStorage entry or use ID
+          let bookName = bookId;
+          try {
+            const bookInfo = await AsyncStorage.getItem(`book_info_${bookId}`);
+            if (bookInfo) {
+              const parsedInfo = JSON.parse(bookInfo);
+              bookName = parsedInfo.name;
+            }
+          } catch (e) {
+            console.warn('Could not get book name', e);
+          }
+          
+          // Transform the data into an array of verses with book info
+          return Object.entries(parsed).map(([verseId, verseData]) => ({
+            id: verseId,
+            bookId,
+            bookName,
+            text: verseData.text,
+            color: verseData.color,
+            reference: verseData.reference || extractReferenceFromId(verseId),
+          }));
+        })
+      );
+      
+      // Flatten the array of arrays
+      const allVerses = highlightsData.flat();
+      
+      // Sort verses by book name then by reference
+      allVerses.sort((a, b) => {
+        if (a.bookName !== b.bookName) {
+          return a.bookName.localeCompare(b.bookName);
+        }
+        return a.reference.localeCompare(b.reference, undefined, { numeric: true });
+      });
+      
+      setSavedVerses(allVerses);
+    } catch (error) {
+      console.error('Error loading saved verses', error);
+    }
+  };
+
+  // Extract reference from verse ID
+  const extractReferenceFromId = (verseId) => {
+    try {
+      const parts = verseId.split('.');
+      if (parts.length >= 3) {
+        return `${parts[1]}:${parts[2]}`;
+      }
+      return verseId;
+    } catch (e) {
+      return verseId;
+    }
+  };
+
+  // Extract chapter from verse ID
+  const extractChapterFromVerseId = (verseId) => {
+    try {
+      const parts = verseId.split('.');
+      if (parts.length >= 2) {
+        return parseInt(parts[1], 10);
+      }
+    } catch (e) {
+      console.warn('Could not extract chapter from verse ID', e);
+    }
+    return 1; // Default to chapter 1
+  };
 
   const fetchBooks = async () => {
     try {
@@ -172,7 +277,6 @@ const BooksListPage = () => {
 
   const handleBookPress = (book) => {
     navigation.navigate('BookChapters', { book, bibleId, language });
-    console.log('Selected book:', book, 'with bibleId:', bibleId);
   };
 
   const handleBackPress = () => {
@@ -188,13 +292,82 @@ const BooksListPage = () => {
     biblePreferences.storeLanguagePreference(langValue, selected.bibleId);
   };
 
+  const handleVersePress = (verse) => {
+    navigation.navigate('BookContent', {
+      book: { id: verse.bookId, name: verse.bookName },
+      chapter: { number: extractChapterFromVerseId(verse.id) },
+      verseId: verse.id
+    });
+  };
+
+  const handleDeleteVerse = async (verse) => {
+    try {
+      // Get the current highlights for this book
+      const highlightsKey = `highlights_${verse.bookId}`;
+      const highlightsData = await AsyncStorage.getItem(highlightsKey);
+      
+      if (highlightsData) {
+        const highlights = JSON.parse(highlightsData);
+        
+        // Remove this verse
+        delete highlights[verse.id];
+        
+        // Save the updated highlights
+        await AsyncStorage.setItem(highlightsKey, JSON.stringify(highlights));
+        
+        // Update the UI
+        loadSavedVerses();
+        
+        Alert.alert('Success', 'Verse removed from saved verses');
+      }
+    } catch (error) {
+      console.error('Error deleting verse', error);
+      Alert.alert('Error', 'Failed to delete the verse');
+    }
+  };
+
+  // Filter saved verses by color
+  const getFilteredSavedVerses = () => {
+    let filtered = [...savedVerses];
+    
+    if (colorFilter) {
+      filtered = filtered.filter(verse => verse.color === colorFilter);
+    }
+    
+    if (bookFilter) {
+      filtered = filtered.filter(verse => verse.bookId === bookFilter);
+    }
+    
+    return filtered;
+  };
+
+  // Group saved verses by book
+  const getSavedVersesByBook = () => {
+    const filtered = getFilteredSavedVerses();
+    const byBook = {};
+    
+    filtered.forEach(verse => {
+      if (!byBook[verse.bookName]) {
+        byBook[verse.bookName] = [];
+      }
+      byBook[verse.bookName].push(verse);
+    });
+    
+    return byBook;
+  };
+
+  // Reset all filters
+  const resetFilters = () => {
+    setColorFilter(null);
+    setBookFilter(null);
+  };
+
   if (loading && books.length === 0) {
     return (
       <SplashScreen 
-      onFinish={() => {
-      }}
-      duration={2000} 
-    />
+        onFinish={() => {}}
+        duration={2000} 
+      />
     );
   }
 
@@ -204,6 +377,9 @@ const BooksListPage = () => {
       ? OLD_TESTAMENT_BOOKS.includes(book.id)
       : !OLD_TESTAMENT_BOOKS.includes(book.id)
   );
+  
+  const filteredSavedVerses = getFilteredSavedVerses();
+  const savedVersesByBook = getSavedVersesByBook();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -225,7 +401,7 @@ const BooksListPage = () => {
           <Ionicons name="arrow-back" size={dimensions.iconSize.medium} color={COLORS.primary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}>
-          Bible Books
+          Bible
         </Text>
         <View style={styles.headerActions}>
           <TouchableOpacity 
@@ -274,6 +450,156 @@ const BooksListPage = () => {
       )}
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Saved Verses Section */}
+        {savedVerses.length > 0 && showSavedVerses && (
+          <View style={styles.savedVersesSection}>
+            <View style={styles.savedVersesHeader}>
+              <View style={styles.savedVersesTitleContainer}>
+                <Ionicons 
+                  name="bookmark" 
+                  size={dimensions.iconSize.small} 
+                  color={COLORS.primary} 
+                  style={styles.savedVersesIcon}
+                />
+                <Text style={[styles.savedVersesTitle, { fontSize: dimensions.fontSize.subtitle }]}>
+                  Saved Verses
+                </Text>
+                <View style={styles.savedVersesBadge}>
+                  <Text style={styles.savedVersesBadgeText}>
+                    {filteredSavedVerses.length}
+                  </Text>
+                </View>
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.toggleSavedVersesButton}
+                onPress={() => setShowSavedVerses(!showSavedVerses)}
+              >
+                <Ionicons 
+                  name={showSavedVerses ? "chevron-up" : "chevron-down"} 
+                  size={dimensions.iconSize.small} 
+                  color={COLORS.primary} 
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Color Filter */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.colorFilterContainer}
+              contentContainerStyle={styles.colorFilterContent}
+            >
+              <TouchableOpacity 
+                style={[
+                  styles.colorFilterButton, 
+                  !colorFilter && styles.colorFilterButtonActive
+                ]}
+                onPress={() => setColorFilter(null)}
+              >
+                <Text style={[
+                  styles.colorFilterButtonText,
+                  !colorFilter && styles.colorFilterButtonTextActive
+                ]}>
+                  All Colors
+                </Text>
+              </TouchableOpacity>
+              
+              {Object.entries(COLORS.highlight).map(([key, color]) => (
+                <TouchableOpacity 
+                  key={key}
+                  style={[
+                    styles.colorFilterButton, 
+                    { backgroundColor: color + '30' },
+                    colorFilter === color && styles.colorFilterButtonActive
+                  ]}
+                  onPress={() => setColorFilter(colorFilter === color ? null : color)}
+                >
+                  <View style={[styles.colorDot, { backgroundColor: color }]} />
+                  <Text style={[
+                    styles.colorFilterButtonText,
+                    colorFilter === color && styles.colorFilterButtonTextActive
+                  ]}>
+                    {key.charAt(0).toUpperCase() + key.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              
+              {(colorFilter || bookFilter) && (
+                <TouchableOpacity 
+                  style={styles.resetFiltersButton}
+                  onPress={resetFilters}
+                >
+                  <Ionicons 
+                    name="close-circle" 
+                    size={dimensions.iconSize.small} 
+                    color={COLORS.text.secondary} 
+                  />
+                  <Text style={styles.resetFiltersButtonText}>
+                    Reset
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+
+            {/* Saved Verses List */}
+            {filteredSavedVerses.length === 0 ? (
+              <View style={styles.emptyFilterResults}>
+                <Text style={styles.emptyFilterResultsText}>
+                  No verses match the current filter
+                </Text>
+                <TouchableOpacity 
+                  style={styles.resetFiltersButton}
+                  onPress={resetFilters}
+                >
+                  <Text style={styles.resetFiltersButtonText}>Reset Filters</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.savedVersesList}>
+                {Object.entries(savedVersesByBook).map(([bookName, verses]) => (
+                  <View key={bookName} style={styles.savedVersesBookSection}>
+                    <View style={styles.savedVersesBookHeader}>
+                      <Text style={styles.savedVersesBookName}>{bookName}</Text>
+                      <Text style={styles.savedVersesCount}>{verses.length}</Text>
+                    </View>
+                    
+                    {verses.map(verse => (
+                      <TouchableOpacity
+                        key={verse.id}
+                        style={[styles.savedVerseCard, { backgroundColor: verse.color + '20' }]}
+                        onPress={() => handleVersePress(verse)}
+                      >
+                        <View style={styles.savedVerseCardHeader}>
+                          <Text style={styles.savedVerseReference}>
+                            {verse.reference}
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.deleteVerseButton}
+                            onPress={() => handleDeleteVerse(verse)}
+                          >
+                            <Ionicons name="trash-outline" size={16} color="#777" />
+                          </TouchableOpacity>
+                        </View>
+                        <Text 
+                          style={styles.savedVerseText}
+                          numberOfLines={2}
+                          ellipsizeMode="tail"
+                        >
+                          {verse.text}
+                        </Text>
+                        <View style={[styles.colorStrip, { backgroundColor: verse.color }]} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            <View style={styles.savedVersesDivider} />
+          </View>
+        )}
+
         {/* Testament Selector */}
         <View style={styles.testamentContainer}>
           <View style={styles.testamentSelector}>
@@ -499,18 +825,177 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  refreshButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: COLORS.primary,
-    borderRadius: 22,
-    justifyContent: 'center',
+  // Saved Verses Section
+  savedVersesSection: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
+    paddingVertical: dimensions.spacing.md,
+  },
+  savedVersesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    paddingHorizontal: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.sm,
+  },
+  savedVersesTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  savedVersesIcon: {
+    marginRight: dimensions.spacing.xs,
+  },
+  savedVersesTitle: {
+    fontWeight: '600',
+    color: COLORS.text.primary,
+  },
+  savedVersesBadge: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: dimensions.spacing.sm,
+  },
+  savedVersesBadgeText: {
+    color: COLORS.background,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  toggleSavedVersesButton: {
+    padding: 8,
+  },
+  colorFilterContainer: {
+    marginTop: dimensions.spacing.sm,
+    marginBottom: dimensions.spacing.sm,
+  },
+  colorFilterContent: {
+    paddingHorizontal: dimensions.spacing.md,
+    paddingBottom: dimensions.spacing.sm,
+    flexDirection: 'row',
+    gap: dimensions.spacing.sm,
+  },
+  colorFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+    backgroundColor: COLORS.surface,
+  },
+  colorFilterButtonActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary + '20',
+  },
+  colorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: dimensions.spacing.xs,
+  },
+  colorFilterButtonText: {
+    color: COLORS.text.secondary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  colorFilterButtonTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  resetFiltersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border.medium,
+    backgroundColor: COLORS.surface,
+  },
+  resetFiltersButtonText: {
+    color: COLORS.text.secondary,
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  savedVersesList: {
+    paddingHorizontal: dimensions.spacing.md,
+  },
+  savedVersesBookSection: {
+    marginBottom: dimensions.spacing.md,
+  },
+  savedVersesBookHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.xs,
+  },
+  savedVersesBookName: {
+    fontWeight: '600',
+    color: COLORS.primary,
+    fontSize: 14,
+  },
+  savedVersesCount: {
+    fontSize: 12,
+    color: COLORS.text.tertiary,
+  },
+  savedVerseCard: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: 8,
+    padding: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.sm,
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+  },
+  savedVerseCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  savedVerseReference: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  deleteVerseButton: {
+    padding: 2,
+  },
+  savedVerseText: {
+    fontSize: 13,
+    color: COLORS.text.primary,
+    lineHeight: 18,
+  },
+  colorStrip: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+  },
+  savedVersesDivider: {
+    height: 1,
+    backgroundColor: COLORS.border.light,
+    marginTop: dimensions.spacing.md,
+  },
+  emptyFilterResults: {
+    alignItems: 'center',
+    paddingVertical: dimensions.spacing.md,
+  },
+  emptyFilterResultsText: {
+    color: COLORS.text.secondary,
+    marginBottom: dimensions.spacing.sm,
   },
   searchContainer: {
     backgroundColor: COLORS.surfaceElevated,
@@ -674,64 +1159,6 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     flex: 1,
     marginRight: dimensions.spacing.sm,
-  },
-  bookMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: dimensions.spacing.sm,
-  },
-  abbreviationBadge: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: dimensions.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  bookAbbreviation: {
-    color: COLORS.background,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  bookActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: dimensions.spacing.sm,
-  },
-  bookNumber: {
-    width: 28,
-    height: 28,
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
-  },
-  bookNumberText: {
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-  },
-  bookFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  testamentIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  testamentDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: dimensions.spacing.sm,
-  },
-  testamentLabel: {
-    color: COLORS.text.tertiary,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
   },
   languagePickerContainer: {
     width: 120,

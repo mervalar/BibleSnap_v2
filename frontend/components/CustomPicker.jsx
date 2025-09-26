@@ -19,7 +19,9 @@ const CustomPicker = ({
   containerStyle, 
   labelStyle, 
   dropdownStyle,
-  colors 
+  colors = defaultColors,
+  compact = false,
+  icon = null
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
   
@@ -38,7 +40,7 @@ const CustomPicker = ({
   
   const theColors = colors || defaultColors;
   
-  const selectedOption = options.find(option => option.value === selectedValue);
+  const selectedOption = options.find(option => option.value === selectedValue) || options[0];
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -46,10 +48,22 @@ const CustomPicker = ({
         style={[styles.pickerButton, { borderColor: theColors.border.light }]}
         onPress={() => setModalVisible(true)}
       >
-        <Text style={[styles.selectedText, labelStyle, { color: theColors.text.primary }]}>
-          {selectedOption?.label || 'Select'}
-        </Text>
-        <Ionicons name="chevron-down" size={16} color={theColors.primary} />
+        {compact ? (
+          icon || <Text style={{ color: theColors.primary }}>A</Text>
+        ) : (
+          <Text style={[
+            styles.selectedText, 
+            labelStyle,
+            { color: modalVisible ? theColors.background : theColors.text.primary }
+          ]}>
+            {selectedOption.label}
+          </Text>
+        )}
+        <Ionicons 
+          name={modalVisible ? "chevron-up" : "chevron-down"} 
+          size={compact ? 16 : 18} 
+          color={modalVisible ? theColors.background : theColors.primary} 
+        />
       </TouchableOpacity>
 
       <Modal
@@ -153,7 +167,12 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontSize: 16,
-  }
+  },
+  compactSelector: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    minHeight: 36,
+  },
 });
 
 export default CustomPicker;

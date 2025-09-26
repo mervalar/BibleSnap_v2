@@ -357,7 +357,7 @@ if (loading) {
         </View>
 
         {/* Stats Cards */}
-        {/* <View style={styles.statsGrid}>
+        <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <View style={styles.statIconContainer}>
               <Ionicons name="flame" size={dimensions.iconSize.medium} color={COLORS.semantic.warning} />
@@ -381,15 +381,14 @@ if (loading) {
             <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>{journalCount}</Text>
             <Text style={[styles.statLabel, { fontSize: dimensions.fontSize.caption }]}>Journals</Text>
           </View>
+        </View>
 
-        </View> */}
-
-        {/* Growth Chart */}
-        {/* <View style={styles.chartCard}>
+        {/* Spiritual Growth Chart - Moved from HomePage */}
+        <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
             <View>
               <Text style={[styles.chartTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                Growth Rate
+                Spiritual Growth
               </Text>
               <Text style={[styles.chartSubtitle, { fontSize: dimensions.fontSize.caption }]}>
                 Last 7 days activity
@@ -400,17 +399,27 @@ if (loading) {
               <Text style={[styles.trendText, { fontSize: dimensions.fontSize.caption }]}>+12%</Text>
             </View>
           </View>
-          <View style={styles.chartContainer}>
-            <LineChart
-              data={chartData}
-              width={screenWidth - (dimensions.spacing.md * 4)}
-              height={180}
-              chartConfig={chartConfig}
-              bezier
-              style={styles.chart}
-            />
+          <View style={styles.chartArea}>
+            <View style={styles.chartLine}>
+              <View style={[styles.chartPoint, {left: '10%', bottom: '30%'}]} />
+              <View style={[styles.chartPoint, {left: '25%', bottom: '45%'}]} />
+              <View style={[styles.chartPoint, {left: '40%', bottom: '35%'}]} />
+              <View style={[styles.chartPoint, {left: '55%', bottom: '50%'}]} />
+              <View style={[styles.chartPoint, {left: '70%', bottom: '45%'}]} />
+              <View style={[styles.chartPoint, {left: '85%', bottom: '60%'}]} />
+            </View>
+            <View style={styles.chartLabels}>
+              <Text style={styles.chartLabel}>Mon</Text>
+              <Text style={styles.chartLabel}>Tue</Text>
+              <Text style={styles.chartLabel}>Wed</Text>
+              <Text style={styles.chartLabel}>Thu</Text>
+              <Text style={styles.chartLabel}>Fri</Text>
+              <Text style={styles.chartLabel}>Sat</Text>
+              <Text style={styles.chartLabel}>Sun</Text>
+            </View>
           </View>
-        </View> */}
+        </View>
+
         {/* Account Section */}
         <View style={styles.sectionContainer}>
           <Text style={[styles.sectionTitle, { fontSize: dimensions.fontSize.subtitle }]}>
@@ -763,6 +772,7 @@ const styles = StyleSheet.create({
   chartCard: {
     backgroundColor: COLORS.surfaceElevated,
     margin: dimensions.spacing.md,
+    marginTop: dimensions.spacing.lg,
     borderRadius: 16,
     padding: dimensions.cardPadding,
     shadowColor: '#000',
@@ -777,25 +787,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 15,
+    marginBottom: dimensions.spacing.md,
   },
   chartTitle: {
-    fontSize: 16,
     fontWeight: '600',
-    color: '#000',
+    color: COLORS.text.primary,
   },
   chartSubtitle: {
-    fontSize: 12,
-    color: '#666',
+    color: COLORS.text.secondary,
+    marginTop: 2,
   },
-  chartContainer: {
-    alignItems: 'center',
+  chartArea: {
+    height: 160,
+    position: 'relative',
+    marginTop: dimensions.spacing.sm,
   },
-  chart: {
-    borderRadius: 16,
+  chartLine: {
+    flex: 1,
+    position: 'relative',
+    height: 120,
   },
-  
+  chartPoint: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: COLORS.surfaceElevated,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 2,
+  },
+  chartLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  chartLabel: {
+    color: COLORS.text.tertiary,
+    fontSize: dimensions.fontSize.caption,
+    textAlign: 'center',
+    width: 30,
+  },
   chevron: {
     fontSize: 18,
     color: '#CCC',

@@ -13,6 +13,7 @@ import BookChapters from './screens/ChapterListPage';
 import BibleStudyContent from './screens/BibleStudyContent';
 import SplashScreen from './components/SplashScreen'; // Import your splash screen
 import  AuthScreen from './screens/AuthScreen';
+import SavedVersesPage from './screens/SavedVersesPage';
 
 const Stack = createStackNavigator();
 
@@ -74,6 +75,11 @@ export default function App() {
         <Stack.Screen name="Profile" component={Profile}
         options={{ headerShown: false }} 
          />
+         <Stack.Screen 
+          name="SavedVerses" 
+          component={SavedVersesPage} 
+          options={{ headerShown: false }}
+        />
         <Stack.Screen name="BibleStudyContent" 
         options={{ headerShown: false }} 
         component={BibleStudyContent} />

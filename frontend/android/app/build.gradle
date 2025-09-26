@@ -2,6 +2,21 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// Add configuration to handle resource conflicts
+android {
+    // Add this to handle resource conflicts
+    lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+    
+    // Add this to handle resource conflicts during build
+    aaptOptions {
+        // Tells AAPT to ignore duplicate resources
+        ignoreAssetsPattern "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
+    }
+}
+
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
 /**

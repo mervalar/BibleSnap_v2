@@ -11,6 +11,7 @@ import {
   StatusBar,
   Dimensions,
   Platform,
+  ToastAndroid
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,6 +20,7 @@ import SplashScreen from '../components/SplashScreen';
 import { Video } from 'expo-av';
 import CustomPicker from '../components/CustomPicker';
 import biblePreferences from '../api/biblePreferences';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -29,10 +31,21 @@ const LANGUAGE_OPTIONS = [
   { label: 'Swahili', value: 'swahili', bibleId: '611f8eb23aec8f13-01' },
 ];
 
+const stripHtml = (html) => {
+  if (!html) return '';
+  return html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+};
+
 const BookContent = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { book, chapter: initialChapter, bibleId: routeBibleId, language: routeLanguage } = route.params;
+  const params = route.params || {}; // Safely access params
+  const book = params.book || { id: '', name: '' };
+  const initialChapter = params.chapter || { number: '1' };
+  const routeBibleId = params.bibleId || '65eec8e0b60e656b-01';
+  const routeLanguage = params.language || 'english';
+  
+  // State variables
   const [videoRef, setVideoRef] = useState(null);
   const [verses, setVerses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,27 +59,24 @@ const BookContent = () => {
   const [highlights, setHighlights] = useState({});
   const [selectedVerse, setSelectedVerse] = useState(null);
   const [showToolbox, setShowToolbox] = useState(false);
-  const highlightColors = ['#FFD700', '#90EE90', '#ADD8E6', '#FFB6C1'];
-  
-  // Language state
+  const [fontSize, setFontSize] = useState(16); // Default font size
+  const [showFontSizeOptions, setShowFontSizeOptions] = useState(false);
   const [language, setLanguage] = useState(routeLanguage || 'english');
   const [bibleId, setBibleId] = useState(routeBibleId || '65eec8e0b60e656b-01');
-  
-  // Audio progress state
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [progress, setProgress] = useState(0);
-  
-  // TTS state management
   const [chapterText, setChapterText] = useState('');
   const [availableVoices, setAvailableVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState(null);
 
-  const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
-  
   // Refs for tracking
   const progressInterval = useRef(null);
   const startTime = useRef(null);
+
+  // Constants
+  const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
+  const highlightColors = ['#FFD700', '#90EE90', '#ADD8E6', '#FFB6C1'];
 
   // Initialize TTS and fetch data
   useEffect(() => {
@@ -103,7 +113,41 @@ const BookContent = () => {
     if (book && book.id) {
       fetchChapters();
     }
-  }, [bibleId]);
+  }, [bibleId, book]);
+
+  // Store book info for later reference
+  useEffect(() => {
+    const storeBookInfo = async () => {
+      try {
+        if (book && book.id) {
+          await AsyncStorage.setItem(`book_info_${book.id}`, JSON.stringify({
+            id: book.id,
+            name: book.name
+          }));
+        }
+      } catch (e) {
+        console.error('Failed to store book info', e);
+      }
+    };
+    
+    storeBookInfo();
+  }, [book]);
+
+  // Load saved font size preference
+  useEffect(() => {
+    const loadFontPreference = async () => {
+      try {
+        const savedFontSize = await AsyncStorage.getItem('bible_font_size');
+        if (savedFontSize) {
+          setFontSize(parseInt(savedFontSize, 10));
+        }
+      } catch (error) {
+        console.error('Error loading font size preference', error);
+      }
+    };
+    
+    loadFontPreference();
+  }, []);
 
   const initializeTTS = async () => {
     try {
@@ -121,7 +165,9 @@ const BookContent = () => {
 
   const saveHighlights = async () => {
     try {
-      await AsyncStorage.setItem(`highlights_${book.id}`, JSON.stringify(highlights));
+      if (book && book.id) {
+        await AsyncStorage.setItem(`highlights_${book.id}`, JSON.stringify(highlights));
+      }
     } catch (e) {
       console.error('Failed to save highlights', e);
     }
@@ -129,12 +175,19 @@ const BookContent = () => {
 
   const loadHighlights = async () => {
     try {
-      const saved = await AsyncStorage.getItem(`highlights_${book.id}`);
-      if (saved) {
-        setHighlights(JSON.parse(saved));
+      if (!book || !book.id) return;
+      
+      const highlightsKey = `highlights_${book.id}`;
+      const highlightsData = await AsyncStorage.getItem(highlightsKey);
+      
+      if (highlightsData) {
+        setHighlights(JSON.parse(highlightsData));
+      } else {
+        setHighlights({});
       }
-    } catch (e) {
-      console.error('Failed to load highlights', e);
+    } catch (error) {
+      console.error('Error loading highlights:', error);
+      setHighlights({});
     }
   };
 
@@ -421,16 +474,57 @@ const BookContent = () => {
 
   const handleHighlight = async (color) => {
     if (!selectedVerse) return;
-    // Stop TTS when highlighting
-    await stopTTS();
-    setHighlights(prev => ({
-      ...prev,
-      [selectedVerse.id]: {
-        color,
-        text: stripHtml(selectedVerse.text)
+    
+    try {
+      // Stop TTS if it's playing
+      if (isPlaying) {
+        await stopTTS();
       }
-    }));
-    setShowToolbox(false);
+      
+      // Create the highlights object for this verse
+      const highlightData = {
+        color,
+        text: stripHtml(selectedVerse.text),
+        reference: `${currentChapter}:${selectedVerse.number}`
+      };
+      
+      // Update local state
+      setHighlights(prev => ({
+        ...prev,
+        [selectedVerse.id]: highlightData
+      }));
+      
+      // Save to AsyncStorage immediately
+      const highlightsKey = `highlights_${book.id}`;
+      
+      // Get existing highlights
+      const existingHighlightsStr = await AsyncStorage.getItem(highlightsKey);
+      const existingHighlights = existingHighlightsStr ? JSON.parse(existingHighlightsStr) : {};
+      
+      // Merge with new highlight
+      const updatedHighlights = {
+        ...existingHighlights,
+        [selectedVerse.id]: highlightData
+      };
+      
+      // Save back to AsyncStorage
+      await AsyncStorage.setItem(highlightsKey, JSON.stringify(updatedHighlights));
+      
+      // Also save book information for reference
+      await AsyncStorage.setItem(`book_info_${book.id}`, JSON.stringify({
+        id: book.id,
+        name: book.name
+      }));
+      
+      // Close the toolbox
+      setShowToolbox(false);
+      
+      // Show a small confirmation
+      showToast('Verse saved');
+    } catch (error) {
+      console.error('Error saving highlight:', error);
+      Alert.alert('Error', 'Failed to save the highlighted verse');
+    }
   };
 
   const removeHighlight = (verseId) => {
@@ -441,34 +535,22 @@ const BookContent = () => {
     });
   };
 
-  const HighlightToolbox = ({ visible, onSelectColor, onClose }) => {
-    if (!visible) return null;
+  const toggleFontSizeOptions = () => {
+    setShowFontSizeOptions(!showFontSizeOptions);
+    if (showToolbox) {
+      setShowToolbox(false);
+    }
+  };
 
-    // Stop TTS when opening toolbox
-    stopTTS();
-
-    return (
-      <View style={styles.toolboxContainer}>
-        <View style={styles.toolbox}>
-          {highlightColors.map((color) => (
-            <TouchableOpacity
-              key={color}
-              style={[styles.colorButton, { backgroundColor: color }]}
-              onPress={() => onSelectColor(color)}
-            />
-          ))}
-          <TouchableOpacity 
-            style={styles.closeButton}
-            onPress={async () => {
-              await stopTTS();
-              onClose();
-            }}
-          >
-            <Text style={styles.closeButtonText}>×</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+  const changeFontSize = (size) => {
+    setFontSize(size);
+    setShowFontSizeOptions(false);
+    // Save user preference if needed
+    try {
+      AsyncStorage.setItem('bible_font_size', size.toString());
+    } catch (error) {
+      console.error('Error saving font size preference', error);
+    }
   };
 
   return (
@@ -486,51 +568,86 @@ const BookContent = () => {
       />
       {/* Full Screen Content Overlay */}
       <SafeAreaView style={styles.contentOverlay}>
-        {/* Chapter Navigation with Book Name */}
-        <View style={styles.chapterNav}>
+        {/* Navigation Bar */}
+        <View style={styles.navBar}>
           <TouchableOpacity 
-            style={[styles.navButton, currentChapter === 1 && styles.disabledButton]}
+            style={styles.navButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#A07553" />
+          </TouchableOpacity>
+          
+          <Text style={styles.navBarTitle} numberOfLines={1}>
+            {book.name} {currentChapter}
+          </Text>
+        </View>
+
+        {/* Chapter Navigation with Controls */}
+        <View style={styles.chapterNavContainer}>
+          <TouchableOpacity 
+            style={[
+              styles.chapterNavButton, 
+              currentChapter === 1 && styles.disabledButton
+            ]}
             onPress={goToPrevChapter}
             disabled={currentChapter === 1}
           >
-            <Text style={[styles.navButtonText, currentChapter === 1 && styles.disabledText]}>
-              Previous
-            </Text>
+            <Ionicons 
+              name="chevron-back" 
+              size={20} 
+              color={currentChapter === 1 ? "#CCCCCC" : "#A07553"} 
+            />
           </TouchableOpacity>
           
-          <View style={styles.titleContainer}>
-            <Text style={styles.compactTitle}>
-              {book.name} {currentChapter}
-            </Text>
+          <View style={styles.chapterControls}>
+            <TouchableOpacity 
+              style={styles.controlIconButton}
+              onPress={() => navigation.navigate('SavedVerses')}
+            >
+              <Ionicons name="bookmark-outline" size={20} color="#A07553" />
+            </TouchableOpacity>
+            
             <CustomPicker
               options={LANGUAGE_OPTIONS}
               selectedValue={language}
               onValueChange={handleLanguageChange}
-              containerStyle={styles.languagePickerContainer}
+              containerStyle={styles.compactPickerContainer}
+              compact={true}
+              icon={<Ionicons name="language-outline" size={20} color="#A07553" />}
               colors={{
-                primary: '#FFFFFF',
-                background: 'rgba(0, 0, 0, 0.7)',
+                primary: '#A07553',
+                background: 'rgba(255, 255, 255, 0.95)',
                 text: {
-                  primary: '#FFFFFF',
-                  secondary: '#CCCCCC',
+                  primary: '#333333',
+                  secondary: '#666666',
                 },
                 border: {
-                  light: 'rgba(255, 255, 255, 0.3)',
+                  light: 'rgba(160, 117, 83, 0.2)',
                 },
               }}
-              labelStyle={styles.languagePickerLabel}
             />
+            
+            <TouchableOpacity 
+              style={styles.controlIconButton}
+              onPress={toggleFontSizeOptions}
+            >
+              <Ionicons name="text-outline" size={20} color="#A07553" />
+            </TouchableOpacity>
           </View>
-
           
           <TouchableOpacity 
-            style={[styles.navButton, currentChapter === chapters.length && styles.disabledButton]}
+            style={[
+              styles.chapterNavButton, 
+              currentChapter === chapters.length && styles.disabledButton
+            ]}
             onPress={goToNextChapter}
             disabled={currentChapter === chapters.length}
           >
-            <Text style={[styles.navButtonText, currentChapter === chapters.length && styles.disabledText]}>
-              Next
-            </Text>
+            <Ionicons 
+              name="chevron-forward" 
+              size={20} 
+              color={currentChapter === chapters.length ? "#CCCCCC" : "#A07553"} 
+            />
           </TouchableOpacity>
         </View>
 
@@ -550,7 +667,7 @@ const BookContent = () => {
                 onLongPress={() => removeHighlight(verse.id)}
               >
                 <Text style={styles.verseNumber}>{verse.number}</Text>
-                <Text style={styles.verseText}>
+                <Text style={[styles.verseText, { fontSize: fontSize, lineHeight: fontSize * 1.6 }]}>
                   {verse.text ? stripHtml(verse.text) : 'Verse text not available'}
                 </Text>
               </TouchableOpacity>
@@ -639,14 +756,32 @@ const BookContent = () => {
           onSelectColor={handleHighlight}
           onClose={() => setShowToolbox(false)}
         />
+        
+        <FontSizeOptions
+          visible={showFontSizeOptions}
+          onSelectSize={changeFontSize}
+          onClose={() => setShowFontSizeOptions(false)}
+        />
       </SafeAreaView>
     </View>
   );
 };
 
-function stripHtml(html) {
-  return html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-}
+// If you're on iOS, replace ToastAndroid with Alert:
+// For iOS-compatible toast replacement:
+const showToast = (message) => {
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(message, ToastAndroid.SHORT);
+  } else {
+    // For iOS, use Alert as a simple toast
+    Alert.alert(
+      "",
+      message,
+      [{ text: "OK", onPress: () => {} }],
+      { cancelable: true, userInterfaceStyle: 'light' }
+    );
+  }
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -668,64 +803,86 @@ const styles = StyleSheet.create({
     zIndex: 2,
     height: screenHeight,
   },
-  topBar: {
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
+    paddingBottom: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(160, 117, 83, 0.2)',
   },
-  backButton: {
+  navButton: {
     padding: 8,
-    alignSelf: 'flex-start',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    marginRight: 12,
   },
-  backArrow: {
-    fontSize: 20,
-    color: '#A07553',
-    fontWeight: 'bold',
+  navBarTitle: {
+    flex: 1,
+    fontWeight: '600',
+    fontSize: 18,
+    color: '#333',
+    textAlign: 'center',
+    marginRight: 50, // Balance the back button
   },
-  chapterNav: {
+  chapterNavContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(224, 224, 224, 0.5)',
-  },
-  titleContainer: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  bookTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'center',
-  },
-  chapterTitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  navButton: {
-    paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#A07553',
-    borderRadius: 8,
-    minWidth: 80,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(160, 117, 83, 0.1)',
+  },
+  chapterNavButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(160, 117, 83, 0.2)',
   },
   disabledButton: {
-    backgroundColor: '#E0E0E0',
+    opacity: 0.5,
   },
-  navButtonText: {
-    color: 'white',
+  chapterControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  controlIconButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(160, 117, 83, 0.2)',
+  },
+  savedVersesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(160, 117, 83, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  savedVersesButtonText: {
+    color: '#A07553',
+    fontSize: 12,
     fontWeight: '600',
-    fontSize: 14,
   },
-  disabledText: {
-    color: '#999',
+  fontSizeButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(160, 117, 83, 0.1)',
   },
   content: {
     flex: 1,
@@ -932,6 +1089,142 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  compactPickerContainer: {
+    width: 40,
+    height: 40,
+  },
+  fontSizeContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    zIndex: 10,
+  },
+  fontSizePanel: {
+    width: '80%',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  fontSizeTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  fontSizeOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 16,
+  },
+  fontSizeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+    marginHorizontal: 4,
+    backgroundColor: 'rgba(160, 117, 83, 0.1)',
+  },
+  activeFontSizeButton: {
+    backgroundColor: '#A07553',
+  },
+  fontSizeButtonText: {
+    color: '#A07553',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  activeFontSizeText: {
+    color: '#FFFFFF',
+  },
+  closeFontSizeButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    backgroundColor: '#A07553',
+  },
+  closeFontSizeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+  },
 });
+
+// Add this component before the export statement
+const HighlightToolbox = ({ visible, onSelectColor, onClose }) => {
+  if (!visible) return null;
+  
+  const highlightColors = ['#FFEB3B', '#4CAF50', '#2196F3', '#E91E63', '#FF9800'];
+  
+  return (
+    <View style={styles.toolboxContainer}>
+      <View style={styles.toolbox}>
+        {highlightColors.map((color, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[styles.colorButton, { backgroundColor: color }]}
+            onPress={() => onSelectColor(color)}
+          />
+        ))}
+        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+          <Text style={styles.closeButtonText}>✕</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+// Font size options component
+const FontSizeOptions = ({ visible, onSelectSize, onClose }) => {
+  if (!visible) return null;
+  
+  return (
+    <View style={styles.fontSizeContainer}>
+      <View style={styles.fontSizePanel}>
+        <Text style={styles.fontSizeTitle}>Text Size</Text>
+        <View style={styles.fontSizeOptions}>
+          <TouchableOpacity
+            style={[styles.fontSizeButton, { backgroundColor: 'rgba(160, 117, 83, 0.1)' }]}
+            onPress={() => onSelectSize(14)}
+          >
+            <Text style={styles.fontSizeButtonText}>S</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fontSizeButton, { backgroundColor: 'rgba(160, 117, 83, 0.1)' }]}
+            onPress={() => onSelectSize(16)}
+          >
+            <Text style={styles.fontSizeButtonText}>M</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fontSizeButton, { backgroundColor: 'rgba(160, 117, 83, 0.1)' }]}
+            onPress={() => onSelectSize(18)}
+          >
+            <Text style={styles.fontSizeButtonText}>L</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fontSizeButton, { backgroundColor: 'rgba(160, 117, 83, 0.1)' }]}
+            onPress={() => onSelectSize(20)}
+          >
+            <Text style={styles.fontSizeButtonText}>XL</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity style={styles.closeFontSizeButton} onPress={onClose}>
+          <Text style={styles.closeFontSizeButtonText}>Done</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
 
 export default BookContent;
