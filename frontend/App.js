@@ -11,7 +11,7 @@ import BooksList from './screens/BooksListPage';
 import BibleStudy from './screens/BibleStudyPage';
 import BookChapters from './screens/ChapterListPage';
 import BibleStudyContent from './screens/BibleStudyContent';
-import SplashScreen from './components/SplashScreen'; // Import your splash screen
+import SplashScreen from './components/SplashScreen'; 
 import  AuthScreen from './screens/AuthScreen';
 import SavedVersesPage from './screens/SavedVersesPage';
 

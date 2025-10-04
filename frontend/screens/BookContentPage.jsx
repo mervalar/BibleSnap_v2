@@ -21,6 +21,9 @@ import { Video } from 'expo-av';
 import CustomPicker from '../components/CustomPicker';
 import biblePreferences from '../api/biblePreferences';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -73,7 +76,8 @@ const BookContent = () => {
   // Refs for tracking
   const progressInterval = useRef(null);
   const startTime = useRef(null);
-
+  const [isSharing, setIsSharing] = useState(false);
+  const shareRef = useRef();
   // Constants
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
   const highlightColors = ['#FFD700', '#90EE90', '#ADD8E6', '#FFB6C1'];
@@ -151,15 +155,22 @@ const BookContent = () => {
 
   const initializeTTS = async () => {
     try {
-      // Get available voices
       const voices = await Speech.getAvailableVoicesAsync();
       setAvailableVoices(voices);
-      const englishVoice = voices.find(voice => 
-        voice.language.startsWith('en') || voice.language.includes('en')
-      );
-      setSelectedVoice(englishVoice || voices[0]);
+
+      let selected = null;
+      if (language === 'english') {
+        selected = voices.find(v => v.language.startsWith('en'));
+      } else if (language === 'french') {
+        selected = voices.find(v => v.language.startsWith('fr'));
+      } else if (language === 'swahili') {
+        selected = voices.find(v => v.language.startsWith('sw'));
+      }
+
+      setSelectedVoice(selected || null);
     } catch (error) {
       console.log('TTS initialization error:', error);
+      setSelectedVoice(null);
     }
   };
 
@@ -234,8 +245,8 @@ const BookContent = () => {
     const selected = LANGUAGE_OPTIONS.find(opt => opt.value === langValue);
     if (selected) {
       setBibleId(selected.bibleId);
-      // Save language preference
       biblePreferences.storeLanguagePreference(langValue, selected.bibleId);
+      initializeTTS(); // Re-initialize TTS for new language
     }
   };
 
@@ -326,6 +337,10 @@ const BookContent = () => {
     try {
       if (!chapterText) {
         Alert.alert('No Content', 'No text available to read.');
+        return;
+      }
+      if (!selectedVoice) {
+        Alert.alert('Voice not found', 'No voice available for this language.');
         return;
       }
 
@@ -507,10 +522,6 @@ const BookContent = () => {
         [selectedVerse.id]: highlightData
       };
       
-      // Save back to AsyncStorage
-      await AsyncStorage.setItem(highlightsKey, JSON.stringify(updatedHighlights));
-      
-      // Also save book information for reference
       await AsyncStorage.setItem(`book_info_${book.id}`, JSON.stringify({
         id: book.id,
         name: book.name
@@ -520,7 +531,6 @@ const BookContent = () => {
       setShowToolbox(false);
       
       // Show a small confirmation
-      showToast('Verse saved');
     } catch (error) {
       console.error('Error saving highlight:', error);
       Alert.alert('Error', 'Failed to save the highlighted verse');
@@ -550,6 +560,30 @@ const BookContent = () => {
       AsyncStorage.setItem('bible_font_size', size.toString());
     } catch (error) {
       console.error('Error saving font size preference', error);
+    }
+  };
+
+  const handleShareVerse = async () => {
+    if (!selectedVerse) {
+      Alert.alert('No verse selected', 'Please select a verse to share.');
+      return;
+    }
+    setIsSharing(true);
+    try {
+      // Wait for the UI to update
+      setTimeout(async () => {
+        const uri = await shareRef.current.capture();
+        setIsSharing(false);
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri);
+        } else {
+          Alert.alert('Sharing not available');
+        }
+      }, 500);
+    } catch (error) {
+      setIsSharing(false);
+      Alert.alert('Error', 'Could not share the verse.');
+      console.error(error);
     }
   };
 
@@ -670,6 +704,17 @@ const BookContent = () => {
                 <Text style={[styles.verseText, { fontSize: fontSize, lineHeight: fontSize * 1.6 }]}>
                   {verse.text ? stripHtml(verse.text) : 'Verse text not available'}
                 </Text>
+                
+                {/* Share button */}
+                <TouchableOpacity 
+                  style={styles.shareButton}
+                  onPress={() => {
+                    setSelectedVerse(verse);
+                    handleShareVerse();
+                  }}
+                >
+                  <Ionicons name="share-social-outline" size={22} color="#A07553" />
+                </TouchableOpacity>
               </TouchableOpacity>
             );
           })}
@@ -763,6 +808,38 @@ const BookContent = () => {
           onClose={() => setShowFontSizeOptions(false)}
         />
       </SafeAreaView>
+
+      <ViewShot
+        ref={shareRef}
+        options={{ format: 'png', quality: 1.0, result: 'tmpfile' }}
+        style={{ 
+          position: 'absolute', 
+          left: -9999, 
+          width: screenWidth * 0.8, 
+          padding: 24,
+          backgroundColor: '#111',
+          borderRadius: 16,
+          justifyContent: 'center',
+          alignItems: 'center',
+          shadowColor: '#000',
+          shadowOpacity: 0.5,
+          shadowRadius: 8,
+        }}
+      >
+        {selectedVerse && (
+          <View style={{ width: '100%', alignItems: 'center' }}>
+            <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold', marginBottom: 12 }}>
+              {book.name} {currentChapter}:{selectedVerse.number}
+            </Text>
+            <Text style={{ color: '#fff', fontSize: 10, textAlign: 'center', marginBottom: 8 }}>
+              "{stripHtml(selectedVerse.text)}"
+            </Text>
+            <Text style={{ color: '#fff', fontSize: 6, opacity: 0.7 }}>
+              BibleSnap
+            </Text>
+          </View>
+        )}
+      </ViewShot>
     </View>
   );
 };
@@ -1090,8 +1167,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   compactPickerContainer: {
-    width: 40,
+    width: 60,
     height: 40,
+    
   },
   fontSizeContainer: {
     position: 'absolute',
@@ -1165,7 +1243,14 @@ const styles = StyleSheet.create({
 const HighlightToolbox = ({ visible, onSelectColor, onClose }) => {
   if (!visible) return null;
   
-  const highlightColors = ['#FFEB3B', '#4CAF50', '#2196F3', '#E91E63', '#FF9800'];
+  // Softer, pastel highlighter colors with transparency
+  const highlightColors = [
+    'rgba(255, 235, 59, 0.5)',  
+    'rgba(129, 212, 250, 0.5)',  
+    'rgba(186, 255, 201, 0.5)',  
+    'rgba(255, 183, 197, 0.5)',  
+    'rgba(255, 213, 128, 0.5)', 
+  ];
   
   return (
     <View style={styles.toolboxContainer}>

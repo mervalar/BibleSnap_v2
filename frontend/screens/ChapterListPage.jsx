@@ -164,9 +164,6 @@ const ChaptersListPage = () => {
         <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}>
           {book.name}
         </Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={fetchChapters}>
-          <Ionicons name="refresh" size={dimensions.iconSize.medium} color={COLORS.background} />
-        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>

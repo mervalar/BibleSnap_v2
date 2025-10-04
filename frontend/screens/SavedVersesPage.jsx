@@ -11,6 +11,7 @@ import {
   Dimensions,
   Alert,
   Platform, 
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,6 +25,8 @@ const SavedVersesPage = () => {
   const [savedVerses, setSavedVerses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [groupByBook, setGroupByBook] = useState(true);
+  const [colorFilter, setColorFilter] = useState(null);
+  const [bookFilter, setBookFilter] = useState(null);
 
   useEffect(() => {
     loadSavedVerses();
@@ -134,11 +137,25 @@ const SavedVersesPage = () => {
     setGroupByBook(!groupByBook);
   };
 
+  // Filter logic
+  const getFilteredSavedVerses = () => {
+    let filtered = [...savedVerses];
+    if (colorFilter) filtered = filtered.filter(verse => verse.color === colorFilter);
+    if (bookFilter) filtered = filtered.filter(verse => verse.bookId === bookFilter);
+    return filtered;
+  };
+
+  const resetFilters = () => {
+    setColorFilter(null);
+    setBookFilter(null);
+  };
+
   const renderGroupedVerses = () => {
+    const filtered = getFilteredSavedVerses();
     // Group verses by book
     const bookGroups = {};
     
-    savedVerses.forEach(verse => {
+    filtered.forEach(verse => {
       if (!bookGroups[verse.bookId]) {
         bookGroups[verse.bookId] = {
           bookId: verse.bookId,
@@ -173,9 +190,10 @@ const SavedVersesPage = () => {
   };
 
   const renderFlatVerses = () => {
+    const filtered = getFilteredSavedVerses();
     return (
       <FlatList
-        data={savedVerses}
+        data={filtered}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContainer}
         renderItem={({ item }) => renderVerseItem(item)}
@@ -249,6 +267,48 @@ const SavedVersesPage = () => {
               color="#A07553" 
             />
           </TouchableOpacity>
+        </View>
+        
+        {/* Filter Section */}
+        <View style={{ padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#eee' }}>
+          <Text style={{ fontWeight: 'bold', color: '#A07553', fontSize: 16 }}>
+            Saved Verses ({getFilteredSavedVerses().length})
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+            <TouchableOpacity
+              style={[
+                { padding: 8, borderRadius: 16, marginRight: 8, backgroundColor: !colorFilter ? '#A07553' : '#eee' }
+              ]}
+              onPress={() => setColorFilter(null)}
+            >
+              <Text style={{ color: !colorFilter ? '#fff' : '#A07553' }}>All Colors</Text>
+            </TouchableOpacity>
+            {/* Add color filter buttons */}
+            {['rgba(255, 235, 59, 0.5)','rgba(129, 212, 250, 0.5)','rgba(186, 255, 201, 0.5)','rgba(255, 183, 197, 0.5)','rgba(255, 213, 128, 0.5)'].map(color => (
+              <TouchableOpacity
+                key={color}
+                style={{
+                  padding: 8,
+                  borderRadius: 16,
+                  marginRight: 8,
+                  backgroundColor: colorFilter === color ? '#A07553' : color,
+                  borderWidth: colorFilter === color ? 2 : 0,
+                  borderColor: '#A07553'
+                }}
+                onPress={() => setColorFilter(colorFilter === color ? null : color)}
+              >
+                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: color, borderWidth: 1, borderColor: '#ccc' }} />
+              </TouchableOpacity>
+            ))}
+            {(colorFilter || bookFilter) && (
+              <TouchableOpacity
+                style={{ padding: 8, borderRadius: 16, backgroundColor: '#eee' }}
+                onPress={resetFilters}
+              >
+                <Text style={{ color: '#A07553' }}>Reset</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
         </View>
         
         {/* Content */}

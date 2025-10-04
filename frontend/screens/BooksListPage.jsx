@@ -414,6 +414,12 @@ const BooksListPage = () => {
               color={showSearch ? COLORS.background : COLORS.primary} 
             />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerActionButton}
+            onPress={() => navigation.navigate('SavedVerses')}
+          >
+            <Ionicons name="bookmark-outline" size={dimensions.iconSize.medium} color={COLORS.primary} />
+          </TouchableOpacity>
           <CustomPicker
             options={LANGUAGE_OPTIONS}
             selectedValue={language}
@@ -450,155 +456,6 @@ const BooksListPage = () => {
       )}
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Saved Verses Section */}
-        {savedVerses.length > 0 && showSavedVerses && (
-          <View style={styles.savedVersesSection}>
-            <View style={styles.savedVersesHeader}>
-              <View style={styles.savedVersesTitleContainer}>
-                <Ionicons 
-                  name="bookmark" 
-                  size={dimensions.iconSize.small} 
-                  color={COLORS.primary} 
-                  style={styles.savedVersesIcon}
-                />
-                <Text style={[styles.savedVersesTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                  Saved Verses
-                </Text>
-                <View style={styles.savedVersesBadge}>
-                  <Text style={styles.savedVersesBadgeText}>
-                    {filteredSavedVerses.length}
-                  </Text>
-                </View>
-              </View>
-              
-              <TouchableOpacity 
-                style={styles.toggleSavedVersesButton}
-                onPress={() => setShowSavedVerses(!showSavedVerses)}
-              >
-                <Ionicons 
-                  name={showSavedVerses ? "chevron-up" : "chevron-down"} 
-                  size={dimensions.iconSize.small} 
-                  color={COLORS.primary} 
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Color Filter */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.colorFilterContainer}
-              contentContainerStyle={styles.colorFilterContent}
-            >
-              <TouchableOpacity 
-                style={[
-                  styles.colorFilterButton, 
-                  !colorFilter && styles.colorFilterButtonActive
-                ]}
-                onPress={() => setColorFilter(null)}
-              >
-                <Text style={[
-                  styles.colorFilterButtonText,
-                  !colorFilter && styles.colorFilterButtonTextActive
-                ]}>
-                  All Colors
-                </Text>
-              </TouchableOpacity>
-              
-              {Object.entries(COLORS.highlight).map(([key, color]) => (
-                <TouchableOpacity 
-                  key={key}
-                  style={[
-                    styles.colorFilterButton, 
-                    { backgroundColor: color + '30' },
-                    colorFilter === color && styles.colorFilterButtonActive
-                  ]}
-                  onPress={() => setColorFilter(colorFilter === color ? null : color)}
-                >
-                  <View style={[styles.colorDot, { backgroundColor: color }]} />
-                  <Text style={[
-                    styles.colorFilterButtonText,
-                    colorFilter === color && styles.colorFilterButtonTextActive
-                  ]}>
-                    {key.charAt(0).toUpperCase() + key.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-              
-              {(colorFilter || bookFilter) && (
-                <TouchableOpacity 
-                  style={styles.resetFiltersButton}
-                  onPress={resetFilters}
-                >
-                  <Ionicons 
-                    name="close-circle" 
-                    size={dimensions.iconSize.small} 
-                    color={COLORS.text.secondary} 
-                  />
-                  <Text style={styles.resetFiltersButtonText}>
-                    Reset
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-
-            {/* Saved Verses List */}
-            {filteredSavedVerses.length === 0 ? (
-              <View style={styles.emptyFilterResults}>
-                <Text style={styles.emptyFilterResultsText}>
-                  No verses match the current filter
-                </Text>
-                <TouchableOpacity 
-                  style={styles.resetFiltersButton}
-                  onPress={resetFilters}
-                >
-                  <Text style={styles.resetFiltersButtonText}>Reset Filters</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.savedVersesList}>
-                {Object.entries(savedVersesByBook).map(([bookName, verses]) => (
-                  <View key={bookName} style={styles.savedVersesBookSection}>
-                    <View style={styles.savedVersesBookHeader}>
-                      <Text style={styles.savedVersesBookName}>{bookName}</Text>
-                      <Text style={styles.savedVersesCount}>{verses.length}</Text>
-                    </View>
-                    
-                    {verses.map(verse => (
-                      <TouchableOpacity
-                        key={verse.id}
-                        style={[styles.savedVerseCard, { backgroundColor: verse.color + '20' }]}
-                        onPress={() => handleVersePress(verse)}
-                      >
-                        <View style={styles.savedVerseCardHeader}>
-                          <Text style={styles.savedVerseReference}>
-                            {verse.reference}
-                          </Text>
-                          <TouchableOpacity
-                            style={styles.deleteVerseButton}
-                            onPress={() => handleDeleteVerse(verse)}
-                          >
-                            <Ionicons name="trash-outline" size={16} color="#777" />
-                          </TouchableOpacity>
-                        </View>
-                        <Text 
-                          style={styles.savedVerseText}
-                          numberOfLines={2}
-                          ellipsizeMode="tail"
-                        >
-                          {verse.text}
-                        </Text>
-                        <View style={[styles.colorStrip, { backgroundColor: verse.color }]} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                ))}
-              </View>
-            )}
-            
-            <View style={styles.savedVersesDivider} />
-          </View>
-        )}
 
         {/* Testament Selector */}
         <View style={styles.testamentContainer}>
