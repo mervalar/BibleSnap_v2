@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\CategoryController;
-use App\Http\Controllers\Api\StarkController;
+use App\Http\Controllers\Api\BibleReadingController;
 use App\Http\Controllers\Api\NotecategoryController;
 use App\Http\Controllers\Api\UserNoteController;
 use App\Http\Controllers\Auth\GoogleController;
@@ -26,20 +26,27 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // Public API routes
 Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/starks', [StarkController::class, 'index']);
+Route::get('/bible-readings', [BibleReadingController::class, 'index']);
 Route::get('/note-categories', [NotecategoryController::class, 'index']);
-Route::get('/starks/random', [StarkController::class, 'getRandomStudy']);
-
+Route::get('/bible-readings/random', [BibleReadingController::class, 'getRandomStudy']);
 // User notes routes - Clean and simple
 Route::prefix('user-notes')->group(function () {
-    Route::post('/', [UserNoteController::class, 'store']);           // Create new note
-    Route::get('/', [UserNoteController::class, 'index']);            // Get all notes for user
-    Route::get('/{id}', [UserNoteController::class, 'show']);         // Get single note
-    Route::put('/{id}', [UserNoteController::class, 'update']);       // Update note
-    Route::delete('/{id}', [UserNoteController::class, 'destroy']);   // Delete note
-    
+    Route::post('/', [UserNoteController::class, 'store']);          
+    Route::get('/', [UserNoteController::class, 'index']);            
+    Route::get('/{id}', [UserNoteController::class, 'show']);         
+    Route::put('/{id}', [UserNoteController::class, 'update']);       
+    Route::delete('/{id}', [UserNoteController::class, 'destroy']);   
+    Route::middleware('auth:sanctum')->get('/user-notes/count', [UserNoteController::class, 'countMyNotes']);
+
     // Additional routes for filtering
     Route::get('/category/{categoryId}', [UserNoteController::class, 'getNotesByCategory']);
     Route::get('/stark/{starkId}', [UserNoteController::class, 'getNotesByStark']);
     Route::get('/date/{date}', [UserNoteController::class, 'getNotesByDate']);
+
+    // progress
+    Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/progress/daily-score', [ProgressController::class, 'saveDailyScore']);
+    Route::get('/progress/today', [ProgressController::class, 'getTodayProgress']);
+    Route::get('/progress/history', [ProgressController::class, 'getScoreHistory']);
+});
 });

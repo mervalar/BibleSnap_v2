@@ -87,7 +87,8 @@ const ProfilePage = () => {
   const [editEmail, setEditEmail] = useState('');
   const [updateLoading, setUpdateLoading] = useState(false);
   const [journalCount, setJournalCount] = useState(0);
-
+  const [savedVersesCount, setSavedVersesCount] = useState(0);
+  const [studyPlanSummary, setStudyPlanSummary] = useState(null);
   const dimensions = getResponsiveDimensions();
 
   // Chart data for growth rate
@@ -181,6 +182,63 @@ const getUserId = async () => {
   loadJournalCount();
 }, []);
 
+const loadSavedVersesCount = async () => {
+  try {
+    // Get all AsyncStorage keys
+    const keys = await AsyncStorage.getAllKeys();
+    const highlightKeys = keys.filter(key => key.startsWith('highlights_'));
+    let total = 0;
+
+    for (const key of highlightKeys) {
+      const data = await AsyncStorage.getItem(key);
+      if (data) {
+        const parsed = JSON.parse(data);
+        total += Object.keys(parsed).length;
+      }
+    }
+    setSavedVersesCount(total);
+  } catch (error) {
+    console.error('Error loading saved verses count:', error);
+    setSavedVersesCount(0);
+  }
+};
+useFocusEffect(
+  React.useCallback(() => {
+    loadSavedVersesCount();
+  }, [])
+);
+
+  // load study plan for profile stats
+  useEffect(() => {
+    const loadPlanSummary = async () => {
+      try {
+        const raw = await AsyncStorage.getItem('studyPlan');
+        if (!raw) {
+          setStudyPlanSummary(null);
+          return;
+        }
+        const plan = JSON.parse(raw);
+        const start = new Date(plan.startDate);
+        const now = new Date();
+        const diff = Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()) - Date.UTC(start.getFullYear(),start.getMonth(),start.getDate())) / (1000*60*60*24));
+        const elapsedDays = Math.max(0, Math.min(plan.days, diff + 1));
+        const percent = Math.min(100, Math.round((elapsedDays / plan.days) * 100));
+        const daysRemaining = Math.max(0, plan.days - elapsedDays);
+        const finishDate = new Date(start.getTime() + (plan.days - 1) * 24 * 60 * 60 * 1000);
+        setStudyPlanSummary({
+          days: plan.days,
+          percent,
+          elapsedDays,
+          daysRemaining,
+          finishDate: finishDate.toISOString(),
+          startDate: plan.startDate,
+        });
+      } catch (e) {
+        console.error('Error loading study plan for profile', e);
+      }
+    };
+    loadPlanSummary();
+  }, []);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -370,7 +428,7 @@ if (loading) {
             <View style={styles.statIconContainer}>
               <Ionicons name="bookmark" size={dimensions.iconSize.medium} color={COLORS.primary} />
             </View>
-            <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>37</Text>
+            <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>{savedVersesCount}</Text>
             <Text style={[styles.statLabel, { fontSize: dimensions.fontSize.caption }]}>Verses Saved</Text>
           </View>
           
@@ -380,6 +438,16 @@ if (loading) {
             </View>
             <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>{journalCount}</Text>
             <Text style={[styles.statLabel, { fontSize: dimensions.fontSize.caption }]}>Journals</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <View style={styles.statIconContainer}>
+              <Ionicons name="calendar" size={dimensions.iconSize.medium} color={COLORS.primary} />
+            </View>
+            <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>
+              {studyPlanSummary ? `${studyPlanSummary.percent}%` : '—'}
+            </Text>
+            <Text style={[styles.statLabel, { fontSize: dimensions.fontSize.caption }]}>Plan progress</Text>
           </View>
         </View>
 
@@ -540,6 +608,19 @@ if (loading) {
           </View>
         </View>
       </Modal>
+
+      {/* Optionally show more details below stats (e.g., finish date) */}
+      {studyPlanSummary && (
+        <View style={[styles.planDetailCard, { marginHorizontal: dimensions.spacing.md, marginTop: dimensions.spacing.md, padding: dimensions.spacing.md, borderRadius: 12, backgroundColor: COLORS.surfaceElevated }]}>
+          <Text style={{ fontWeight: '700', color: COLORS.text.primary }}>Reading Plan</Text>
+          <Text style={{ color: COLORS.text.secondary, marginTop: 4 }}>
+            {studyPlanSummary.days}-day plan • Started {new Date(studyPlanSummary.startDate).toLocaleDateString()}
+          </Text>
+          <Text style={{ color: COLORS.text.secondary, marginTop: 6 }}>
+            {studyPlanSummary.daysRemaining} day{studyPlanSummary.daysRemaining !== 1 ? 's' : ''} remaining — Finish {new Date(studyPlanSummary.finishDate).toLocaleDateString()}
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -1018,6 +1099,10 @@ modalButton: {
   justifyContent: 'center',
   minHeight: 48,
 },
+planDetailCard: {
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+  },
 });
 
 export default ProfilePage;

@@ -9,7 +9,7 @@ import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import AuthModal from '../components/AuthModal';
-import { fetchRandomStudy } from '../api/starksService'; 
+import { fetchRandomStudy } from '../api/bibleReadingService'; 
 import SharedPreferences from 'react-native-shared-preferences'; 
 
 const HomePage = () => {

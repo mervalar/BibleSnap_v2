@@ -51,33 +51,24 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|string|email',
-            'password' => 'required|string',
+        $request->validate([
+            'email' => 'required|email',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+        // Find user or create if not exists
+        $user = User::firstOrCreate(
+            ['email' => $request->email],
+            ['name' => $request->email] // You can set a default name if needed
+        );
 
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
-        }
+        // Generate token (using Laravel Sanctum)
+        $token = $user->createToken('BibleSnapApp')->plainTextToken;
 
         return response()->json([
             'success' => true,
-            'message' => 'Login successful',
-            'user' => $user
-        ], 200);
+            'user' => $user,
+            'token' => $token,
+        ]);
     }
 
     public function googleLogin(Request $request)

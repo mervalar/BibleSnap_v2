@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "cd81023d-1b40-41f5-8f3d-64f8f547e5c3"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.merveille22.backend",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

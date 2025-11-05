@@ -87,6 +87,29 @@ class UserNoteController extends Controller
             ], 500);
         }
     }
+    public function countMyNotes()
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+
+            $count = UserNote::where('user_id', $user->id)->count();
+
+            return response()->json([
+                'user_id' => $user->id,
+                'note_count' => $count
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to count notes',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 
     // Update a note - FIXED VERSION
     public function update(Request $request, $id)

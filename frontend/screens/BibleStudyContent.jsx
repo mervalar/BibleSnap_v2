@@ -208,7 +208,8 @@ const BibleStudyContent = () => {
   const [progress, setProgress] = useState(initialProgress);
 
   // Get data from route params
-  const stark = route?.params?.stark || {};
+  const bibleReading = route?.params?.bibleReading || {};
+  const reading = bibleReading; // alias for easier use in component
 
   // Steps configuration
   const steps = [
@@ -221,16 +222,16 @@ const BibleStudyContent = () => {
 
   // Save progress to AsyncStorage
   const saveProgress = async (progressValue) => {
-    if (!stark || !stark.id) return;
+    if (!reading || !reading.id) return;
     
     try {
       const today = new Date().toDateString();
-      await AsyncStorage.setItem('challengeProgress', JSON.stringify({
+      await AsyncStorage.setItem('bibleProgress', JSON.stringify({
         percent: progressValue,
-        studyId: stark.id,
+        studyId: reading.id,
         lastUpdated: Date.now()
       }));
-      await AsyncStorage.setItem('challengeProgressDate', today);
+      await AsyncStorage.setItem('bibleProgressDate', today);
     } catch (error) {
       console.error('Error saving progress:', error);
     }
@@ -254,21 +255,16 @@ const BibleStudyContent = () => {
   useEffect(() => {
     const loadSavedProgress = async () => {
       try {
-        if (!stark || !stark.id) return;
-        
+        if (!reading || !reading.id) return;
         const today = new Date().toDateString();
-        const progressDate = await AsyncStorage.getItem('challengeProgressDate');
-        
+        const progressDate = await AsyncStorage.getItem('bibleProgressDate');
         if (progressDate === today) {
-          const savedProgress = await AsyncStorage.getItem('challengeProgress');
+          const savedProgress = await AsyncStorage.getItem('bibleProgress');
           if (savedProgress) {
             const progressData = JSON.parse(savedProgress);
-            if (progressData.studyId === stark.id && progressData.percent > initialProgress) {
+            if (progressData.studyId === reading.id && progressData.percent > initialProgress) {
               setProgress(progressData.percent);
-              // Use the safe update method
-              if (safeProgressUpdate.current) {
-                safeProgressUpdate.current(progressData.percent);
-              }
+              if (safeProgressUpdate.current) safeProgressUpdate.current(progressData.percent);
             }
           }
         }
@@ -278,7 +274,7 @@ const BibleStudyContent = () => {
     };
     
     loadSavedProgress();
-  }, [stark?.id, initialProgress]);
+  }, [reading?.id, initialProgress]);
 
   // Handle scroll for progress tracking
   const handleScroll = (event) => {
@@ -461,10 +457,10 @@ const BibleStudyContent = () => {
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail"> 
-              {stark?.title || 'Bible Study'}
+              {reading?.title || 'Bible Study'}
             </Text>
             <Text style={styles.headerSubtitle} numberOfLines={1} ellipsizeMode="tail"> 
-              {stark?.category?.name || 'Study'}
+              {reading?.category?.name || reading?.theme || 'Study'}
             </Text>
           </View>
           {/* Empty View to maintain layout balance */}
@@ -496,7 +492,7 @@ const BibleStudyContent = () => {
               stepId="verse" 
               title="Main Verse"
               isUnlocked={true}
-              contentText={`Main Verse: ${stark?.main_verse || 'Verse reference'}. ${stark?.verse_text || stark?.explanation || 'Verse text here'}`}
+              contentText={`Main Verse: ${reading?.main_verse || 'Verse reference'}. ${reading?.verse_text || reading?.explanation || 'Verse text here'}`}
             >
               <View style={styles.verseCard}>
                 <View style={styles.verseContent}>
@@ -511,10 +507,10 @@ const BibleStudyContent = () => {
                   <View style={styles.verseDivider} />
                   <View style={styles.verseTextContainer}>
                     <Text style={styles.verseReference}> 
-                      {stark?.main_verse || 'Verse reference'}
+                      {reading?.main_verse || reading?.verse_reference?.[0] || 'Verse reference'}
                     </Text>
                     <Text style={styles.verseText}> 
-                      "{stark?.verse_text || stark?.explanation || 'Verse text here'}"
+                      "{reading?.verse_text || reading?.explanation || 'Verse text here'}"
                     </Text>
                   </View>
                 </View>
@@ -531,7 +527,7 @@ const BibleStudyContent = () => {
               stepId="explanation" 
               title="Explanation"
               isUnlocked={true}
-              contentText={`Explanation: ${stark?.explanation || 'Detailed explanation of the verse'}`}
+              contentText={`Explanation: ${reading?.explanation || 'Detailed explanation of the verse'}`}
               style={styles.explanationCard}
             >
               <View style={styles.cardContent}>
@@ -547,7 +543,7 @@ const BibleStudyContent = () => {
                 </View>
                 <View style={styles.cardDivider} />
                 <Text style={styles.cardText}> 
-                  {stark?.explanation || 'Detailed explanation of the verse will appear here.'}
+                  {reading?.explanation || 'Detailed explanation of the verse will appear here.'}
                 </Text>
               </View>
             </SectionCard>
@@ -562,8 +558,8 @@ const BibleStudyContent = () => {
               stepId="related" 
               title="Related Verses"
               isUnlocked={true}
-              contentText={`Related Verses: ${(stark?.related_verses && Array.isArray(stark.related_verses)) ? 
-                stark.related_verses.map(verse => `${verse.reference}: ${verse.text}`).join('. ') : 
+              contentText={`Related Verses: ${(reading?.related_verses && Array.isArray(reading.related_verses)) ? 
+                reading.related_verses.map(verse => `${verse.reference}: ${verse.text}`).join('. ') : 
                 'No related verses available'}`}
             >
               <View style={styles.cardContent}>
@@ -571,14 +567,14 @@ const BibleStudyContent = () => {
                   Related Verses
                 </Text>
                 <View style={styles.versesContainer}>
-                  {(stark?.related_verses && Array.isArray(stark.related_verses)) ? 
-                    stark.related_verses.map((verse, index) => (
+                  {(reading?.related_verses && Array.isArray(reading.related_verses)) ? 
+                    (reading?.related_verses && Array.isArray(reading.related_verses) ? reading.related_verses : (reading?.verse_reference || [])).map((verse, index) => (
                       <View key={index} style={styles.relatedVerse}>
                         <Text style={[styles.relatedVerseReference, { fontSize: dimensions.fontSize.caption }]}> 
-                          {verse.reference}
+                          {verse.reference || verse}
                         </Text>
                         <Text style={[styles.relatedVerseText, { fontSize: dimensions.fontSize.body }]}> 
-                          "{verse.text}"
+                          "{verse.text || ''}"
                         </Text>
                       </View>
                     )) : 
@@ -601,7 +597,7 @@ const BibleStudyContent = () => {
               title="Did You Know?"
               isUnlocked={true}
               style={[styles.knowledgeCard, { backgroundColor: 'rgba(67, 87, 29, 0.81)', padding: dimensions.spacing.xl }]}
-              contentText={`Did You Know? ${stark?.did_you_know || 'Interesting facts and historical context will appear here.'}`}
+              contentText={`Did You Know? ${reading?.did_you_know || 'Interesting facts and historical context will appear here.'}`}
             >
               <View style={styles.cardContent}>
                 <View style={styles.cardHeader}>
@@ -615,7 +611,7 @@ const BibleStudyContent = () => {
                   </Text>
                 </View>
                 <Text style={[styles.knowledgeText, { fontSize: dimensions.fontSize.body }]}> 
-                  {stark?.did_you_know || 'Interesting facts and historical context will appear here.'}
+                  {reading?.did_you_know || 'Interesting facts and historical context will appear here.'}
                 </Text>
               </View>
             </SectionCard>
@@ -631,7 +627,7 @@ const BibleStudyContent = () => {
               title="Activity of the Day"
               isUnlocked={true}
               style={[styles.activityCard, { backgroundColor: 'rgba(139, 69, 19, 0.89)', padding: dimensions.spacing.xl }]}
-              contentText={`Activity of the Day: ${stark?.activity || 'Practical activity or exercise will appear here.'}`}
+              contentText={`Activity of the Day: ${reading?.activity || 'Practical activity or exercise will appear here.'}`}
             >
               <View style={styles.cardContent}>
                 <View style={styles.cardHeader}>
@@ -645,16 +641,16 @@ const BibleStudyContent = () => {
                   </Text>
                 </View>
                 <Text style={[styles.activityText, { fontSize: dimensions.fontSize.body }]}> 
-                  {stark?.activity || 'Practical activity or exercise will appear here.'}
+                  {reading?.activity || 'Practical activity or exercise will appear here.'}
                 </Text>
                 {/* Take a Note Button */}
                 <TouchableOpacity
                   style={styles.takeNoteButton}
                   onPress={() => {
                     navigation.navigate('Journal', {
-                      verse: stark?.main_verse || '',
-                      verseText: stark?.verse_text || '',
-                      category: stark?.category || null,
+                      verse: reading?.main_verse || reading?.verse_reference?.[0] || '',
+                      verseText: reading?.verse_text || reading?.explanation || '',
+                      category: reading?.category || null,
                       fromBibleStudy: true,
                     });
                   }}
