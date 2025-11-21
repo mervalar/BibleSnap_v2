@@ -366,9 +366,9 @@ const BibleStudyApp = () => {
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
   const [unlockTarget, setUnlockTarget] = useState(null);
 
-  // Dropdown states
-  const [showReadingTypeDropdown, setShowReadingTypeDropdown] = useState(false);
-  const [showDaysDropdown, setShowDaysDropdown] = useState(false);
+  // NEW: Reading type modal state
+  const [readingTypeModalVisible, setReadingTypeModalVisible] = useState(false);
+  const [selectedReadingType, setSelectedReadingType] = useState('historical'); // 'historical' or 'books'
 
   useEffect(() => {
     const loadData = async () => {
@@ -445,7 +445,16 @@ const BibleStudyApp = () => {
 
   const handleCategoryFilter = (categoryId) => {
     setSelectedCategory(categoryId);
-    setShowReadingTypeDropdown(false);
+    setReadingTypeModalVisible(false);
+  };
+
+  const handleReadingTypeSelect = (type) => {
+    setSelectedReadingType(type);
+    if (type === 'historical') {
+      setSelectedCategory('all');
+      setReadingTypeModalVisible(false);
+    }
+    // Don't close modal for 'books' type, let user select a book
   };
 
   const handleNavigateToStudy = (study, progress) => {
@@ -610,84 +619,31 @@ const BibleStudyApp = () => {
         </View>
       )}
 
-      {/* Filter Bar with Dropdowns */}
+      {/* Filter Bar with Buttons */}
       <View style={styles.filterBar}>
-        {/* Reading Type Dropdown */}
-        <View style={styles.dropdownWrapper}>
-          <TouchableOpacity 
-            style={styles.dropdownButton}
-            onPress={() => {
-              setShowReadingTypeDropdown(!showReadingTypeDropdown);
-              setShowDaysDropdown(false);
-            }}
-          >
-            <Ionicons name="book-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
-            <Text style={styles.dropdownButtonText}>
-              {selectedCategory === 'all' ? 'All Types' : categories.find(c => c.id === selectedCategory)?.name || 'Type'}
-            </Text>
-            <Ionicons name={showReadingTypeDropdown ? "chevron-up" : "chevron-down"} size={dimensions.iconSize.small} color={COLORS.text.light} />
-          </TouchableOpacity>
-          
-          {showReadingTypeDropdown && (
-            <View style={styles.dropdownMenu}>
-              <TouchableOpacity
-                style={[styles.dropdownItem, selectedCategory === 'all' && styles.dropdownItemActive]}
-                onPress={() => handleCategoryFilter('all')}
-              >
-                <Text style={[styles.dropdownItemText, selectedCategory === 'all' && styles.dropdownItemTextActive]}>
-                  All Types
-                </Text>
-              </TouchableOpacity>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.dropdownItem, selectedCategory === cat.id && styles.dropdownItemActive]}
-                  onPress={() => handleCategoryFilter(cat.id)}
-                >
-                  <Text style={[styles.dropdownItemText, selectedCategory === cat.id && styles.dropdownItemTextActive]}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
+        {/* Reading Type Button */}
+        <TouchableOpacity 
+          style={styles.filterButton}
+          onPress={() => setReadingTypeModalVisible(true)}
+        >
+          <Ionicons name="book-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
+          <Text style={styles.filterButtonText}>
+            {selectedReadingType === 'historical' ? 'Historical' : 
+             selectedCategory === 'all' ? 'All Books' : 
+             categories.find(c => c.id === selectedCategory)?.name || 'Books'}
+          </Text>
+        </TouchableOpacity>
 
-        {/* Days Plan Dropdown */}
-        <View style={styles.dropdownWrapper}>
-          <TouchableOpacity 
-            style={styles.dropdownButton}
-            onPress={() => {
-              setShowDaysDropdown(!showDaysDropdown);
-              setShowReadingTypeDropdown(false);
-            }}
-          >
-            <Ionicons name="calendar-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
-            <Text style={styles.dropdownButtonText}>
-              {studyPlan ? `${studyPlan.days}d` : 'Plan'}
-            </Text>
-            <Ionicons name={showDaysDropdown ? "chevron-up" : "chevron-down"} size={dimensions.iconSize.small} color={COLORS.text.light} />
-          </TouchableOpacity>
-          
-          {showDaysDropdown && (
-            <View style={styles.dropdownMenu}>
-              {[365, 180, 120, 90, 60, 30].map(d => (
-                <TouchableOpacity
-                  key={d}
-                  style={[styles.dropdownItem, studyPlan?.days === d && styles.dropdownItemActive]}
-                  onPress={() => {
-                    setPlanDays(d);
-                    setPlanModalVisible(true);
-                  }}
-                >
-                  <Text style={[styles.dropdownItemText, studyPlan?.days === d && styles.dropdownItemTextActive]}>
-                    {d} Days Plan
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
+        {/* Days Plan Button - Click to open modal */}
+        <TouchableOpacity 
+          style={styles.filterButton}
+          onPress={() => setPlanModalVisible(true)}
+        >
+          <Ionicons name="calendar-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
+          <Text style={styles.filterButtonText}>
+            {studyPlan ? `${studyPlan.days}d Plan` : 'Set Plan'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Main Content */}
@@ -746,64 +702,79 @@ const BibleStudyApp = () => {
         onRequestClose={() => setPlanModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons name="calendar" size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
-            <Text style={styles.modalTitle}>Choose Your Journey</Text>
-            <Text style={styles.modalSubtitle}>Select a reading plan duration</Text>
-            
-            <View style={{ marginBottom:16 }}>
-              <Text style={styles.modalLabel}>Start Date</Text>
-              <TouchableOpacity
-                onPress={() => setShowDatePicker(true)}
-                style={styles.dateButton}
+          <View style={styles.modalContentCompact}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="calendar" size={32} color={COLORS.primary} />
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitleCompact}>Study Plan</Text>
+                <Text style={styles.modalSubtitleCompact}>Set your reading duration</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setPlanModalVisible(false)}
+                style={styles.modalCloseIcon}
               >
-                <Ionicons name="calendar-outline" size={20} color={COLORS.text.secondary} />
-                <Text style={styles.dateButtonText}>{formatDate(startDate)}</Text>
+                <Ionicons name="close" size={24} color={COLORS.text.secondary} />
               </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={startDate || new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, selected) => {
-                    setShowDatePicker(false);
-                    if (selected) setStartDate(selected);
-                  }}
-                />
-              )}
             </View>
             
-            {[365, 180, 120, 90, 60, 30].map(d => (
-              <TouchableOpacity
-                key={d}
-                onPress={() => {
-                  setPlanDays(d);
-                  savePlan(d);
-                }}
-                style={[styles.planOption, planDays===d && styles.planOptionActive]}
-              >
-                <View style={styles.planOptionContent}>
-                  <Text style={[styles.planOptionText, planDays===d && styles.planOptionTextActive]}>
-                    {d} Days Plan
-                  </Text>
-                  <Ionicons 
-                    name="checkmark-circle" 
-                    size={24} 
-                    color={planDays===d ? '#FFF' : COLORS.border.medium} 
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              {/* Start Date Selector */}
+              <View style={styles.compactSection}>
+                <Text style={styles.compactLabel}>Start Date</Text>
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(true)}
+                  style={styles.dateButtonCompact}
+                >
+                  <Ionicons name="calendar-outline" size={18} color={COLORS.text.secondary} />
+                  <Text style={styles.dateButtonTextCompact}>{formatDate(startDate)}</Text>
+                  <Ionicons name="chevron-down" size={18} color={COLORS.text.tertiary} />
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={startDate || new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={(event, selected) => {
+                      setShowDatePicker(false);
+                      if (selected) setStartDate(selected);
+                    }}
                   />
+                )}
+              </View>
+              
+              {/* Plan Duration */}
+              <View style={styles.compactSection}>
+                <Text style={styles.compactLabel}>Duration</Text>
+                <View style={styles.planGrid}>
+                  {[365, 180, 120, 90, 60, 30].map(d => (
+                    <TouchableOpacity
+                      key={d}
+                      onPress={() => {
+                        setPlanDays(d);
+                        savePlan(d);
+                      }}
+                      style={[
+                        styles.planOptionCompact,
+                        planDays === d && styles.planOptionCompactActive
+                      ]}
+                    >
+                      <Text style={[
+                        styles.planOptionTextCompact,
+                        planDays === d && styles.planOptionTextCompactActive
+                      ]}>
+                        {d}d
+                      </Text>
+                      <Text style={[
+                        styles.planOptionSubtextCompact,
+                        planDays === d && styles.planOptionSubtextCompactActive
+                      ]}>
+                        {Math.ceil((bibleReadings?.length || 365)/d )}section/day
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
-                <Text style={[styles.planOptionSubtext, planDays===d && styles.planOptionSubtextActive]}>
-                  {Math.ceil((bibleReadings?.length || 365)/d)} reading(s) per day
-                </Text>
-              </TouchableOpacity>
-            ))}
-            
-            <TouchableOpacity 
-              onPress={() => setPlanModalVisible(false)} 
-              style={styles.modalCloseButton}
-            >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -858,6 +829,105 @@ const BibleStudyApp = () => {
                 <Text style={styles.modalButtonPrimaryText}>Understood</Text>
               </TouchableOpacity>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reading Type Modal (NEW) */}
+      <Modal
+        visible={readingTypeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setReadingTypeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Ionicons name="book" size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
+            <Text style={styles.modalTitle}>Choose Reading Type</Text>
+            <Text style={styles.modalSubtitle}>Select how you want to read</Text>
+
+            {/* Historical Reading Option */}
+            <TouchableOpacity
+              onPress={() => handleReadingTypeSelect('historical')}
+              style={[
+                styles.readingTypeOption,
+                selectedReadingType === 'historical' && styles.readingTypeOptionActive
+              ]}
+            >
+              <View style={styles.readingTypeContent}>
+                <View style={styles.readingTypeLeft}>
+                  <Ionicons 
+                    name="time-outline" 
+                    size={24} 
+                    color={selectedReadingType === 'historical' ? '#FFF' : COLORS.primary} 
+                  />
+                  <View style={styles.readingTypeTextContainer}>
+                    <Text style={[
+                      styles.readingTypeTitle,
+                      selectedReadingType === 'historical' && styles.readingTypeTextActive
+                    ]}>
+                      Historical Order
+                    </Text>
+                    <Text style={[
+                      styles.readingTypeSubtitle,
+                      selectedReadingType === 'historical' && styles.readingTypeSubtitleActive
+                    ]}>
+                      Follow chronological timeline
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons 
+                  name="checkmark-circle" 
+                  size={24} 
+                  color={selectedReadingType === 'historical' ? '#FFF' : COLORS.border.medium} 
+                />
+              </View>
+            </TouchableOpacity>
+
+            {/* Books Selection Option */}
+            <TouchableOpacity
+              onPress={() => setSelectedReadingType('books')}
+              style={[
+                styles.readingTypeOption,
+                selectedReadingType === 'books' && styles.readingTypeOptionActive
+              ]}
+            >
+              <View style={styles.readingTypeContent}>
+                <View style={styles.readingTypeLeft}>
+                  <Ionicons 
+                    name="library-outline" 
+                    size={24} 
+                    color={selectedReadingType === 'books' ? '#FFF' : COLORS.primary} 
+                  />
+                  <View style={styles.readingTypeTextContainer}>
+                    <Text style={[
+                      styles.readingTypeTitle,
+                      selectedReadingType === 'books' && styles.readingTypeTextActive
+                    ]}>
+                      Pick Books
+                    </Text>
+                    <Text style={[
+                      styles.readingTypeSubtitle,
+                      selectedReadingType === 'books' && styles.readingTypeSubtitleActive
+                    ]}>
+                      Choose specific books
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons 
+                  name="checkmark-circle" 
+                  size={24} 
+                  color={selectedReadingType === 'books' ? '#FFF' : COLORS.border.medium} 
+                />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => setReadingTypeModalVisible(false)} 
+              style={styles.modalCloseButton}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -975,12 +1045,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 12,
   },
-  dropdownWrapper: {
+  filterButton: {
     flex: 1,
-    position: 'relative',
-    zIndex: 100,
-  },
-  dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
@@ -991,43 +1057,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  dropdownButtonText: {
+  filterButtonText: {
     flex: 1,
     color: COLORS.text.light,
     fontSize: 14,
     fontWeight: '600',
-  },
-  dropdownMenu: {
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    maxHeight: 300,
-  },
-  dropdownItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
-  },
-  dropdownItemActive: {
-    backgroundColor: COLORS.primary,
-  },
-  dropdownItemText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  dropdownItemTextActive: {
-    color: '#FFF',
   },
   mainContent: {
     flex: 1,
@@ -1182,7 +1216,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
-    padding: 20,
   },
   modalContent: {
     backgroundColor: COLORS.background,
@@ -1195,18 +1228,53 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
+  modalContentCompact: {
+    backgroundColor: COLORS.background,
+    borderRadius: 20,
+    maxWidth: 400,
+    width: '90%',
+    maxHeight: '70%',
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+    overflow: 'hidden',
+    padding:20
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
+    gap: 12,
+  },
+  modalHeaderText: {
+    flex: 1,
+  },
   modalTitle: {
     fontSize: 22,
     fontWeight: '800',
     color: COLORS.text.primary,
-    marginBottom: 8,
-    textAlign: 'center',
+    marginBottom: 4,
+  },
+  modalTitleCompact: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text.primary,
   },
   modalSubtitle: {
     color: COLORS.text.secondary,
     marginBottom: 24,
     textAlign: 'center',
     fontSize: 14,
+  },
+  modalSubtitleCompact: {
+    fontSize: 12,
+    color: COLORS.text.secondary,
+    marginTop: 2,
   },
   modalLabel: {
     color: COLORS.text.secondary,
@@ -1224,9 +1292,30 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border.light,
     backgroundColor: COLORS.surface,
   },
+  dateButtonCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+  },
   dateButtonText: {
     color: COLORS.text.primary,
     fontWeight: '600',
+  },
+  dateButtonTextCompact: {
+    flex: 1,
+    color: COLORS.text.primary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  planGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   planOption: {
     width: '100%',
@@ -1238,7 +1327,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.border.light,
   },
+  planOptionCompact: {
+    width: '30%',
+    aspectRatio: 1,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderWidth: 2,
+    borderColor: COLORS.border.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   planOptionActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  planOptionCompactActive: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
@@ -1252,17 +1356,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
-  planOptionTextActive: {
-    color: '#FFF',
+  planOptionTextCompact: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text.primary,
+    marginBottom: 4,
+  },
+  planOptionTextCompactActive: {
+    color: '#FFF', // Changed to white for visibility
+    fontWeight: '800',
   },
   planOptionSubtext: {
     color: COLORS.text.secondary,
     fontSize: 12,
     marginTop: 4,
   },
-  planOptionSubtextActive: {
-    color: '#FFF',
-    opacity: 0.9,
+  planOptionSubtextCompact: {
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+    fontWeight: '600',
+    textAlign: 'center', // Center align the text
+  },
+  planOptionSubtextCompactActive: {
+    color: 'rgba(255, 255, 255, 0.95)', // Brighter white for better visibility
+    opacity: 1, // Full opacity
+    fontWeight: '600',
   },
   unlockInfo: {
     backgroundColor: COLORS.surface,
@@ -1314,9 +1432,96 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     padding: 10,
   },
+  modalCloseIcon: {
+    padding: 4,
+  },
   modalCloseText: {
     color: COLORS.text.secondary,
     fontWeight: '600',
+  },
+  readingTypeOption: {
+    width: '100%',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: COLORS.border.light,
+  },
+  readingTypeOptionActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  readingTypeContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  readingTypeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  readingTypeTextContainer: {
+    flex: 1,
+  },
+  readingTypeTitle: {
+    color: COLORS.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  readingTypeTextActive: {
+    color: '#FFF',
+  },
+  readingTypeSubtitle: {
+    color: COLORS.text.secondary,
+    fontSize: 12,
+  },
+  readingTypeSubtitleActive: {
+    color: '#FFF',
+    opacity: 0.9,
+  },
+  booksList: {
+    maxHeight: 250,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 8,
+    marginBottom: 12,
+    width: '100%',
+  },
+  bookItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginVertical: 2,
+  },
+  bookItemActive: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  bookItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+  },
+  bookItemTextActive: {
+    color: '#FFF',
+  },
+  compactSection: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
+  },
+  compactLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text.secondary,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingTop: 8, // Add padding at top
   },
 });
 
