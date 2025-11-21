@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,13 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Dimensions,
-  Image,
   Modal,
   Platform,
+  Animated,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Video } from 'expo-av';
 import { fetchCategories } from '../api/categoryService';
 import { fetchBibleReadings } from '../api/bibleReadingService'; 
 import { useNavigation } from '@react-navigation/native';
@@ -24,34 +26,15 @@ let DateTimePicker;
 try {
   if (Platform.OS !== 'web') {
     const moduleName = '@react-native-community/datetimepicker';
-    // use eval to avoid static require resolution by the bundler on web
-    // eslint-disable-next-line no-eval
     DateTimePicker = eval('require')(moduleName).default;
   } else {
     DateTimePicker = ({ value, onChange }) => null;
   }
 } catch (e) {
-  // If the native package is not installed or fails to load, provide a safe fallback
   DateTimePicker = ({ value, onChange }) => null;
 }
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-// Bible study images
-const BIBLE_STUDY_IMAGES = [
-  require('../assets/images/img1.jpg'),
-  require('../assets/images/img2.jpg'),
-  require('../assets/images/img3.jpg'),
-  require('../assets/images/img5.jpg'),
-  require('../assets/images/img6.jpg'),
-  require('../assets/images/img4.jpg'),
-];
-
-// Function to get random image for each study
-const getRandomImage = (studyId) => {
-  const index = studyId % BIBLE_STUDY_IMAGES.length;
-  return BIBLE_STUDY_IMAGES[index];
-};
 
 // Responsive dimensions
 const getResponsiveDimensions = () => {
@@ -62,8 +45,8 @@ const getResponsiveDimensions = () => {
     cardPadding: isTablet ? 24 : 16,
     imageHeight: isTablet ? 180 : 140,
     fontSize: {
-      title: isTablet ? 20 : 18,
-      subtitle: isTablet ? 16 : 14,
+      title: isTablet ? 24 : 20,
+      subtitle: isTablet ? 18 : 16,
       body: isTablet ? 16 : 14,
       caption: isTablet ? 14 : 12,
     },
@@ -82,110 +65,78 @@ const getResponsiveDimensions = () => {
   };
 };
 
-// Professional color palette
+const dimensions = getResponsiveDimensions();
+
+// Updated color palette to match BibleStudyContent
 const COLORS = {
-  primary: '#A07553',
-  primaryLight: '#B8956D',
-  primaryDark: '#8A6344',
+  primary: '#8B5D33',
+  primaryLight: '#A67C52',
+  primaryDark: '#6A4424',
+  accent: '#4A6741',
   background: '#FFFFFF',
   surface: '#FAFAFA',
-  surfaceElevated: '#FFFFFF',
   text: {
-    primary: '#1A1A1A',
-    secondary: '#666666',
-    tertiary: '#999999',
+    primary: '#2D2417',
+    secondary: '#5A4A33',
+    tertiary: '#8B7355',
+    light: '#F7F0E3',
   },
   border: {
-    light: '#E0E0E0',
-    medium: '#CCCCCC',
-    strong: '#B0B0B0',
+    light: '#E7DBC8',
+    medium: '#CCBDA6',
   },
   semantic: {
-    success: '#4CAF50',
+    success: '#4A7742',
     warning: '#FF9800',
     error: '#F44336',
-    info: '#2196F3',
   },
-  overlay: 'rgba(160, 117, 83, 0.1)',
+  overlay: 'rgba(45, 36, 23, 0.75)',
+  locked: '#D0D0D0',
 };
 
-// Enhanced color table for categories
-const CATEGORY_COLORS = [
-  '#E91E63', '#2196F3', '#FF9800', '#4CAF50', '#9C27B0', 
-  '#F44336', '#00BCD4', '#8BC34A', '#FF5722', '#3F51B5',
-  '#FFEB3B', '#795548', '#607D8B', '#FFC107', '#009688'
-];
-
-// Single study card component
-const StudyCard = ({ item, progress, isCompleted, categoryColor, handleNavigate, handleRestart }) => {
-  const dimensions = getResponsiveDimensions();
-  
+// Video Background Component
+const VideoBackground = () => {
   return (
-    <TouchableOpacity
-      style={[styles.entryCard, isCompleted && styles.completedEntryCard]}
-      onPress={() => handleNavigate(item, progress)}
-      activeOpacity={0.7}
-    >
-      {/* Image Container */}
-      <View style={styles.imageContainer}>
-        <Image 
-          source={getRandomImage(item.id)} 
-          style={[styles.cardImage, { height: dimensions.imageHeight }]}
-          resizeMode="cover"
-        />
-        <View style={styles.imageOverlay} />
-        {/* Category Badge on Image */}
-        <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}> 
-          <Text style={[styles.categoryBadgeText, { fontSize: dimensions.fontSize.caption }]}> 
-            {item.theme || item.category?.name || 'STUDY'}
-          </Text>
-        </View>
-        {/* Progress/Completed Badge - Top Right */}
-        <View style={[styles.progressBadge, isCompleted && styles.completedBadge]}>
-          <Text style={[styles.progressBadgeText, { fontSize: dimensions.fontSize.caption }]}> 
-            {isCompleted ? 'FINISHED' : `${progress}%`}
-          </Text>
-        </View>
-      </View>
-      {/* Content Container - Simplified */}
-      <View style={styles.cardContent}>
-        <Text style={[styles.entryTitle, { fontSize: dimensions.fontSize.subtitle }]} numberOfLines={2}>
-          {item.title}
-        </Text>
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${progress}%` },
-                isCompleted && styles.completedProgressFill
-              ]}
-            />
-          </View>
-        </View>
-        
-        {/* Restart button for completed studies */}
-        {isCompleted && (
-          <TouchableOpacity 
-            style={styles.restartButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleRestart(item.id);
-            }}
-          >
-            <Ionicons name="refresh-outline" size={dimensions.iconSize.small} color="#FFFFFF" />
-            <Text style={styles.restartButtonText}>Restart</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </TouchableOpacity>
+    <View style={styles.videoBackground}>
+      <Video
+        source={require('../assets/view.mp4')}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+        shouldPlay
+        isLooping
+        muted
+        rate={1.0}
+      />
+      <View style={styles.videoOverlay} />
+    </View>
   );
 };
 
-// --- Replace existing VerticalGameMap with this upgraded, Duolingo-like version ---
-const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem }) => {
+// Vertical Journey Map - Snake path layout
+const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequestUnlock }) => {
   const dimensions = getResponsiveDimensions();
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const popAnim = useRef(new Animated.Value(1)).current;
+
+  // Pulse animation for current node
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.08, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true })
+      ])
+    ).start();
+  }, []);
+
+  // Pop animation for current node ring
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(popAnim, { toValue: 1.2, duration: 1500, useNativeDriver: true }),
+        Animated.timing(popAnim, { toValue: 1, duration: 1500, useNativeDriver: true })
+      ])
+    ).start();
+  }, []);
 
   const getStatus = (item, index) => {
     const id = item.id;
@@ -198,124 +149,211 @@ const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem }) => {
     return prevCompleted ? 'current' : 'locked';
   };
 
+  // Snake pattern: creates a zigzag path
+  const getNodePosition = (index) => {
+    const row = Math.floor(index / 3);
+    const posInRow = index % 3;
+    const isEvenRow = row % 2 === 0;
+    
+    let position;
+    
+    if (isEvenRow) {
+      switch (posInRow) {
+        case 0:
+          position = { alignSelf: 'flex-start', marginLeft: 30 };
+          break;
+        case 1:
+          position = { alignSelf: 'center' };
+          break;
+        case 2:
+          position = { alignSelf: 'flex-end', marginRight: 30 };
+          break;
+      }
+    } else {
+      switch (posInRow) {
+        case 0:
+          position = { alignSelf: 'flex-end', marginRight: 30 };
+          break;
+        case 1:
+          position = { alignSelf: 'center' };
+          break;
+        case 2:
+          position = { alignSelf: 'flex-start', marginLeft: 30 };
+          break;
+      }
+    }
+    
+    return position;
+  };
+
+  // Get rotation angle for 3D effect
+  const getNodeRotation = (index) => {
+    const posInRow = index % 3;
+    const row = Math.floor(index / 3);
+    const isEvenRow = row % 2 === 0;
+    
+    if (isEvenRow) {
+      switch (posInRow) {
+        case 0: return '-8deg';
+        case 1: return '0deg';
+        case 2: return '8deg';
+      }
+    } else {
+      switch (posInRow) {
+        case 0: return '8deg';
+        case 1: return '0deg';
+        case 2: return '-8deg';
+      }
+    }
+    return '0deg';
+  };
+
+  // Add spacing after each group of 3
+  const getExtraMargin = (index) => {
+    const posInRow = index % 3;
+    return posInRow === 2 ? 20 : 8; // Extra space after last item in group
+  };
+
   return (
     <View style={styles.gameMapWrap}>
-      <Text style={[styles.sectionTitle, { marginHorizontal: getResponsiveDimensions().spacing.md }]}>Journey</Text>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: getResponsiveDimensions().spacing.md }}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.journeyContainer}
+      >
         {items.map((item, index) => {
           const status = getStatus(item, index);
-          const size = dimensions.iconSize.large + 12;
-          const outerSize = size + 14;
           const locked = status === 'locked';
           const isCurrent = status === 'current';
           const isCompleted = status === 'completed';
-          const color = isCompleted ? COLORS.semantic.success : isCurrent ? COLORS.primary : COLORS.border.medium;
-          const iconColor = (isCompleted || isCurrent) ? COLORS.background : COLORS.text.secondary;
           const label = item.day ? `Day ${item.day}` : (item.title || `#${item.id}`);
+          const previousItem = items[index - 1];
+          const positionStyle = getNodePosition(index);
+          const rotation = getNodeRotation(index);
+          const extraMargin = getExtraMargin(index);
+
+          const handlePress = () => {
+            if (locked) {
+              if (typeof onRequestUnlock === 'function') onRequestUnlock(item, index, previousItem);
+              return;
+            }
+            if (typeof onPressItem === 'function') onPressItem(item, progressMap[item.id] || 0);
+          };
+
+          let nodeColor = COLORS.locked;
+          let iconName = 'lock-closed';
+          let iconColor = '#FFFFFF';
+          
+          if (isCompleted) {
+            nodeColor = COLORS.semantic.success;
+            iconName = 'checkmark';
+            iconColor = '#FFFFFF';
+          } else if (isCurrent) {
+            nodeColor = COLORS.primary;
+            iconName = 'book';
+            iconColor = '#FFFFFF';
+          }
 
           return (
-            <View key={item.id} style={styles.nodeRow}>
-              <View style={styles.timelineColumn}>
-                {/* top connector */}
-                {index !== 0 && <View style={[styles.connectorLine, { backgroundColor: COLORS.border.light }]} />}
-                <TouchableOpacity
-                  activeOpacity={locked ? 1 : 0.85}
-                  onPress={() => !locked && onPressItem(item, progressMap[item.id] || 0)}
-                  style={[styles.nodeWrapper, { marginVertical: 6 }]}
-                >
-                  {/* outer ring */}
-                  <View style={[
-                    styles.nodeOuter,
-                    {
-                      width: outerSize,
-                      height: outerSize,
-                      borderRadius: outerSize / 2,
-                      borderColor: color,
-                      shadowColor: color,
-                    }
-                  ]}>
-                    {/* inner circle */}
-                    <View style={[
-                      styles.nodeInner,
+            <View key={item.id} style={[styles.nodeWrapper, positionStyle, { marginVertical: extraMargin }]}>
+              <TouchableOpacity
+                activeOpacity={locked ? 0.9 : 0.7}
+                onPress={handlePress}
+                style={styles.nodeTouchable}
+              >
+                {/* Outer pulsing ring for current node */}
+                {isCurrent && (
+                  <Animated.View
+                    style={[
+                      styles.currentNodeRing,
                       {
-                        width: size,
-                        height: size,
-                        borderRadius: size / 2,
-                        backgroundColor: isCompleted || isCurrent ? color : COLORS.surface,
+                        transform: [{ scale: popAnim }],
+                        borderColor: nodeColor,
                       }
-                    ]}>
-                      <Ionicons
-                        name={isCompleted ? 'checkmark' : (locked ? 'lock-closed' : 'book')}
-                        size={dimensions.iconSize.medium}
-                        color={iconColor}
-                      />
-                    </View>
-                  </View>
+                    ]}
+                  />
+                )}
 
-                  {/* small progress badge for current/completed */}
-                  {!locked && (
-                    <View style={[styles.nodeBadge, { backgroundColor: isCompleted ? COLORS.semantic.success : COLORS.primary }]}>
-                      <Text style={[styles.nodeBadgeText, { fontSize: dimensions.fontSize.caption }]}>
-                        {isCompleted ? '✓' : (progressMap[item.id] ? `${progressMap[item.id]}%` : '')}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+                {/* External bottom shadow */}
+                <View style={[styles.nodeExternalShadow, { backgroundColor: nodeColor }]} />
 
-                {/* bottom connector */}
-                {index !== items.length - 1 && <View style={[styles.connectorLine, { backgroundColor: COLORS.border.light }]} />}
-              </View>
+                {/* 3D Node with rotation */}
+                <Animated.View
+                  style={[
+                    styles.nodeCircle,
+                    {
+                      backgroundColor: nodeColor,
+                      transform: [
+                        { rotate: rotation },
+                        { scale: isCurrent ? pulseAnim : 1 },
+                        { perspective: 1000 },
+                        { rotateX: '15deg' },
+                      ],
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 12,
+                      elevation: 15,
+                    }
+                  ]}
+                >
+                  {/* Inner shadow for depth */}
+                  <View style={styles.nodeInnerShadow} />
+                  
+                  <Ionicons
+                    name={iconName}
+                    size={dimensions.iconSize.large}
+                    color={iconColor}
+                    style={{ zIndex: 2 }}
+                  />
+                </Animated.View>
 
-              <View style={styles.detailColumn}>
-                <Text style={[styles.nodeLabel, { fontSize: dimensions.fontSize.subtitle, color: locked ? COLORS.text.tertiary : COLORS.text.primary }]}>
-                  {label}
-                </Text>
-                <Text numberOfLines={2} style={[styles.nodeSubtitle, { color: COLORS.text.secondary, fontSize: dimensions.fontSize.caption }]}>
-                  {item.title || (item.theme ? item.theme : '')}
-                </Text>
-              </View>
+                {/* Label below node */}
+                <View style={styles.nodeLabelContainer}>
+                  <Text style={[
+                    styles.nodeLabel,
+                    { color: locked ? COLORS.text.tertiary : COLORS.text.light }
+                  ]}>
+                    {label}
+                  </Text>
+                  <Text 
+                    numberOfLines={2} 
+                    style={[
+                      styles.nodeSubtitle,
+                      { color: locked ? COLORS.text.tertiary : 'rgba(247, 240, 227, 0.8)' }
+                    ]}
+                  >
+                    {item.title || (item.theme ? item.theme : '')}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </View>
           );
         })}
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      <View style={{ paddingHorizontal: getResponsiveDimensions().spacing.md, marginTop: getResponsiveDimensions().spacing.sm }}>
-        <Text style={{ color: COLORS.text.secondary, fontSize: dimensions.fontSize.caption }}>
-          Tap a node to open the day's study. Locked nodes require previous days to be completed.
-        </Text>
-      </View>
     </View>
   );
 };
-// --- end upgraded VerticalGameMap ---
 
 // Main component
 const BibleStudyApp = () => {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
-  const [bibleReadings, setBibleReadings] = useState([]); // <-- CHANGED
+  const [bibleReadings, setBibleReadings] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [progressMap, setProgressMap] = useState({});
   const [completedStudies, setCompletedStudies] = useState(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const lessonsPerPage = 5;
-  const dimensions = getResponsiveDimensions();
 
-  // New state for study plan modal and data
+  // Study plan state
   const [planModalVisible, setPlanModalVisible] = useState(false);
-  const [studyPlan, setStudyPlan] = useState(null); // object { days, startDate, schedule: [[dayNumbers], ...] }
+  const [studyPlan, setStudyPlan] = useState(null);
   const [planDays, setPlanDays] = useState(365);
-  const [todaysReadings, setTodaysReadings] = useState([]);
-  const [startDate, setStartDate] = useState(new Date()); // user selected start date
+  const [startDate, setStartDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-
-  // new: plan stats state
   const [planStats, setPlanStats] = useState({
     percent: 0,
     elapsedDays: 0,
@@ -324,11 +362,13 @@ const BibleStudyApp = () => {
     startDate: null,
   });
 
-  // Get category color based on category ID (now category.id can be theme string)
-  const getCategoryColor = (categoryId) => {
-    const categoryIndex = categories.findIndex(cat => cat.id === categoryId);
-    return categoryIndex >= 0 ? CATEGORY_COLORS[categoryIndex % CATEGORY_COLORS.length] : COLORS.primary;
-  };
+  // Unlock modal state
+  const [unlockModalVisible, setUnlockModalVisible] = useState(false);
+  const [unlockTarget, setUnlockTarget] = useState(null);
+
+  // Dropdown states
+  const [showReadingTypeDropdown, setShowReadingTypeDropdown] = useState(false);
+  const [showDaysDropdown, setShowDaysDropdown] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -339,10 +379,8 @@ const BibleStudyApp = () => {
           fetchBibleReadings()
         ]);
 
-        // set raw readings
         setBibleReadings(fetchedBibleReadings);
 
-        // Derive categories from reading.theme (fallback to fetchedCategories if you prefer)
         const themes = Array.from(new Set(
           (fetchedBibleReadings || [])
             .map(r => r.theme)
@@ -359,13 +397,11 @@ const BibleStudyApp = () => {
     loadData();
   }, []);
 
-  // Load progress from storage on mount
   useEffect(() => {
     AsyncStorage.getItem('bibleProgress').then(data => {
       if (data) setProgressMap(JSON.parse(data));
     });
     
-    // Load completed studies
     AsyncStorage.getItem('completedStudies').then(data => {
       if (data) {
         const completedIds = JSON.parse(data);
@@ -374,11 +410,9 @@ const BibleStudyApp = () => {
     });
   }, []);
 
-  // Save progress to storage whenever it changes
   useEffect(() => {
     AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
     
-    // Check for completed studies (100% progress)
     const newCompleted = new Set(completedStudies);
     let hasChanges = false;
     
@@ -395,10 +429,8 @@ const BibleStudyApp = () => {
     }
   }, [progressMap, completedStudies]);
 
-  // Filter bibleReadings based on category and search query
   const filteredReadings = bibleReadings.filter(item => {
     const matchesCategory = selectedCategory === 'all' || 
-      // match derived theme string or existing category id
       (item.theme && item.theme === selectedCategory) ||
       (item.category && item.category.id === selectedCategory);
     const matchesSearch = searchQuery === '' || 
@@ -406,8 +438,6 @@ const BibleStudyApp = () => {
       (item.main_verse && item.main_verse.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
-  const totalPages = Math.ceil(filteredReadings.length / lessonsPerPage);
-  const paginatedReadings = filteredReadings.slice((currentPage - 1) * lessonsPerPage, currentPage * lessonsPerPage);
 
   const handleGoBack = () => {
     navigation.goBack();
@@ -415,24 +445,13 @@ const BibleStudyApp = () => {
 
   const handleCategoryFilter = (categoryId) => {
     setSelectedCategory(categoryId);
-    setCurrentPage(1);
-  };
-  
-  // Function to restart a completed study
-  const handleRestartStudy = (studyId) => {
-    // Set progress to 0%
-    setProgressMap(prev => ({...prev, [studyId]: 0}));
-    
-    // Remove from completed studies
-    const newCompleted = new Set(completedStudies);
-    newCompleted.delete(studyId);
-    setCompletedStudies(newCompleted);
-    AsyncStorage.setItem('completedStudies', JSON.stringify([...newCompleted]));
+    setShowReadingTypeDropdown(false);
   };
 
   const handleNavigateToStudy = (study, progress) => {
     navigation.navigate('BibleStudyContent', {
-      bibleReading: study, // <-- CHANGED
+      bibleReading: study,
+      allReadings: filteredReadings,
       progress,
       onProgressUpdate: (percent) => {
         setProgressMap((prev) => ({ ...prev, [study.id]: percent }));
@@ -440,7 +459,6 @@ const BibleStudyApp = () => {
     });
   };
 
-  // helper: build balanced schedule (array of arrays of reading.day numbers)
   const buildSchedule = (readings, totalDays) => {
     const items = readings.slice().sort((a,b)=>a.day - b.day);
     const n = items.length;
@@ -456,7 +474,6 @@ const BibleStudyApp = () => {
     return schedule;
   };
 
-  // Save plan to AsyncStorage
   const savePlan = async (days) => {
     if (!bibleReadings || bibleReadings.length === 0) return;
     const schedule = buildSchedule(bibleReadings, days);
@@ -469,9 +486,9 @@ const BibleStudyApp = () => {
     await AsyncStorage.setItem('studyPlan', JSON.stringify(plan));
     setStudyPlan(plan);
     setPlanModalVisible(false);
+    setShowDaysDropdown(false);
   };
 
-  // Load saved plan on mount
   useEffect(() => {
     const loadPlan = async () => {
       try {
@@ -489,24 +506,15 @@ const BibleStudyApp = () => {
     loadPlan();
   }, []);
 
-  // compute today's readings whenever bibleReadings or studyPlan changes
   useEffect(() => {
     if (!studyPlan || !bibleReadings || bibleReadings.length === 0) {
-      setTodaysReadings([]);
       setPlanStats(prev => ({...prev, percent: 0, elapsedDays: 0, daysRemaining: 0, finishDate: null, startDate: null}));
       return;
     }
     const start = new Date(studyPlan.startDate);
     const now = new Date();
     const diff = Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()) - Date.UTC(start.getFullYear(),start.getMonth(),start.getDate())) / (1000*60*60*24));
-    const dayIndex = Math.max(0, Math.min(studyPlan.days - 1, diff)); // clamp
-    const dayList = studyPlan.schedule[dayIndex] || [];
-    // resolve day numbers to full reading objects
-    const todays = dayList.map(dayNum => bibleReadings.find(r => Number(r.day) === Number(dayNum))).filter(Boolean);
-    setTodaysReadings(todays);
-
-    // compute plan stats
-    const elapsedDays = Math.max(0, Math.min(studyPlan.days, diff + 1)); // count today
+    const elapsedDays = Math.max(0, Math.min(studyPlan.days, diff + 1));
     const percent = Math.min(100, Math.round((elapsedDays / studyPlan.days) * 100));
     const daysRemaining = Math.max(0, studyPlan.days - elapsedDays);
     const finishDate = new Date(start.getTime() + (studyPlan.days - 1) * 24 * 60 * 60 * 1000);
@@ -519,13 +527,6 @@ const BibleStudyApp = () => {
     });
   }, [studyPlan, bibleReadings]);
 
-  // function to clear/reset plan (optional)
-  const clearPlan = async () => {
-    await AsyncStorage.removeItem('studyPlan');
-    setStudyPlan(null);
-    setPlanModalVisible(true);
-  };
-
   if (loading && bibleReadings.length === 0) {
     return (
       <SplashScreen 
@@ -535,62 +536,53 @@ const BibleStudyApp = () => {
     );
   }
 
-  // Separate studies into ongoing and completed
-  const ongoingStudies = paginatedReadings.filter(item => {
-    const progress = progressMap[item.id] || 0;
-    return !(progress === 100 || completedStudies.has(item.id));
-  });
-  
-  const completedStudiesList = paginatedReadings.filter(item => {
-    const progress = progressMap[item.id] || 0;
-    return progress === 100 || completedStudies.has(item.id);
-  });
-
-  // Format date for display
   const formatDate = (d) => {
     if (!d) return '-';
     const date = (typeof d === 'string') ? new Date(d) : d;
     return date.toLocaleDateString();
   };
 
+  const handleRequestUnlock = (item, index, previousItem) => {
+    setUnlockTarget({ item, index, previousItem });
+    setUnlockModalVisible(true);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Loading overlay */}
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      
+      {/* Video Background */}
+      <VideoBackground />
+
       {loading && (
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingContent}>
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={[styles.loadingOverlayText, { fontSize: dimensions.fontSize.body }]}>
-              Processing...
+              Loading journey...
             </Text>
           </View>
         </View>
       )}
-      
+
       {/* Header */}
       <View style={[styles.header, { height: dimensions.headerHeight }]}>
         <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-          <Ionicons name="arrow-back" size={dimensions.iconSize.medium} color={COLORS.primary} />
+          <Ionicons name="arrow-back" size={dimensions.iconSize.medium} color={COLORS.text.light} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}>
           Bible Studies
         </Text>
-        <View style={styles.headerActions}>
-          {/* Quick access to study plan */}
-          <TouchableOpacity onPress={() => setPlanModalVisible(true)} style={{ marginLeft: 8 }}>
-            <Text style={{ color: COLORS.primary, fontWeight: '600' }}>{studyPlan ? `${studyPlan.days}d plan` : 'Pick a plan'}</Text>
-          </TouchableOpacity>
-           <TouchableOpacity 
-            style={[styles.headerActionButton, showSearch && styles.headerActionButtonActive]} 
-            onPress={() => setShowSearch(!showSearch)}
-          >
-            <Ionicons 
-              name="search" 
-              size={dimensions.iconSize.medium} 
-              color={showSearch ? COLORS.background : COLORS.primary} 
-            />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity 
+          style={[styles.headerActionButton, showSearch && styles.headerActionButtonActive]} 
+          onPress={() => setShowSearch(!showSearch)}
+        >
+          <Ionicons 
+            name="search" 
+            size={dimensions.iconSize.medium} 
+            color={COLORS.text.light}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -600,188 +592,151 @@ const BibleStudyApp = () => {
             <Ionicons name="search" size={dimensions.iconSize.small} color={COLORS.text.tertiary} />
             <TextInput
               style={[styles.searchInput, { fontSize: dimensions.fontSize.body }]}
-              placeholder="Search studies, titles, verses..."
+              placeholder="Search studies..."
               placeholderTextColor={COLORS.text.tertiary}
               value={searchQuery}
-              onChangeText={(text) => {
-                setSearchQuery(text);
-                setCurrentPage(1); 
-              }}
+              onChangeText={setSearchQuery}
               autoFocus={true}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity 
                 style={styles.clearSearchButton}
-                onPress={() => {
-                  setSearchQuery('');
-                  setCurrentPage(1);
-                }}
+                onPress={() => setSearchQuery('')}
               >
-                <Ionicons name="close" size={dimensions.iconSize.small} color={COLORS.text.secondary} />
+                <Ionicons name="close" size={dimensions.iconSize.small} color={COLORS.text.light} />
               </TouchableOpacity>
             )}
           </View>
         </View>
       )}
 
-      {/* Today's Challenge Card */}
-      {studyPlan && todaysReadings.length > 0 && (
-        <TouchableOpacity
-          style={[styles.todayCard]}
-          onPress={() => {
-            // navigate to first reading of today's list or a dedicated screen that shows all today's readings
-            handleNavigateToStudy(todaysReadings[0], progressMap[todaysReadings[0].id] || 0);
-          }}
-        >
-          <Text style={styles.todayTitle}>Today's challenge</Text>
-          <Text numberOfLines={1} style={styles.todaySubtitle}>
-            {todaysReadings.map(r => r.title).join(' • ')}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Filter Tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterContainer}
-          contentContainerStyle={styles.filterContentContainer}
-        >
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedCategory === 'all' ? styles.activeFilter : styles.inactiveFilter
-            ]}
-            onPress={() => handleCategoryFilter('all')}
+      {/* Filter Bar with Dropdowns */}
+      <View style={styles.filterBar}>
+        {/* Reading Type Dropdown */}
+        <View style={styles.dropdownWrapper}>
+          <TouchableOpacity 
+            style={styles.dropdownButton}
+            onPress={() => {
+              setShowReadingTypeDropdown(!showReadingTypeDropdown);
+              setShowDaysDropdown(false);
+            }}
           >
-            <Text style={[
-              styles.filterText,
-              { fontSize: dimensions.fontSize.caption },
-              selectedCategory === 'all' ? styles.activeFilterText : styles.inactiveFilterText
-            ]}>
-              All
+            <Ionicons name="book-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
+            <Text style={styles.dropdownButtonText}>
+              {selectedCategory === 'all' ? 'All Types' : categories.find(c => c.id === selectedCategory)?.name || 'Type'}
             </Text>
+            <Ionicons name={showReadingTypeDropdown ? "chevron-up" : "chevron-down"} size={dimensions.iconSize.small} color={COLORS.text.light} />
           </TouchableOpacity>
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.id}
-              style={[
-                styles.filterButton,
-                selectedCategory === cat.id ? styles.activeFilter : styles.inactiveFilter
-              ]}
-              onPress={() => handleCategoryFilter(cat.id)}
-            >
-              <View style={[
-                styles.categoryDot, 
-                { backgroundColor: getCategoryColor(cat.id) }
-              ]} />
-              <Text style={[
-                styles.filterText,
-                { fontSize: dimensions.fontSize.caption },
-                selectedCategory === cat.id ? styles.activeFilterText : styles.inactiveFilterText
-              ]}>
-                {cat.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Search Results Info */}
-        {(searchQuery.trim() || selectedCategory !== 'all') && (
-          <View style={styles.resultsInfo}>
-            <Text style={[styles.resultsText, { fontSize: dimensions.fontSize.caption }]}>
-              {filteredReadings.length} result{filteredReadings.length !== 1 ? 's' : ''} 
-              {searchQuery.trim() && ` for "${searchQuery}"`}
-              {selectedCategory !== 'all' && ` in "${categories.find(c => c.id === selectedCategory)?.name}"`}
-            </Text>
-          </View>
-        )}
-
-        {/* Check if we have any filtered studies */}
-        {filteredReadings.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <Ionicons name="book-outline" size={64} color={COLORS.border.medium} />
-            </View>
-            <Text style={[styles.emptyTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-              {searchQuery.trim() 
-                ? 'No matches found' 
-                : selectedCategory === 'all' 
-                  ? 'Start your study' 
-                  : 'No studies in this category'
-              }
-            </Text>
-            <Text style={[styles.emptyText, { fontSize: dimensions.fontSize.body }]}>
-              {searchQuery.trim() 
-                ? `No studies found matching "${searchQuery}"` 
-                : selectedCategory === 'all' 
-                  ? 'Begin your journey with Bible studies to deepen your understanding and faith.' 
-                  : `No studies found in "${categories.find(c => c.id === selectedCategory)?.name}" category. Try a different category or explore all studies.`
-              }
-            </Text>
-            {(searchQuery.trim() || selectedCategory !== 'all') && (
-              <TouchableOpacity 
-                style={styles.clearFiltersButton}
-                onPress={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('all');
-                  setCurrentPage(1);
-                }}
+          
+          {showReadingTypeDropdown && (
+            <View style={styles.dropdownMenu}>
+              <TouchableOpacity
+                style={[styles.dropdownItem, selectedCategory === 'all' && styles.dropdownItemActive]}
+                onPress={() => handleCategoryFilter('all')}
               >
-                <Text style={[styles.clearFiltersText, { fontSize: dimensions.fontSize.caption }]}>
-                  Clear filters
+                <Text style={[styles.dropdownItemText, selectedCategory === 'all' && styles.dropdownItemTextActive]}>
+                  All Types
                 </Text>
               </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          <>
-            {/* Ongoing Studies Section */}
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                Ongoing Studies
-              </Text>
-              <Text style={[styles.studyCount, { fontSize: dimensions.fontSize.caption }]}>
-                {ongoingStudies.length} studies
-              </Text>
-            </View>
-
-            {/* Replace list with GameMap */}
-            <View style={{ paddingVertical: getResponsiveDimensions().spacing.sm }}>
-              <VerticalGameMap
-                items={paginatedReadings}
-                progressMap={progressMap}
-                completedSet={completedStudies}
-                onPressItem={handleNavigateToStudy}
-              />
-            </View>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16 }}>
+              {categories.map((cat) => (
                 <TouchableOpacity
-                  onPress={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  style={{ padding: 8, opacity: currentPage === 1 ? 0.5 : 1 }}
+                  key={cat.id}
+                  style={[styles.dropdownItem, selectedCategory === cat.id && styles.dropdownItemActive]}
+                  onPress={() => handleCategoryFilter(cat.id)}
                 >
-                  <Text style={{ fontSize: 18, color: COLORS.primary }}>{'<'}</Text>
+                  <Text style={[styles.dropdownItemText, selectedCategory === cat.id && styles.dropdownItemTextActive]}>
+                    {cat.name}
+                  </Text>
                 </TouchableOpacity>
-                <Text style={{ marginHorizontal: 16, fontSize: 16 }}>
-                  Page {currentPage} of {totalPages}
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Days Plan Dropdown */}
+        <View style={styles.dropdownWrapper}>
+          <TouchableOpacity 
+            style={styles.dropdownButton}
+            onPress={() => {
+              setShowDaysDropdown(!showDaysDropdown);
+              setShowReadingTypeDropdown(false);
+            }}
+          >
+            <Ionicons name="calendar-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
+            <Text style={styles.dropdownButtonText}>
+              {studyPlan ? `${studyPlan.days}d` : 'Plan'}
+            </Text>
+            <Ionicons name={showDaysDropdown ? "chevron-up" : "chevron-down"} size={dimensions.iconSize.small} color={COLORS.text.light} />
+          </TouchableOpacity>
+          
+          {showDaysDropdown && (
+            <View style={styles.dropdownMenu}>
+              {[365, 180, 120, 90, 60, 30].map(d => (
+                <TouchableOpacity
+                  key={d}
+                  style={[styles.dropdownItem, studyPlan?.days === d && styles.dropdownItemActive]}
+                  onPress={() => {
+                    setPlanDays(d);
+                    setPlanModalVisible(true);
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, studyPlan?.days === d && styles.dropdownItemTextActive]}>
+                    {d} Days Plan
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Main Content */}
+      <View style={styles.mainContent}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {filteredReadings.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="book-outline" size={64} color="rgba(247, 240, 227, 0.3)" />
+              <Text style={[styles.emptyTitle, { fontSize: dimensions.fontSize.subtitle }]}>
+                No studies found
+              </Text>
+              <Text style={[styles.emptyText, { fontSize: dimensions.fontSize.body }]}>
+                Start your Bible study journey today
+              </Text>
+            </View>
+          ) : (
+            <VerticalGameMap
+              items={filteredReadings}
+              progressMap={progressMap}
+              completedSet={completedStudies}
+              onPressItem={handleNavigateToStudy}
+              onRequestUnlock={handleRequestUnlock}
+            />
+          )}
+        </ScrollView>
+
+        {/* Plan Summary Bar - Now at bottom */}
+        {studyPlan && (
+          <View style={styles.planSummaryBottom}>
+            <View style={styles.planSummaryContent}>
+              <View style={styles.planInfoLeft}>
+                <Text style={styles.planTitle}>Your Journey</Text>
+                <Text style={styles.planSubtitle}>
+                  {planStats.daysRemaining}d remaining • {planStats.percent}% complete
                 </Text>
-                <TouchableOpacity
-                  onPress={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  style={{ padding: 8, opacity: currentPage === totalPages ? 0.5 : 1 }}
-                >
-                  <Text style={{ fontSize: 18, color: COLORS.primary }}>{'>'}</Text>
-                </TouchableOpacity>
               </View>
-            )}
-          </>
+              <View style={styles.planStatsRight}>
+                <View style={styles.planPercentBadge}>
+                  <Text style={styles.planPercentText}>{planStats.percent}%</Text>
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.planProgressBar}>
+              <View style={[styles.planProgressFill, { width: `${planStats.percent}%` }]} />
+            </View>
+          </View>
         )}
-      </ScrollView>
+      </View>
 
       {/* Study Plan Modal */}
       <Modal
@@ -790,18 +745,20 @@ const BibleStudyApp = () => {
         animationType="slide"
         onRequestClose={() => setPlanModalVisible(false)}
       >
-        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center', padding:20 }}>
-          <View style={{ backgroundColor:COLORS.surfaceElevated, borderRadius:12, padding:20 }}>
-            <Text style={{ fontSize:18, fontWeight:'700', color:COLORS.text.primary, marginBottom:12 }}>Choose a reading plan</Text>
-            <Text style={{ color:COLORS.text.secondary, marginBottom:16 }}>Pick how many days you want to finish the whole Bible; we will group readings per day for you.</Text>
-            {/* Start date selector */}
-            <View style={{ marginBottom:12 }}>
-              <Text style={{ color: COLORS.text.secondary, marginBottom:6 }}>Start date</Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Ionicons name="calendar" size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
+            <Text style={styles.modalTitle}>Choose Your Journey</Text>
+            <Text style={styles.modalSubtitle}>Select a reading plan duration</Text>
+            
+            <View style={{ marginBottom:16 }}>
+              <Text style={styles.modalLabel}>Start Date</Text>
               <TouchableOpacity
                 onPress={() => setShowDatePicker(true)}
-                style={{ padding:12, borderRadius:8, borderWidth:1, borderColor:COLORS.border.light, backgroundColor: COLORS.surface }}
+                style={styles.dateButton}
               >
-                <Text style={{ color: COLORS.text.primary }}>{formatDate(startDate)}</Text>
+                <Ionicons name="calendar-outline" size={20} color={COLORS.text.secondary} />
+                <Text style={styles.dateButtonText}>{formatDate(startDate)}</Text>
               </TouchableOpacity>
               {showDatePicker && (
                 <DateTimePicker
@@ -815,48 +772,95 @@ const BibleStudyApp = () => {
                 />
               )}
             </View>
-             {[365, 120, 90, 60].map(d => (
-               <TouchableOpacity
-                 key={d}
-                 onPress={() => {
+            
+            {[365, 180, 120, 90, 60, 30].map(d => (
+              <TouchableOpacity
+                key={d}
+                onPress={() => {
                   setPlanDays(d);
                   savePlan(d);
-                 }}
-                 style={{ paddingVertical:12, paddingHorizontal:16, borderRadius:8, backgroundColor: planDays===d ? COLORS.primary : COLORS.surface, marginBottom:8 }}
-               >
-                 <Text style={{ color: planDays===d ? '#fff' : COLORS.text.primary, fontWeight:'600' }}>{d} days</Text>
-                 <Text style={{ color: planDays===d ? '#fff' : COLORS.text.secondary, fontSize:12 }}>{Math.ceil((bibleReadings?.length || 365)/d)} reading(s) per day</Text>
-               </TouchableOpacity>
-             ))}
-             <TouchableOpacity onPress={() => { setPlanModalVisible(false); }} style={{ marginTop:12, alignSelf:'flex-end' }}>
-               <Text style={{ color:COLORS.primary }}>Close</Text>
-             </TouchableOpacity>
-           </View>
-         </View>
-       </Modal>
-
-      {/* Plan summary (shows days/progress) */}
-      {studyPlan && (
-        <View style={styles.planSummary}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View>
-              <Text style={styles.planTitle}>{studyPlan.days}‑day plan</Text>
-              <Text style={styles.planSubtitle}>
-                Started {formatDate(planStats.startDate || studyPlan.startDate)} • Finish {planStats.finishDate ? formatDate(planStats.finishDate) : '-'}
-              </Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.planPercent}>{planStats.percent}%</Text>
-              <Text style={styles.planSmall}>Remaining: {planStats.daysRemaining} day{planStats.daysRemaining !== 1 ? 's' : ''}</Text>
-            </View> 
-          </View>
-          
-          {/* Progress Bar */}
-          <View style={styles.planProgressBar}>
-            <View style={[styles.planProgressFill, { width: `${planStats.percent}%` }]} />
+                }}
+                style={[styles.planOption, planDays===d && styles.planOptionActive]}
+              >
+                <View style={styles.planOptionContent}>
+                  <Text style={[styles.planOptionText, planDays===d && styles.planOptionTextActive]}>
+                    {d} Days Plan
+                  </Text>
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={24} 
+                    color={planDays===d ? '#FFF' : COLORS.border.medium} 
+                  />
+                </View>
+                <Text style={[styles.planOptionSubtext, planDays===d && styles.planOptionSubtextActive]}>
+                  {Math.ceil((bibleReadings?.length || 365)/d)} reading(s) per day
+                </Text>
+              </TouchableOpacity>
+            ))}
+            
+            <TouchableOpacity 
+              onPress={() => setPlanModalVisible(false)} 
+              style={styles.modalCloseButton}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
+
+      {/* Unlock Modal */}
+      <Modal
+        visible={unlockModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUnlockModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Ionicons name="lock-closed" size={48} color={COLORS.semantic.warning} style={{ marginBottom: 16 }} />
+            <Text style={styles.modalTitle}>Lesson Locked</Text>
+            <Text style={styles.modalSubtitle}>
+              Complete the previous lesson to unlock this one
+            </Text>
+
+            {unlockTarget?.previousItem ? (
+              <>
+                <View style={styles.unlockInfo}>
+                  <Text style={styles.unlockLabel}>Previous Lesson:</Text>
+                  <Text style={styles.unlockValue}>
+                    {unlockTarget.previousItem.title || `Day ${unlockTarget.previousItem.day || unlockTarget.previousItem.id}`}
+                  </Text>
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity 
+                    onPress={() => setUnlockModalVisible(false)} 
+                    style={styles.modalButton}
+                  >
+                    <Text style={styles.modalButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setUnlockModalVisible(false);
+                      handleNavigateToStudy(unlockTarget.previousItem, progressMap[unlockTarget.previousItem.id] || 0);
+                    }}
+                    style={[styles.modalButton, styles.modalButtonPrimary]}
+                  >
+                    <Text style={styles.modalButtonPrimaryText}>Go There</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <TouchableOpacity 
+                onPress={() => setUnlockModalVisible(false)} 
+                style={[styles.modalButton, styles.modalButtonPrimary, { marginTop: 20 }]}
+              >
+                <Text style={styles.modalButtonPrimaryText}>Understood</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -864,7 +868,15 @@ const BibleStudyApp = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.primary,
+  },
+  videoBackground: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: -1,
+  },
+  videoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.overlay,
   },
   loadingOverlay: {
     position: 'absolute',
@@ -872,437 +884,439 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: COLORS.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
   },
   loadingContent: {
-    backgroundColor: COLORS.surfaceElevated,
-    padding: getResponsiveDimensions().spacing.xl,
+    backgroundColor: COLORS.background,
+    padding: 32,
     borderRadius: 16,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 8,
   },
   loadingOverlayText: {
-    marginTop: getResponsiveDimensions().spacing.md,
+    marginTop: 16,
     color: COLORS.text.primary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   header: {
-    backgroundColor: COLORS.surfaceElevated,
-    paddingHorizontal: getResponsiveDimensions().spacing.md,
-    paddingVertical: getResponsiveDimensions().spacing.md,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 10 : 30,
+    paddingBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
   },
   backButton: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 22,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   headerTitle: {
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    letterSpacing: -0.5,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: getResponsiveDimensions().spacing.sm,
+    fontWeight: '800',
+    color: COLORS.text.light,
+    letterSpacing: 0.5,
   },
   headerActionButton: {
     width: 44,
     height: 44,
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   headerActionButtonActive: {
     backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
   },
   searchContainer: {
-    backgroundColor: COLORS.surfaceElevated,
-    paddingHorizontal: getResponsiveDimensions().spacing.md,
-    paddingVertical: getResponsiveDimensions().spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 12,
-    paddingHorizontal: getResponsiveDimensions().spacing.md,
-    paddingVertical: getResponsiveDimensions().spacing.sm,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: COLORS.border.light,
-    minHeight: 48,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   searchInput: {
     flex: 1,
-    marginLeft: getResponsiveDimensions().spacing.sm,
-    color: COLORS.text.primary,
+    marginLeft: 8,
+    color: COLORS.text.light,
   },
   clearSearchButton: {
-    padding: getResponsiveDimensions().spacing.xs,
+    padding: 4,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 12,
+  },
+  dropdownWrapper: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 100,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  dropdownButtonText: {
+    flex: 1,
+    color: COLORS.text.light,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    maxHeight: 300,
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
+  },
+  dropdownItemActive: {
+    backgroundColor: COLORS.primary,
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+  },
+  dropdownItemTextActive: {
+    color: '#FFF',
+  },
+  mainContent: {
+    flex: 1,
   },
   content: {
     flex: 1,
   },
-  filterContainer: {
-    backgroundColor: COLORS.surfaceElevated,
-    paddingHorizontal: getResponsiveDimensions().spacing.md,
-    paddingVertical: getResponsiveDimensions().spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
-  },
-  filterContentContainer: {
-    paddingVertical: getResponsiveDimensions().spacing.sm,
-    gap: getResponsiveDimensions().spacing.sm,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: getResponsiveDimensions().spacing.md,
-    paddingVertical: getResponsiveDimensions().spacing.xs,
+  planSummaryBottom: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 16,
     borderWidth: 1,
-    marginRight: getResponsiveDimensions().spacing.sm,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  activeFilter: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  inactiveFilter: {
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.border.light,
-  },
-  categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: getResponsiveDimensions().spacing.xs,
-  },
-  filterText: {
-    fontWeight: '500',
-  },
-  activeFilterText: {
-    color: COLORS.background,
-  },
-  inactiveFilterText: {
-    color: COLORS.text.secondary,
-  },
-  resultsInfo: {
-    paddingHorizontal: getResponsiveDimensions().spacing.md,
-    paddingVertical: getResponsiveDimensions().spacing.sm,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
-  },
-  resultsText: {
-    color: COLORS.text.secondary,
-    fontStyle: 'italic',
-  },
-  sectionHeader: {
-    paddingHorizontal: getResponsiveDimensions().spacing.md,
-    paddingVertical: getResponsiveDimensions().spacing.md,
+  planSummaryContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  sectionTitle: {
-    fontWeight: '700',
-    color: COLORS.text.primary,
-  },
-  studyCount: {
-    color: COLORS.text.secondary,
-  },
-  entriesContainer: {
-    paddingHorizontal: getResponsiveDimensions().spacing.md,
-  },
-  entryCard: {
-    marginBottom: getResponsiveDimensions().spacing.md,
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  imageContainer: {
-    position: 'relative',
-  },
-  cardImage: {
-    width: '100%',
-    height: getResponsiveDimensions().imageHeight,
-    backgroundColor: COLORS.surface,
-  },
-  imageOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.12)',
-  },
-  categoryBadge: {
-    position: 'absolute',
-    left: 12,
-    top: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  categoryBadgeText: {
-    color: COLORS.background,
-    fontWeight: '700',
-  },
-  progressBadge: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-  },
-  progressBadgeText: {
-    color: COLORS.text.primary,
-    fontWeight: '700',
-  },
-  cardContent: {
-    padding: getResponsiveDimensions().spacing.md,
-  },
-  entryTitle: {
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginBottom: getResponsiveDimensions().spacing.sm,
-  },
-  progressContainer: {
-    width: '100%',
-  },
-  progressBar: {
-    width: '100%',
-    height: 6,
-    backgroundColor: COLORS.border.light,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 3,
-  },
-  completedBadge: {
-    backgroundColor: COLORS.semantic.success,
-  },
-  completedProgressFill: {
-    backgroundColor: COLORS.semantic.success,
-  },
-  restartButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    marginTop: 10,
-    alignSelf: 'center',
-  },
-  restartButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  completedSectionHeader: {
-    marginTop: 24,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border.light,
-    paddingTop: 16,
-    backgroundColor: COLORS.surface,
-  },
-  completedEntryCard: {
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.semantic.success,
-  },
-  emptySectionContainer: {
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
-    marginBottom: 16,
-  },
-  emptySectionText: {
-    color: COLORS.text.secondary,
-    textAlign: 'center',
-  },
-  sectionDivider: {
-    height: 8,
-    backgroundColor: COLORS.border.light,
-    marginVertical: 8,
-  },
-  todayCard: {
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 12,
-    padding: getResponsiveDimensions().spacing.md,
-    margin: getResponsiveDimensions().spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  todayTitle: {
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginBottom: getResponsiveDimensions().spacing.xs,
-  },
-  todaySubtitle: {
-    color: COLORS.text.secondary,
-    fontSize: 14,
-  },
-  planSummary: {
-    backgroundColor: COLORS.surfaceElevated,
-    marginHorizontal: getResponsiveDimensions().spacing.md,
-    marginTop: getResponsiveDimensions().spacing.md,
-    padding: getResponsiveDimensions().spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
+  planInfoLeft: {
+    flex: 1,
   },
   planTitle: {
     fontWeight: '700',
-    color: COLORS.text.primary,
+    color: COLORS.text.light,
+    fontSize: 16,
+    marginBottom: 4,
   },
   planSubtitle: {
-    color: COLORS.text.secondary,
+    color: 'rgba(247, 240, 227, 0.8)',
     fontSize: 12,
-    marginTop: 4,
   },
-  planPercent: {
+  planStatsRight: {
+    alignItems: 'flex-end',
+  },
+  planPercentBadge: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  planPercentText: {
     fontWeight: '700',
-    color: COLORS.primary,
-    fontSize: 20,
-  },
-  planSmall: {
-    color: COLORS.text.secondary,
-    fontSize: 12,
-    marginTop: 4,
+    color: '#FFF',
+    fontSize: 16,
   },
   planProgressBar: {
     height: 8,
-    backgroundColor: COLORS.border.light,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 8,
     overflow: 'hidden',
-    marginTop: getResponsiveDimensions().spacing.sm,
   },
   planProgressFill: {
     height: '100%',
     backgroundColor: COLORS.primary,
+    borderRadius: 8,
   },
   gameMapWrap: {
-    marginTop: getResponsiveDimensions().spacing.md,
-    marginBottom: getResponsiveDimensions().spacing.md,
+    flex: 1,
   },
-  nodeCircle: {
-    justifyContent: 'center',
+  journeyContainer: {
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20, // Add space for bottom bar
+  },
+  nodeWrapper: {
     alignItems: 'center',
-    marginBottom: getResponsiveDimensions().spacing.xs,
+    width: 150,
+    position: 'relative',
+    marginVertical: 0,
   },
-  nodeLabel: {
-    textAlign: 'center',
-    maxWidth: 80,
-  },
-  nodeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: getResponsiveDimensions().spacing.md,
-  },
-  centerColumn: {
+  nodeTouchable: {
     alignItems: 'center',
     position: 'relative',
   },
-  connectorLine: {
+  nodeExternalShadow: {
     position: 'absolute',
-    width: 2,
-    backgroundColor: COLORS.border.light,
+    width: 66,
+    height: 66,
+    borderRadius: 25,
+    top: 10,
+    left: 36,
+    opacity: 0.25,
+    zIndex: -1,
+  },
+  currentNodeRing: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 3,
+    top: -10,
+    opacity: 0.3,
+    zIndex: 0,
+  },
+  nodeCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  nodeInnerShadow: {
+    position: 'absolute',
     top: 0,
-    bottom: 0,
-    left: '50%',
-    marginLeft: -1,
+    left: 0,
+    right: 0,
+    height: '30%',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderTopLeftRadius: 35,
+    borderTopRightRadius: 35,
     zIndex: 1,
   },
-  nodeWrapper: {
-    zIndex: 2,
-    flexDirection: 'column',
+  nodeLabelContainer: {
+    marginTop: 16,
     alignItems: 'center',
+    width: 140,
   },
-  timelineColumn: {
-    width: 78,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  detailColumn: {
-    flex: 1,
-    paddingLeft: getResponsiveDimensions().spacing.md,
-    justifyContent: 'center',
-  },
-  nodeOuter: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    backgroundColor: 'transparent',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  nodeInner: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nodeBadge: {
-    position: 'absolute',
-    right: -6,
-    top: -6,
-    minWidth: 28,
-    paddingHorizontal: 6,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-  },
-  nodeBadgeText: {
-    color: COLORS.background,
+  nodeLabel: {
+    fontSize: 15,
     fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 4,
   },
   nodeSubtitle: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  emptyContainer: {
+    padding: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontWeight: '700',
+    color: COLORS.text.light,
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyText: {
+    color: 'rgba(247, 240, 227, 0.8)',
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: COLORS.background,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.text.primary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    color: COLORS.text.secondary,
+    marginBottom: 24,
+    textAlign: 'center',
+    fontSize: 14,
+  },
+  modalLabel: {
+    color: COLORS.text.secondary,
+    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+    backgroundColor: COLORS.surface,
+  },
+  dateButtonText: {
+    color: COLORS.text.primary,
+    fontWeight: '600',
+  },
+  planOption: {
+    width: '100%',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: COLORS.border.light,
+  },
+  planOptionActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  planOptionContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  planOptionText: {
+    color: COLORS.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  planOptionTextActive: {
+    color: '#FFF',
+  },
+  planOptionSubtext: {
+    color: COLORS.text.secondary,
+    fontSize: 12,
     marginTop: 4,
+  },
+  planOptionSubtextActive: {
+    color: '#FFF',
+    opacity: 0.9,
+  },
+  unlockInfo: {
+    backgroundColor: COLORS.surface,
+    padding: 16,
+    borderRadius: 12,
+    marginVertical: 16,
+    width: '100%',
+  },
+  unlockLabel: {
+    color: COLORS.text.secondary,
+    fontSize: 12,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  unlockValue: {
+    color: COLORS.text.primary,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+  },
+  modalButtonPrimary: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  modalButtonText: {
+    color: COLORS.text.primary,
+    fontWeight: '700',
+  },
+  modalButtonPrimaryText: {
+    color: '#FFF',
+    fontWeight: '700',
+  },
+  modalCloseButton: {
+    marginTop: 16,
+    alignSelf: 'center',
+    padding: 10,
+  },
+  modalCloseText: {
+    color: COLORS.text.secondary,
+    fontWeight: '600',
   },
 });
 

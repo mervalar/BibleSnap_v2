@@ -1,4 +1,4 @@
-const BASE_URL = 'https://localhost:/api';
+const BASE_URL = 'https://biblesnap.bellatis.com:/api';
 
 // Helper function to get auth token
 const getAuthToken = () => {
