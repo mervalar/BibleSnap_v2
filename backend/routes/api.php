@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\BibleReadingController;
 use App\Http\Controllers\Api\NotecategoryController;
 use App\Http\Controllers\Api\UserNoteController;
+use App\Http\Controllers\Api\BookController;
 use App\Http\Controllers\Auth\GoogleController;
 
 // Authentication routes
@@ -29,6 +30,12 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/bible-readings', [BibleReadingController::class, 'index']);
 Route::get('/note-categories', [NotecategoryController::class, 'index']);
 Route::get('/bible-readings/random', [BibleReadingController::class, 'getRandomStudy']);
+// Books routes
+Route::get('/books', [BookController::class, 'index']);
+Route::get('/books/{identifier}', [BookController::class, 'show']);
+Route::get('/books/testament/{testament}', [BookController::class, 'getByTestament']);
+Route::get('/books/category/{category}', [BookController::class, 'getByCategory']);
+
 // User notes routes - Clean and simple
 Route::prefix('user-notes')->group(function () {
     Route::post('/', [UserNoteController::class, 'store']);          

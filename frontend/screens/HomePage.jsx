@@ -79,20 +79,21 @@ const HomePage = () => {
   useFocusEffect(
     React.useCallback(() => {
       checkUserAuth();
-      // Reload challenge progress when returning to the home screen
-      if (todaysChallenge && todaysChallenge.id) {
-        setTimeout(() => {
-          loadChallengeProgress().then(progressData => {
-            if (progressData && progressData.studyId === todaysChallenge.id) {
-              setTodaysChallenge(prev => ({
-                ...prev,
-                progress: progressData
-              }));
-            }
-          });
-        }, 0);  // Use setTimeout to avoid React state update during render
-      }
-    }, [todaysChallenge?.id])
+      
+      // Always reload challenge when screen comes into focus
+      const reloadChallenge = async () => {
+        try {
+          // Force a fresh load to ensure sync with BibleStudyPage
+          await loadTodaysChallenge();
+          
+          console.log('HomePage - Challenge reloaded on focus');
+        } catch (error) {
+          console.error('Error reloading challenge on focus:', error);
+        }
+      };
+      
+      reloadChallenge();
+    }, []) // Empty dependency array - reload every time screen comes into focus
   );
 
 const loadChallengeProgress = async () => {
@@ -101,8 +102,24 @@ const loadChallengeProgress = async () => {
     const progress = await AsyncStorage.getItem('challengeProgress');
     const progressDate = await AsyncStorage.getItem('challengeProgressDate');
     
+    // Check if we have progress for today
     if (progress && progressDate === today) {
-      return JSON.parse(progress);
+      const progressData = JSON.parse(progress);
+      
+      // Also check the main bible progress map for consistency
+      const bibleProgress = await AsyncStorage.getItem('bibleProgress');
+      if (bibleProgress) {
+        const progressMap = JSON.parse(bibleProgress);
+        const studyProgress = progressMap[progressData.studyId];
+        
+        // Use the most recent progress
+        if (studyProgress !== undefined && studyProgress !== progressData.percent) {
+          progressData.percent = studyProgress;
+          await AsyncStorage.setItem('challengeProgress', JSON.stringify(progressData));
+        }
+      }
+      
+      return progressData;
     }
     return null;
   } catch (error) {
@@ -116,33 +133,129 @@ const loadChallengeProgress = async () => {
     setChallengeLoading(true);
     
     const today = new Date().toDateString();
-    const cachedChallenge = await AsyncStorage.getItem('todaysChallenge');
-    const cachedDate = await AsyncStorage.getItem('challengeDate');
     
-    // Load progress
-    const progressData = await loadChallengeProgress();
+    // First, check if there's a study plan
+    const studyPlanStr = await AsyncStorage.getItem('studyPlan');
+    const studyPlan = studyPlanStr ? JSON.parse(studyPlanStr) : null;
     
-    if (cachedChallenge && cachedDate === today) {
-      // Use cached challenge if it's from today
-      const challenge = JSON.parse(cachedChallenge);
-      setTodaysChallenge({
-        ...challenge,
-        progress: progressData 
+    let todayReading = null;
+    
+    // If study plan exists, get today's reading from schedule (SAME AS BIBLESTUDYPAGE)
+    if (studyPlan && studyPlan.schedule && studyPlan.startDate) {
+      const start = new Date(studyPlan.startDate);
+      const now = new Date();
+      
+      // Calculate days elapsed since start - EXACT SAME LOGIC AS BIBLESTUDYPAGE
+      const diff = Math.floor(
+        (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - 
+         Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) 
+        / (1000 * 60 * 60 * 24)
+      );
+      
+      // Get the day index within the plan
+      const dayIndex = Math.max(0, Math.min(studyPlan.days - 1, diff));
+      const todayReadingIds = studyPlan.schedule[dayIndex] || [];
+      
+      console.log('HomePage - Study Plan Info:', {
+        startDate: studyPlan.startDate,
+        currentDate: now.toISOString(),
+        daysElapsed: diff,
+        dayIndex: dayIndex,
+        todayReadingIds: todayReadingIds,
+        totalPlanDays: studyPlan.days
       });
+      
+      // Get all readings from AsyncStorage
+      const readingsStr = await AsyncStorage.getItem('bibleReadings');
+      const allReadings = readingsStr ? JSON.parse(readingsStr) : [];
+      
+      // Find today's FIRST reading based on schedule
+      if (todayReadingIds.length > 0) {
+        const firstDayId = todayReadingIds[0];
+        todayReading = allReadings.find(r => r.day === firstDayId);
+        
+        console.log('HomePage - Found today\'s reading:', {
+          firstDayId,
+          readingTitle: todayReading?.title,
+          readingId: todayReading?.id
+        });
+      } else {
+        console.log('HomePage - No readings scheduled for today');
+      }
     } else {
-      // Fetch new random study
-      const randomStudy = await fetchRandomStudy();
-      setTodaysChallenge({
-        ...randomStudy,
-        progress: null // No progress for new challenge
-      });
+      console.log('HomePage - No study plan found or invalid plan');
+    }
+    
+    // If no study plan or no reading found, fall back to cached or random
+    if (!todayReading) {
+      console.log('HomePage - Falling back to cached/random challenge');
+      const cachedChallenge = await AsyncStorage.getItem('todaysChallenge');
+      const cachedDate = await AsyncStorage.getItem('challengeDate');
       
-      // Cache the challenge for today
-      await AsyncStorage.setItem('todaysChallenge', JSON.stringify(randomStudy));
-      await AsyncStorage.setItem('challengeDate', today);
+      if (cachedChallenge && cachedDate === today) {
+        todayReading = JSON.parse(cachedChallenge);
+        console.log('HomePage - Using cached challenge:', todayReading?.title);
+      } else {
+        // Fetch new random study as fallback
+        todayReading = await fetchRandomStudy();
+        console.log('HomePage - Using random study:', todayReading?.title);
+      }
+    }
+    
+    // Load progress for the reading
+    const bibleProgress = await AsyncStorage.getItem('bibleProgress');
+    const completedStudies = await AsyncStorage.getItem('completedStudies');
+    
+    let finalProgress = null;
+    
+    if (bibleProgress) {
+      const progressMap = JSON.parse(bibleProgress);
+      const studyProgress = progressMap[todayReading.id];
       
-      // Clear previous progress if it exists
+      if (studyProgress !== undefined) {
+        finalProgress = {
+          studyId: todayReading.id,
+          percent: studyProgress,
+          lastUpdated: Date.now()
+        };
+      }
+    }
+    
+    // Check if completed
+    if (completedStudies) {
+      const completedSet = new Set(JSON.parse(completedStudies));
+      if (completedSet.has(todayReading.id)) {
+        finalProgress = {
+          studyId: todayReading.id,
+          percent: 100,
+          lastUpdated: Date.now()
+        };
+      }
+    }
+    
+    console.log('HomePage - Final challenge state:', {
+      readingTitle: todayReading?.title,
+      readingId: todayReading?.id,
+      progress: finalProgress?.percent || 0
+    });
+    
+    setTodaysChallenge({
+      ...todayReading,
+      progress: finalProgress
+    });
+    
+    // Cache the challenge for today
+    await AsyncStorage.setItem('todaysChallenge', JSON.stringify(todayReading));
+    await AsyncStorage.setItem('challengeDate', today);
+    
+    // Save progress if exists
+    if (finalProgress) {
+      await AsyncStorage.setItem('challengeProgress', JSON.stringify(finalProgress));
+      await AsyncStorage.setItem('challengeProgressDate', today);
+    } else {
+      // Clear previous progress if new challenge
       await AsyncStorage.removeItem('challengeProgress');
+      await AsyncStorage.removeItem('challengeProgressDate');
     }
   } catch (error) {
     console.error('Error loading today\'s challenge:', error);
@@ -234,16 +347,51 @@ const loadChallengeProgress = async () => {
   const handleChallengePress = () => {
     handleAuthenticatedAction(() => {
       if (todaysChallenge && todaysChallenge.id) {
-        // Get the current progress
+        // Get the current progress from progressMap
         const currentProgress = todaysChallenge.progress?.percent || 0;
         
         // Navigate to the specific bible study
         navigation.navigate('BibleStudyContent', {
-          stark: todaysChallenge,
-          progress: currentProgress, // Pass current progress to the study screen
-          onProgressUpdate: (percent) => {
-            // Use the safe update method
-            updateChallengeProgress(percent, todaysChallenge.id);
+          bibleReading: todaysChallenge,
+          progress: currentProgress,
+          isChallenge: true, // Mark this as a challenge
+          onProgressUpdate: async (percent) => {
+            try {
+              // Update the challenge progress in AsyncStorage
+              const progressData = {
+                studyId: todaysChallenge.id,
+                percent: percent,
+                lastUpdated: Date.now()
+              };
+              
+              const today = new Date().toDateString();
+              await AsyncStorage.setItem('challengeProgress', JSON.stringify(progressData));
+              await AsyncStorage.setItem('challengeProgressDate', today);
+              
+              // Also update in the main bible progress map
+              const existingProgress = await AsyncStorage.getItem('bibleProgress');
+              const progressMap = existingProgress ? JSON.parse(existingProgress) : {};
+              progressMap[todaysChallenge.id] = percent;
+              await AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
+              
+              // Update completed studies if 100%
+              if (percent === 100) {
+                const completedData = await AsyncStorage.getItem('completedStudies');
+                const completedSet = completedData ? new Set(JSON.parse(completedData)) : new Set();
+                completedSet.add(todaysChallenge.id);
+                await AsyncStorage.setItem('completedStudies', JSON.stringify([...completedSet]));
+              }
+              
+              // Update local state safely
+              setTimeout(() => {
+                setTodaysChallenge(prev => ({
+                  ...prev,
+                  progress: progressData
+                }));
+              }, 0);
+            } catch (error) {
+              console.error('Error saving challenge progress:', error);
+            }
           }
         });
       } else {

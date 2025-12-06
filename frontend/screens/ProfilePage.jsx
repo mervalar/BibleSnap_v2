@@ -11,26 +11,23 @@ import {
   TextInput,
   Alert,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LineChart } from 'react-native-chart-kit';
-import { fetchJournals } from '../api/journalApi'; 
-import SplashScreen from '../components/SplashScreen';
+import { Video } from 'expo-av';
+import { fetchJournals } from '../api/journalApi';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 
-// Responsive dimensions
+// Responsive dimensions helper
 const getResponsiveDimensions = () => {
   const isTablet = screenWidth >= 768;
-  
   return {
-    headerHeight: isTablet ? 80 : 60,
-    cardPadding: isTablet ? 24 : 16,
     fontSize: {
-      title: isTablet ? 20 : 18,
-      subtitle: isTablet ? 16 : 14,
+      title: isTablet ? 24 : 20,
+      subtitle: isTablet ? 18 : 16,
       body: isTablet ? 16 : 14,
       caption: isTablet ? 14 : 12,
     },
@@ -49,32 +46,47 @@ const getResponsiveDimensions = () => {
   };
 };
 
-// Professional color palette matching your app
+const dimensions = getResponsiveDimensions();
+
+// Color palette
 const COLORS = {
-  primary: '#A07553',
-  primaryLight: '#B8956D',
-  primaryDark: '#8A6344',
+  primary: '#8B5D33',
+  accent: '#4A6741',
   background: '#FFFFFF',
   surface: '#FAFAFA',
-  surfaceElevated: '#FFFFFF',
   text: {
-    primary: '#1A1A1A',
-    secondary: '#666666',
-    tertiary: '#999999',
+    primary: '#2D2417',
+    secondary: '#5A4A33',
+    light: '#F7F0E3',
   },
   border: {
-    light: '#E0E0E0',
-    medium: '#CCCCCC',
-    strong: '#B0B0B0',
+    light: '#E7DBC8',
+    medium: '#CCBDA6',
   },
   semantic: {
-    success: '#4CAF50',
-    warning: '#FF9800',
+    success: '#4A7742',
     error: '#F44336',
     info: '#2196F3',
   },
-  overlay: 'rgba(160, 117, 83, 0.1)',
-  accent: '#DDBBA1',
+  overlay: 'rgba(139, 93, 51, 0.1)',
+};
+
+// Video Background Component
+const VideoBackground = () => {
+  return (
+    <View style={styles.videoBackground}>
+      <Video
+        source={require('../assets/view.mp4')}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+        shouldPlay
+        isLooping
+        muted
+        rate={1.0}
+      />
+      <View style={styles.videoOverlay} />
+    </View>
+  );
 };
 
 const ProfilePage = () => {
@@ -86,45 +98,19 @@ const ProfilePage = () => {
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [updateLoading, setUpdateLoading] = useState(false);
+  
+  // Stats
   const [journalCount, setJournalCount] = useState(0);
   const [savedVersesCount, setSavedVersesCount] = useState(0);
   const [studyPlanSummary, setStudyPlanSummary] = useState(null);
-  const dimensions = getResponsiveDimensions();
+  const [weeklyProgress, setWeeklyProgress] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [weekTotal, setWeekTotal] = useState(0);
 
-  // Chart data for growth rate
-  const chartData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    datasets: [
-      {
-        data: [2, 3, 4, 5, 6, 7, 8],
-        strokeWidth: 3,
-      },
-    ],
-  };
-
-  const chartConfig = {
-    backgroundColor: COLORS.surfaceElevated,
-    backgroundGradientFrom: COLORS.surfaceElevated,
-    backgroundGradientTo: COLORS.surfaceElevated,
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(160, 117, 83, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(26, 26, 26, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: '4',
-      strokeWidth: '2',
-      stroke: COLORS.primary,
-      fill: COLORS.primary,
-    },
-  };
-
-  // Fetch user data from AsyncStorage
+  // Fetch user data
   const fetchUserData = async () => {
     try {
       setLoading(true);
-      
       const isAuthenticated = await AsyncStorage.getItem('isAuthenticated');
       const userData = await AsyncStorage.getItem('user');
       const token = await AsyncStorage.getItem('token');
@@ -133,9 +119,7 @@ const ProfilePage = () => {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
         setUserToken(token);
-        console.log('User data loaded:', parsedUser);
       } else {
-        console.log('No user data found');
         navigation.goBack();
       }
     } catch (error) {
@@ -145,130 +129,156 @@ const ProfilePage = () => {
     }
   };
 
-  useEffect(() => {
-    fetchUserData();
-  }, []);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchUserData();
-    }, [])
-  );
-const getUserId = async () => {
-  try {
-    const userData = await AsyncStorage.getItem('user');
-    if (userData) {
-      const parsedUser = JSON.parse(userData);
-      return parsedUser?.id;
+  // Load weekly progress data
+  const loadWeeklyProgress = async () => {
+    try {
+      const completedData = await AsyncStorage.getItem('completedStudies');
+      const completedIds = completedData ? JSON.parse(completedData) : [];
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const weekData = [0, 0, 0, 0, 0, 0, 0];
+      
+      for (const id of completedIds) {
+        const timestamp = await AsyncStorage.getItem(`lesson_${id}_completed_date`);
+        if (timestamp) {
+          const completedDate = new Date(parseInt(timestamp));
+          completedDate.setHours(0, 0, 0, 0);
+          
+          const daysDiff = Math.floor((today - completedDate) / (1000 * 60 * 60 * 24));
+          
+          if (daysDiff >= 0 && daysDiff < 7) {
+            const targetDate = new Date(today);
+            targetDate.setDate(targetDate.getDate() - daysDiff);
+            const targetDayOfWeek = targetDate.getDay();
+            const arrayIndex = targetDayOfWeek === 0 ? 6 : targetDayOfWeek - 1;
+            weekData[arrayIndex]++;
+          }
+        }
+      }
+      
+      setWeeklyProgress(weekData);
+      
+      // Calculate streak
+      let streak = 0;
+      for (let i = 6; i >= 0; i--) {
+        if (weekData[i] > 0) {
+          streak++;
+        } else if (i < 6) {
+          break;
+        }
+      }
+      
+      setCurrentStreak(streak);
+      setWeekTotal(weekData.reduce((sum, val) => sum + val, 0));
+    } catch (error) {
+      console.error('Error loading weekly progress:', error);
     }
-    return null;
-  } catch (error) {
-    console.error('Error getting user ID:', error);
-    return null;
-  }
-};
+  };
 
-  useEffect(() => {
+  // Load saved verses count
+  const loadSavedVersesCount = async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const highlightKeys = keys.filter(key => key.startsWith('highlights_'));
+      let total = 0;
+
+      for (const key of highlightKeys) {
+        const data = await AsyncStorage.getItem(key);
+        if (data) {
+          const parsed = JSON.parse(data);
+          total += Object.keys(parsed).length;
+        }
+      }
+      setSavedVersesCount(total);
+    } catch (error) {
+      console.error('Error loading saved verses count:', error);
+    }
+  };
+
+  // Load journal count
   const loadJournalCount = async () => {
     try {
-      const userId = await getUserId();
-      const journals = await fetchJournals(userId);
-      setJournalCount(journals.length);
+      const userData = await AsyncStorage.getItem('user');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        const journals = await fetchJournals(parsedUser?.id);
+        setJournalCount(journals.length);
+      }
     } catch (error) {
       console.error('Failed to load journal count:', error);
     }
   };
 
-  loadJournalCount();
-}, []);
-
-const loadSavedVersesCount = async () => {
-  try {
-    // Get all AsyncStorage keys
-    const keys = await AsyncStorage.getAllKeys();
-    const highlightKeys = keys.filter(key => key.startsWith('highlights_'));
-    let total = 0;
-
-    for (const key of highlightKeys) {
-      const data = await AsyncStorage.getItem(key);
-      if (data) {
-        const parsed = JSON.parse(data);
-        total += Object.keys(parsed).length;
+  // Load study plan summary
+  const loadPlanSummary = async () => {
+    try {
+      const raw = await AsyncStorage.getItem('studyPlan');
+      if (!raw) {
+        setStudyPlanSummary(null);
+        return;
       }
+      
+      const plan = JSON.parse(raw);
+      if (!plan.days || plan.days <= 0) {
+        setStudyPlanSummary(null);
+        return;
+      }
+      
+      const progressData = await AsyncStorage.getItem('bibleProgress');
+      const progressMap = progressData ? JSON.parse(progressData) : {};
+      
+      const completedData = await AsyncStorage.getItem('completedStudies');
+      const completedIds = completedData ? JSON.parse(completedData) : [];
+      const completedSet = new Set(completedIds);
+      
+      const bibleReadingsData = await AsyncStorage.getItem('bibleReadings');
+      let totalLessons = 0;
+      let completedLessons = 0;
+      
+      if (bibleReadingsData) {
+        const readings = JSON.parse(bibleReadingsData);
+        totalLessons = readings.length;
+        
+        completedLessons = readings.filter(reading => {
+          const progress = progressMap[reading.id] || 0;
+          return completedSet.has(reading.id) || progress === 100;
+        }).length;
+      }
+      
+      if (totalLessons === 0) {
+        setStudyPlanSummary(null);
+        return;
+      }
+      
+      const percent = Math.min(100, Math.round((completedLessons / totalLessons) * 100));
+      const remainingLessons = Math.max(0, totalLessons - completedLessons);
+      const lessonsPerDay = totalLessons / plan.days;
+      const daysRemaining = lessonsPerDay > 0 
+        ? Math.max(0, Math.ceil(remainingLessons / lessonsPerDay))
+        : plan.days;
+      
+      const now = Date.now();
+      const finishTimestamp = now + (daysRemaining * 24 * 60 * 60 * 1000);
+      const finishDate = new Date(finishTimestamp);
+      
+      setStudyPlanSummary({
+        days: plan.days,
+        percent,
+        daysRemaining,
+        finishDate: finishDate.toISOString(),
+        startDate: plan.startDate,
+        totalLessons,
+        completedLessons,
+      });
+    } catch (error) {
+      console.error('Error loading study plan:', error);
+      setStudyPlanSummary(null);
     }
-    setSavedVersesCount(total);
-  } catch (error) {
-    console.error('Error loading saved verses count:', error);
-    setSavedVersesCount(0);
-  }
-};
-useFocusEffect(
-  React.useCallback(() => {
-    loadSavedVersesCount();
-  }, [])
-);
-
-  // load study plan for profile stats
-  useEffect(() => {
-    const loadPlanSummary = async () => {
-      try {
-        const raw = await AsyncStorage.getItem('studyPlan');
-        if (!raw) {
-          setStudyPlanSummary(null);
-          return;
-        }
-        const plan = JSON.parse(raw);
-        const start = new Date(plan.startDate);
-        const now = new Date();
-        const diff = Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()) - Date.UTC(start.getFullYear(),start.getMonth(),start.getDate())) / (1000*60*60*24));
-        const elapsedDays = Math.max(0, Math.min(plan.days, diff + 1));
-        const percent = Math.min(100, Math.round((elapsedDays / plan.days) * 100));
-        const daysRemaining = Math.max(0, plan.days - elapsedDays);
-        const finishDate = new Date(start.getTime() + (plan.days - 1) * 24 * 60 * 60 * 1000);
-        setStudyPlanSummary({
-          days: plan.days,
-          percent,
-          elapsedDays,
-          daysRemaining,
-          finishDate: finishDate.toISOString(),
-          startDate: plan.startDate,
-        });
-      } catch (e) {
-        console.error('Error loading study plan for profile', e);
-      }
-    };
-    loadPlanSummary();
-  }, []);
-
-  const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.multiRemove(['user', 'isAuthenticated', 'token']);
-              console.log('User logged out from profile');
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Home' }],
-              });
-            } catch (error) {
-              console.error('Error logging out:', error);
-            }
-          },
-        },
-      ],
-    );
   };
 
+  // Update profile
   const handleSaveEdit = async () => {
     if (!editName.trim() || !editEmail.trim()) {
       Alert.alert('Error', 'Please fill in all fields');
@@ -283,7 +293,6 @@ useFocusEffect(
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${userToken}`,
-          'Accept': 'application/json',
         },
         body: JSON.stringify({ 
           name: editName.trim(), 
@@ -299,8 +308,7 @@ useFocusEffect(
         setModalVisible(false);
         Alert.alert('Success', 'Profile updated successfully!');
       } else {
-        const errorMessage = responseData.message || 'Failed to update profile';
-        Alert.alert('Error', errorMessage);
+        Alert.alert('Error', responseData.message || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Update error:', error);
@@ -310,42 +318,72 @@ useFocusEffect(
     }
   };
 
-  const handleBackPress = () => {
-    if (navigation && navigation.goBack) {
-      navigation.goBack();
-    }
+  // Logout
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.multiRemove(['user', 'isAuthenticated', 'token']);
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Home' }],
+              });
+            } catch (error) {
+              console.error('Error logging out:', error);
+            }
+          },
+        },
+      ],
+    );
   };
 
-if (loading) {
-  return (
-    <SplashScreen 
-      onFinish={() => {
-      }}
-      duration={2000} 
-    />
-  );
-}
+  // Initial load
+  useEffect(() => {
+    fetchUserData();
+  }, []);
 
+  // Refresh on focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserData();
+      loadWeeklyProgress();
+      loadSavedVersesCount();
+      loadJournalCount();
+      loadPlanSummary();
+    }, [])
+  );
+
+  // Loading state
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <VideoBackground />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.text.light} />
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // No user state
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
+        <VideoBackground />
         <View style={styles.loadingContainer}>
-          <View style={styles.errorIconContainer}>
-            <Ionicons name="person-outline" size={64} color={COLORS.border.medium} />
-          </View>
-          <Text style={[styles.errorTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-            No Profile Found
-          </Text>
-          <Text style={[styles.errorText, { fontSize: dimensions.fontSize.body }]}>
-            Unable to load your profile data. Please try again.
-          </Text>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={[styles.backButtonText, { fontSize: dimensions.fontSize.body }]}>
-              Go Back
-            </Text>
+          <Ionicons name="person-outline" size={64} color={COLORS.text.light} />
+          <Text style={styles.errorTitle}>No Profile Found</Text>
+          <Text style={styles.errorText}>Unable to load your profile data.</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -354,189 +392,207 @@ if (loading) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      
+      <VideoBackground />
+
       {/* Loading overlay */}
       {updateLoading && (
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingContent}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={[styles.loadingOverlayText, { fontSize: dimensions.fontSize.body }]}>
-              Updating profile...
-            </Text>
+            <Text style={styles.loadingOverlayText}>Updating profile...</Text>
           </View>
         </View>
       )}
 
       {/* Header */}
-      <View style={[styles.header, { height: dimensions.headerHeight }]}>
-        <TouchableOpacity style={styles.headerBackButton} onPress={handleBackPress}>
-          <Ionicons name="arrow-back" size={dimensions.iconSize.medium} color={COLORS.primary} />
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={dimensions.iconSize.medium} color={COLORS.text.light} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}>
-          Profile
-        </Text>
+        <Text style={styles.headerTitle}>Profile</Text>
         <TouchableOpacity 
-          style={styles.editHeaderButton}
+          style={styles.closeButton}
           onPress={() => {
             setEditName(user.name || '');
             setEditEmail(user.email || '');
             setModalVisible(true);
           }}
         >
-          <Ionicons name="create-outline" size={dimensions.iconSize.medium} color={COLORS.primary} />
+          <Ionicons name="create-outline" size={dimensions.iconSize.medium} color={COLORS.text.light} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.profileImageContainer}>
             <View style={styles.profileImagePlaceholder}>
-              <Text style={[styles.profileInitial, { fontSize: dimensions.fontSize.title * 1.5 }]}>
+              <Text style={styles.profileInitial}>
                 {user.name?.charAt(0).toUpperCase() || 'U'}
               </Text>
             </View>
             <View style={styles.statusIndicator} />
           </View>
           
-          <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { fontSize: dimensions.fontSize.title }]}>
-              {user.name || 'User'}
-            </Text>
-            <Text style={[styles.profileEmail, { fontSize: dimensions.fontSize.body }]}>
-              {user.email || 'No email'}
-            </Text>
-            <View style={styles.joinedContainer}>
-              <Ionicons name="calendar-outline" size={dimensions.iconSize.small} color={COLORS.text.tertiary} />
-              <Text style={[styles.joinedText, { fontSize: dimensions.fontSize.caption }]}>
-                Joined March 2024
-              </Text>
-            </View>
+          <Text style={styles.profileName}>{user.name || 'User'}</Text>
+          <Text style={styles.profileEmail}>{user.email || 'No email'}</Text>
+          
+          <View style={styles.joinedContainer}>
+            <Ionicons name="calendar-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
+            <Text style={styles.joinedText}>Member since March 2024</Text>
           </View>
         </View>
 
         {/* Stats Cards */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="flame" size={dimensions.iconSize.medium} color={COLORS.semantic.warning} />
-            </View>
-            <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>153</Text>
-            <Text style={[styles.statLabel, { fontSize: dimensions.fontSize.caption }]}>Days Active</Text>
+            <Ionicons name="bookmark" size={dimensions.iconSize.large} color={COLORS.primary} />
+            <Text style={styles.statNumber}>{savedVersesCount}</Text>
+            <Text style={styles.statLabel}>Verses Saved</Text>
           </View>
           
           <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="bookmark" size={dimensions.iconSize.medium} color={COLORS.primary} />
-            </View>
-            <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>{savedVersesCount}</Text>
-            <Text style={[styles.statLabel, { fontSize: dimensions.fontSize.caption }]}>Verses Saved</Text>
-          </View>
-          
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="journal" size={dimensions.iconSize.medium} color={COLORS.semantic.info} />
-            </View>
-            <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>{journalCount}</Text>
-            <Text style={[styles.statLabel, { fontSize: dimensions.fontSize.caption }]}>Journals</Text>
+            <Ionicons name="journal" size={dimensions.iconSize.large} color={COLORS.semantic.info} />
+            <Text style={styles.statNumber}>{journalCount}</Text>
+            <Text style={styles.statLabel}>Journals</Text>
           </View>
 
           <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="calendar" size={dimensions.iconSize.medium} color={COLORS.primary} />
-            </View>
-            <Text style={[styles.statNumber, { fontSize: dimensions.fontSize.title }]}>
+            <Ionicons name="calendar" size={dimensions.iconSize.large} color={COLORS.primary} />
+            <Text style={styles.statNumber}>
               {studyPlanSummary ? `${studyPlanSummary.percent}%` : '—'}
             </Text>
-            <Text style={[styles.statLabel, { fontSize: dimensions.fontSize.caption }]}>Plan progress</Text>
+            <Text style={styles.statLabel}>Plan Progress</Text>
           </View>
         </View>
 
-        {/* Spiritual Growth Chart - Moved from HomePage */}
+        {/* Weekly Progress Chart */}
         <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
             <View>
-              <Text style={[styles.chartTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                Spiritual Growth
-              </Text>
-              <Text style={[styles.chartSubtitle, { fontSize: dimensions.fontSize.caption }]}>
-                Last 7 days activity
+              <Text style={styles.chartTitle}>Spiritual Growth</Text>
+              <Text style={styles.chartSubtitle}>
+                Last 7 days • {weekTotal} lessons completed
               </Text>
             </View>
-            <View style={styles.trendIndicator}>
-              <Ionicons name="trending-up" size={dimensions.iconSize.small} color={COLORS.semantic.success} />
-              <Text style={[styles.trendText, { fontSize: dimensions.fontSize.caption }]}>+12%</Text>
-            </View>
+            {currentStreak > 0 && (
+              <View style={styles.streakBadge}>
+                <Ionicons 
+                  name={currentStreak >= 3 ? "trending-up" : "flame"} 
+                  size={dimensions.iconSize.small} 
+                  color={COLORS.text.light} 
+                />
+                <Text style={styles.streakText}>
+                  {currentStreak} day{currentStreak !== 1 ? 's' : ''}
+                </Text>
+              </View>
+            )}
           </View>
+          
           <View style={styles.chartArea}>
             <View style={styles.chartLine}>
-              <View style={[styles.chartPoint, {left: '10%', bottom: '30%'}]} />
-              <View style={[styles.chartPoint, {left: '25%', bottom: '45%'}]} />
-              <View style={[styles.chartPoint, {left: '40%', bottom: '35%'}]} />
-              <View style={[styles.chartPoint, {left: '55%', bottom: '50%'}]} />
-              <View style={[styles.chartPoint, {left: '70%', bottom: '45%'}]} />
-              <View style={[styles.chartPoint, {left: '85%', bottom: '60%'}]} />
+              {weeklyProgress.map((value, index) => {
+                const maxValue = Math.max(...weeklyProgress, 1);
+                const bottomPercent = (value / maxValue) * 60;
+                const leftPercent = (index / 6) * 85 + 7.5;
+                
+                return value > 0 ? (
+                  <View 
+                    key={index}
+                    style={[
+                      styles.chartPoint, 
+                      {
+                        left: `${leftPercent}%`, 
+                        bottom: `${20 + bottomPercent}%`,
+                      }
+                    ]} 
+                  />
+                ) : null;
+              })}
             </View>
+            
             <View style={styles.chartLabels}>
-              <Text style={styles.chartLabel}>Mon</Text>
-              <Text style={styles.chartLabel}>Tue</Text>
-              <Text style={styles.chartLabel}>Wed</Text>
-              <Text style={styles.chartLabel}>Thu</Text>
-              <Text style={styles.chartLabel}>Fri</Text>
-              <Text style={styles.chartLabel}>Sat</Text>
-              <Text style={styles.chartLabel}>Sun</Text>
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => (
+                <View key={day} style={styles.chartLabelContainer}>
+                  <Text style={[
+                    styles.chartLabel,
+                    weeklyProgress[index] > 0 && styles.chartLabelActive
+                  ]}>
+                    {day}
+                  </Text>
+                  {weeklyProgress[index] > 0 && (
+                    <View style={styles.chartDot}>
+                      <Text style={styles.chartDotText}>{weeklyProgress[index]}</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
             </View>
           </View>
         </View>
 
-        {/* Account Section */}
-        <View style={styles.sectionContainer}>
-          <Text style={[styles.sectionTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-            Account
-          </Text>
-          
-          <View style={styles.menuCard}>
-            {/* <TouchableOpacity style={styles.menuItem}>
-              <View style={styles.menuIcon}>
-                <Ionicons name="bookmark" size={dimensions.iconSize.medium} color={COLORS.primary} />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={[styles.menuText, { fontSize: dimensions.fontSize.body }]}>Saved Verses</Text>
-                <Text style={[styles.menuSubtext, { fontSize: dimensions.fontSize.caption }]}>37 verses saved</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={dimensions.iconSize.small} color={COLORS.text.tertiary} />
-            </TouchableOpacity> */}
-
-            <View style={styles.menuDivider} />
-
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Journal')}>
-              <View style={styles.menuIcon}>
-                <Ionicons name="journal" size={dimensions.iconSize.medium} color={COLORS.semantic.info} />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={[styles.menuText, { fontSize: dimensions.fontSize.body }]}>My Journals</Text>
-                <Text style={[styles.menuSubtext, { fontSize: dimensions.fontSize.caption }]}>{journalCount} journal entries</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={dimensions.iconSize.small} color={COLORS.text.tertiary} />
-            </TouchableOpacity>
-
-            <View style={styles.menuDivider} />
-
-            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-              <View style={[styles.menuIcon, { backgroundColor: '#ffebee' }]}>
-                <Ionicons name="log-out" size={dimensions.iconSize.medium} color={COLORS.semantic.error} />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={[styles.menuText, { fontSize: dimensions.fontSize.body, color: COLORS.semantic.error }]}>
-                  Logout
+        {/* Study Plan Details */}
+        {studyPlanSummary && (
+          <View style={styles.planCard}>
+            <Text style={styles.planTitle}>Reading Plan Progress</Text>
+            <Text style={styles.planSubtitle}>
+              {studyPlanSummary.days}-day plan • Started {new Date(studyPlanSummary.startDate).toLocaleDateString()}
+            </Text>
+            
+            <View style={styles.planStats}>
+              <View>
+                <Text style={styles.planStatLabel}>Completed</Text>
+                <Text style={styles.planStatValue}>
+                  {studyPlanSummary.completedLessons}/{studyPlanSummary.totalLessons}
                 </Text>
-                <Text style={[styles.menuSubtext, { fontSize: dimensions.fontSize.caption }]}>Sign out of your account</Text>
               </View>
-            </TouchableOpacity>
+              <View style={styles.planStatRight}>
+                <Text style={styles.planStatLabel}>Days Remaining</Text>
+                <Text style={styles.planStatValue}>{studyPlanSummary.daysRemaining}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${studyPlanSummary.percent}%` }]} />
+            </View>
+            
+            <Text style={styles.planFinishText}>
+              Est. finish: {new Date(studyPlanSummary.finishDate).toLocaleDateString()}
+            </Text>
           </View>
-        </View>
+        )}
 
-        {/* Bottom spacing */}
-        <View style={{ height: dimensions.spacing.xl }} />
+        {/* Menu Section */}
+        <View style={styles.menuCard}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Journal')}>
+            <View style={styles.menuIcon}>
+              <Ionicons name="journal" size={dimensions.iconSize.medium} color={COLORS.semantic.info} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuText}>My Journals</Text>
+              <Text style={styles.menuSubtext}>{journalCount} journal entries</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={dimensions.iconSize.small} color={COLORS.text.light} />
+          </TouchableOpacity>
+
+          <View style={styles.menuDivider} />
+
+          <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+            <View style={[styles.menuIcon, { backgroundColor: 'rgba(244, 67, 54, 0.1)' }]}>
+              <Ionicons name="log-out" size={dimensions.iconSize.medium} color={COLORS.semantic.error} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={[styles.menuText, { color: COLORS.semantic.error }]}>Logout</Text>
+              <Text style={styles.menuSubtext}>Sign out of your account</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Edit Profile Modal */}
@@ -544,36 +600,30 @@ if (loading) {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { fontSize: dimensions.fontSize.title }]}>
-                Edit Profile
-              </Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setModalVisible(false)}
-                disabled={updateLoading}
-              >
+              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} disabled={updateLoading}>
                 <Ionicons name="close" size={dimensions.iconSize.medium} color={COLORS.text.secondary} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, { fontSize: dimensions.fontSize.caption }]}>Full Name</Text>
+              <Text style={styles.inputLabel}>Full Name</Text>
               <TextInput
                 placeholder="Enter your name"
                 value={editName}
                 onChangeText={setEditName}
-                style={[styles.input, { fontSize: dimensions.fontSize.body }]}
+                style={styles.input}
                 editable={!updateLoading}
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, { fontSize: dimensions.fontSize.caption }]}>Email Address</Text>
+              <Text style={styles.inputLabel}>Email Address</Text>
               <TextInput
                 placeholder="Enter your email"
                 value={editEmail}
                 onChangeText={setEditEmail}
-                style={[styles.input, { fontSize: dimensions.fontSize.body }]}
+                style={styles.input}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 editable={!updateLoading}
@@ -586,9 +636,7 @@ if (loading) {
                 onPress={() => setModalVisible(false)}
                 disabled={updateLoading}
               >
-                <Text style={[styles.cancelButtonText, { fontSize: dimensions.fontSize.body }]}>
-                  Cancel
-                </Text>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -599,50 +647,65 @@ if (loading) {
                 {updateLoading ? (
                   <ActivityIndicator color={COLORS.background} size="small" />
                 ) : (
-                  <Text style={[styles.saveButtonText, { fontSize: dimensions.fontSize.body }]}>
-                    Save Changes
-                  </Text>
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
                 )}
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-
-      {/* Optionally show more details below stats (e.g., finish date) */}
-      {studyPlanSummary && (
-        <View style={[styles.planDetailCard, { marginHorizontal: dimensions.spacing.md, marginTop: dimensions.spacing.md, padding: dimensions.spacing.md, borderRadius: 12, backgroundColor: COLORS.surfaceElevated }]}>
-          <Text style={{ fontWeight: '700', color: COLORS.text.primary }}>Reading Plan</Text>
-          <Text style={{ color: COLORS.text.secondary, marginTop: 4 }}>
-            {studyPlanSummary.days}-day plan • Started {new Date(studyPlanSummary.startDate).toLocaleDateString()}
-          </Text>
-          <Text style={{ color: COLORS.text.secondary, marginTop: 6 }}>
-            {studyPlanSummary.daysRemaining} day{studyPlanSummary.daysRemaining !== 1 ? 's' : ''} remaining — Finish {new Date(studyPlanSummary.finishDate).toLocaleDateString()}
-          </Text>
-        </View>
-      )}
     </SafeAreaView>
   );
 };
 
-const dimensions = getResponsiveDimensions();
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.primary,
+  },
+  videoBackground: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: -1,
+  },
+  videoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(68, 57, 46, 0.74)',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
     paddingHorizontal: dimensions.spacing.lg,
   },
   loadingText: {
     marginTop: dimensions.spacing.md,
-    color: COLORS.text.secondary,
+    color: COLORS.text.light,
+    fontSize: dimensions.fontSize.body,
     fontWeight: '500',
+  },
+  errorTitle: {
+    fontSize: dimensions.fontSize.title,
+    fontWeight: '700',
+    color: COLORS.text.light,
+    marginTop: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.sm,
+  },
+  errorText: {
+    fontSize: dimensions.fontSize.body,
+    color: COLORS.text.light,
+    textAlign: 'center',
+    marginBottom: dimensions.spacing.lg,
+  },
+  backButton: {
+    backgroundColor: COLORS.background,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: 12,
+  },
+  backButtonText: {
+    color: COLORS.primary,
+    fontSize: dimensions.fontSize.body,
+    fontWeight: '600',
   },
   loadingOverlay: {
     position: 'absolute',
@@ -650,111 +713,58 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: COLORS.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
   },
   loadingContent: {
-    backgroundColor: COLORS.surfaceElevated,
+    backgroundColor: COLORS.background,
     padding: dimensions.spacing.xl,
     borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
   },
   loadingOverlayText: {
     marginTop: dimensions.spacing.md,
     color: COLORS.text.primary,
+    fontSize: dimensions.fontSize.body,
     fontWeight: '500',
   },
-  errorIconContainer: {
-    width: 120,
-    height: 120,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 60,
-    marginBottom: dimensions.spacing.lg,
-    borderWidth: 2,
-    borderColor: COLORS.border.light,
-  },
-  errorTitle: {
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    marginBottom: dimensions.spacing.sm,
-    textAlign: 'center',
-  },
-  errorText: {
-    color: COLORS.text.secondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: dimensions.spacing.lg,
-  },
-  backButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-    borderRadius: 24,
-  },
-  backButtonText: {
-    color: COLORS.background,
-    fontWeight: '600',
-  },
   header: {
-    backgroundColor: COLORS.surfaceElevated,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingTop: dimensions.spacing.lg,
+    paddingBottom: dimensions.spacing.md,
   },
-  headerBackButton: {
+  closeButton: {
     width: 44,
     height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
     borderRadius: 22,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
+    fontSize: dimensions.fontSize.title,
     fontWeight: '700',
-    color: COLORS.text.primary,
-    letterSpacing: -0.5,
-  },
-  editHeaderButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: COLORS.surface,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
+    color: COLORS.text.light,
+    letterSpacing: 0.5,
   },
   content: {
     flex: 1,
   },
+  contentContainer: {
+    padding: dimensions.spacing.lg,
+    paddingBottom: dimensions.spacing.xl * 2,
+  },
   profileCard: {
-    backgroundColor: COLORS.surfaceElevated,
-    margin: dimensions.spacing.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
-    padding: dimensions.cardPadding,
+    padding: dimensions.spacing.lg,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
+    marginBottom: dimensions.spacing.lg,
   },
   profileImageContainer: {
     position: 'relative',
@@ -767,10 +777,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: COLORS.surfaceElevated,
   },
   profileInitial: {
+    fontSize: dimensions.fontSize.title * 1.5,
     color: COLORS.background,
     fontWeight: 'bold',
   },
@@ -783,21 +792,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: COLORS.semantic.success,
     borderWidth: 2,
-    borderColor: COLORS.surfaceElevated,
-  },
-  profileInfo: {
-    alignItems: 'center',
+    borderColor: COLORS.background,
   },
   profileName: {
+    fontSize: dimensions.fontSize.title,
     fontWeight: '700',
     color: COLORS.text.primary,
     marginBottom: dimensions.spacing.xs,
-    textAlign: 'center',
   },
   profileEmail: {
+    fontSize: dimensions.fontSize.body,
     color: COLORS.text.secondary,
     marginBottom: dimensions.spacing.sm,
-    textAlign: 'center',
   },
   joinedContainer: {
     flexDirection: 'row',
@@ -809,60 +815,39 @@ const styles = StyleSheet.create({
   },
   joinedText: {
     marginLeft: dimensions.spacing.xs,
-    color: COLORS.text.tertiary,
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.secondary,
     fontWeight: '500',
   },
   statsGrid: {
     flexDirection: 'row',
-    marginHorizontal: dimensions.spacing.md,
     gap: dimensions.spacing.sm,
+    marginBottom: dimensions.spacing.lg,
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.surfaceElevated,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
     padding: dimensions.spacing.md,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
-  },
-  statIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.sm,
   },
   statNumber: {
+    fontSize: dimensions.fontSize.title,
     fontWeight: '700',
     color: COLORS.text.primary,
-    marginBottom: dimensions.spacing.xs,
+    marginVertical: dimensions.spacing.xs,
   },
   statLabel: {
+    fontSize: dimensions.fontSize.caption,
     color: COLORS.text.secondary,
     fontWeight: '500',
     textAlign: 'center',
   },
   chartCard: {
-    backgroundColor: COLORS.surfaceElevated,
-    margin: dimensions.spacing.md,
-    marginTop: dimensions.spacing.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
-    padding: dimensions.cardPadding,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
+    padding: dimensions.spacing.lg,
+    marginBottom: dimensions.spacing.lg,
   },
   chartHeader: {
     flexDirection: 'row',
@@ -871,17 +856,31 @@ const styles = StyleSheet.create({
     marginBottom: dimensions.spacing.md,
   },
   chartTitle: {
-    fontWeight: '600',
+    fontSize: dimensions.fontSize.subtitle,
+    fontWeight: '700',
     color: COLORS.text.primary,
   },
   chartSubtitle: {
+    fontSize: dimensions.fontSize.caption,
     color: COLORS.text.secondary,
     marginTop: 2,
   },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: dimensions.spacing.sm,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: 12,
+  },
+  streakText: {
+    marginLeft: dimensions.spacing.xs,
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.light,
+    fontWeight: '600',
+  },
   chartArea: {
     height: 160,
-    position: 'relative',
-    marginTop: dimensions.spacing.sm,
   },
   chartLine: {
     flex: 1,
@@ -890,218 +889,204 @@ const styles = StyleSheet.create({
   },
   chartPoint: {
     position: 'absolute',
-    width: 8,
-    height: 8,
+    width: 10,
+    height: 10,
     backgroundColor: COLORS.primary,
-    borderRadius: 4,
+    borderRadius: 5,
     borderWidth: 2,
-    borderColor: COLORS.surfaceElevated,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 2,
+    borderColor: COLORS.background,
   },
   chartLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8,
-    paddingHorizontal: 4,
+    marginTop: dimensions.spacing.sm,
   },
-  chartLabel: {
-    color: COLORS.text.tertiary,
-    fontSize: dimensions.fontSize.caption,
-    textAlign: 'center',
+  chartLabelContainer: {
+    alignItems: 'center',
     width: 30,
   },
-  chevron: {
-    fontSize: 18,
-    color: '#CCC',
+  chartLabel: {
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.secondary,
   },
-  section: {
-    marginTop: 20,
-  },
-  sectionTitle: {
-    fontSize: 12,
+  chartLabelActive: {
     fontWeight: '600',
-    color: '#AE796D',
-    paddingHorizontal: 20,
-    marginBottom: 10,
+    color: COLORS.primary,
+  },
+  chartDot: {
+    marginTop: 4,
+    backgroundColor: COLORS.primary,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chartDotText: {
+    color: COLORS.background,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  planCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: dimensions.spacing.lg,
+    marginBottom: dimensions.spacing.lg,
+  },
+  planTitle: {
+    fontSize: dimensions.fontSize.subtitle,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  planSubtitle: {
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.secondary,
+    marginTop: 4,
+  },
+  planStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: dimensions.spacing.md,
+  },
+  planStatLabel: {
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.secondary,
+  },
+  planStatValue: {
+    fontSize: dimensions.fontSize.subtitle,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginTop: 4,
+  },
+  planStatRight: {
+    alignItems: 'flex-end',
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: 4,
+    marginTop: dimensions.spacing.md,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 4,
+  },
+  planFinishText: {
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.secondary,
+    marginTop: dimensions.spacing.sm,
+  },
+  menuCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    marginBottom: 1,
+    padding: dimensions.spacing.md,
   },
   menuIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: dimensions.spacing.md,
+  },
+  menuContent: {
+    flex: 1,
   },
   menuText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#000',
+    fontSize: dimensions.fontSize.body,
+    fontWeight: '600',
+    color: COLORS.text.primary,
   },
-  menuAction: {
-    fontSize: 14,
-    color: '#A07553',
-    fontWeight: '500',
+  menuSubtext: {
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.secondary,
+    marginTop: 2,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: COLORS.border.light,
+    marginLeft: 70,
   },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: dimensions.spacing.lg,
   },
   modalContent: {
-    backgroundColor: '#fff',
-    margin: 20,
-    padding: 20,
-    borderRadius: 10,
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    padding: dimensions.spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.lg,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: dimensions.fontSize.title,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  inputContainer: {
+    marginBottom: dimensions.spacing.md,
+  },
+  inputLabel: {
+    fontSize: dimensions.fontSize.caption,
     fontWeight: '600',
-    marginBottom: 20,
-    textAlign: 'center',
+    color: COLORS.text.secondary,
+    marginBottom: dimensions.spacing.xs,
+    textTransform: 'uppercase',
   },
   input: {
-    borderBottomWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 15,
-    padding: 8,
-    fontSize: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+    borderRadius: 12,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    fontSize: dimensions.fontSize.body,
+    backgroundColor: COLORS.surface,
   },
-  buttonContainer: {
-    marginTop: 20,
+  modalButtons: {
+    flexDirection: 'row',
+    marginTop: dimensions.spacing.lg,
+    gap: dimensions.spacing.sm,
   },
-  saveButton: {
-    backgroundColor: '#AE796D',
-    padding: 15,
-    borderRadius: 8,
+  modalButton: {
+    flex: 1,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    justifyContent: 'center',
+    minHeight: 48,
   },
   cancelButton: {
-    backgroundColor: '#f0f0f0',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
+    backgroundColor: COLORS.surface,
   },
   cancelButtonText: {
-    color: '#666',
-    fontSize: 16,
+    fontSize: dimensions.fontSize.body,
     fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  saveButton: {
+    backgroundColor: COLORS.primary,
+  },
+  saveButtonText: {
+    fontSize: dimensions.fontSize.body,
+    fontWeight: '600',
+    color: COLORS.background,
   },
   disabledButton: {
     opacity: 0.6,
-  },
-  sectionContainer: {
-  marginHorizontal: dimensions.spacing.md,
-  marginTop: dimensions.spacing.lg,
-},
-menuCard: {
-  backgroundColor: COLORS.surfaceElevated,
-  borderRadius: 16,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.06,
-  shadowRadius: 8,
-  elevation: 3,
-  borderWidth: 1,
-  borderColor: COLORS.border.light,
-  overflow: 'hidden',
-},
-menuContent: {
-  flex: 1,
-},
-menuSubtext: {
-  color: COLORS.text.tertiary,
-  marginTop: 2,
-},
-menuDivider: {
-  height: 1,
-  backgroundColor: COLORS.border.light,
-  marginLeft: 70, // Align with text content
-},
-trendIndicator: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  backgroundColor: COLORS.surface,
-  paddingHorizontal: dimensions.spacing.sm,
-  paddingVertical: dimensions.spacing.xs,
-  borderRadius: 12,
-},
-trendText: {
-  marginLeft: dimensions.spacing.xs,
-  color: COLORS.semantic.success,
-  fontWeight: '600',
-},
-streakBadge: {
-  backgroundColor: COLORS.surface,
-  paddingHorizontal: dimensions.spacing.sm,
-  paddingVertical: dimensions.spacing.xs,
-  borderRadius: 12,
-},
-streakNumber: {
-  fontWeight: '600',
-  color: COLORS.text.primary,
-},
-modalHeader: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: dimensions.spacing.lg,
-},
-modalCloseButton: {
-  padding: dimensions.spacing.sm,
-},
-inputContainer: {
-  marginBottom: dimensions.spacing.md,
-},
-inputLabel: {
-  color: COLORS.text.secondary,
-  fontWeight: '500',
-  marginBottom: dimensions.spacing.xs,
-  textTransform: 'uppercase',
-  letterSpacing: 0.5,
-},
-input: {
-  borderWidth: 1,
-  borderColor: COLORS.border.light,
-  borderRadius: 12,
-  paddingHorizontal: dimensions.spacing.md,
-  paddingVertical: dimensions.spacing.sm,
-  backgroundColor: COLORS.surface,
-},
-modalButtons: {
-  flexDirection: 'row',
-  marginTop: dimensions.spacing.lg,
-  gap: dimensions.spacing.sm,
-},
-modalButton: {
-  flex: 1,
-  paddingVertical: dimensions.spacing.md,
-  borderRadius: 12,
-  alignItems: 'center',
-  justifyContent: 'center',
-  minHeight: 48,
-},
-planDetailCard: {
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
   },
 });
 

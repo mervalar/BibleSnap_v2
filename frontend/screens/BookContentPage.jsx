@@ -42,11 +42,21 @@ const stripHtml = (html) => {
 const BookContent = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const params = route.params || {}; // Safely access params
+  
+  // FIXED: Better handling of params from different sources
+  const params = route.params || {};
   const book = params.book || { id: '', name: '' };
   const initialChapter = params.chapter || { number: '1' };
   const routeBibleId = params.bibleId || '65eec8e0b60e656b-01';
   const routeLanguage = params.language || 'english';
+  
+  console.log('📚 BookContent initialized with:', {
+    book,
+    initialChapter,
+    routeBibleId,
+    routeLanguage,
+    allParams: params
+  });
   
   // State variables
   const [videoRef, setVideoRef] = useState(null);
@@ -153,6 +163,14 @@ const BookContent = () => {
     loadFontPreference();
   }, []);
 
+  // FIXED: Initialize from route params immediately
+  useEffect(() => {
+    console.log('🔧 Initializing settings from route params');
+    setLanguage(routeLanguage);
+    setBibleId(routeBibleId);
+    initializeTTS();
+  }, [routeBibleId, routeLanguage]);
+
   const initializeTTS = async () => {
     try {
       const voices = await Speech.getAvailableVoicesAsync();
@@ -222,17 +240,26 @@ const BookContent = () => {
   const fetchChapters = async () => {
     try {
       setLoading(true);
+      console.log('📚 Fetching chapters for:', {
+        bookId: book.id,
+        bibleId: bibleId
+      });
+      
       const response = await fetch(
         `https://api.scripture.api.bible/v1/bibles/${bibleId}/books/${book.id}/chapters`,
         { headers: { 'api-key': API_KEY } }
       );
+      
+      console.log('📡 Chapters response status:', response.status);
+      
       const data = await response.json();
+      console.log('📦 Chapters received:', data.data?.length || 0);
+      
       setChapters(data.data || []);
-      if (data.data && data.data.length > 0) {
-        setCurrentChapter(1);
-      }
+      
+      // Don't auto-set to chapter 1, let the initialChapter effect handle it
     } catch (error) {
-      console.error('Error fetching chapters:', error);
+      console.error('💥 Error fetching chapters:', error);
       Alert.alert('Error', 'Failed to load chapters. Please try again.');
     } finally {
       setLoading(false);
@@ -258,30 +285,50 @@ const BookContent = () => {
       await cleanupTTS();
 
       const chapter = chapters.find(c => c.number === chapterNum.toString());
-      if (!chapter) return;
+      
+      console.log('🔍 Fetching chapter content:', {
+        chapterNum,
+        chapter,
+        bibleId,
+        bookId: book.id,
+        allChapters: chapters.map(c => c.number)
+      });
+      
+      if (!chapter) {
+        console.warn('⚠️ Chapter not found in chapters array');
+        return;
+      }
 
       // Fetch verses for the chapter
-      const versesResponse = await fetch(
-        `https://api.scripture.api.bible/v1/bibles/${bibleId}/chapters/${chapter.id}/verses`,
-        { headers: { 'api-key': API_KEY } }
-      );
+      const versesUrl = `https://api.scripture.api.bible/v1/bibles/${bibleId}/chapters/${chapter.id}/verses`;
+      console.log('📡 Fetching verses from:', versesUrl);
+      
+      const versesResponse = await fetch(versesUrl, { 
+        headers: { 'api-key': API_KEY } 
+      });
+      
+      console.log('📡 Verses response status:', versesResponse.status);
+      
       const versesData = await versesResponse.json();
       const chapterVerses = versesData.data || [];
+      
+      console.log('📦 Verses received:', chapterVerses.length);
 
       // Fetch text for each verse
       const versesWithText = await Promise.all(
         chapterVerses.map(async (verse) => {
           try {
-            const verseDetailResponse = await fetch(
-              `https://api.scripture.api.bible/v1/bibles/${bibleId}/verses/${verse.id}`,
-              { headers: { 'api-key': API_KEY } }
-            );
+            const verseUrl = `https://api.scripture.api.bible/v1/bibles/${bibleId}/verses/${verse.id}`;
+            const verseDetailResponse = await fetch(verseUrl, { 
+              headers: { 'api-key': API_KEY } 
+            });
             const verseDetailData = await verseDetailResponse.json();
             return {
               ...verse,
               text: verseDetailData.data?.content || '',
             };
           } catch (err) {
+            console.error('Error fetching verse:', verse.id, err);
             return {
               ...verse,
               text: '',
@@ -289,6 +336,9 @@ const BookContent = () => {
           }
         })
       );
+
+      console.log('✅ Verses with text:', versesWithText.length);
+      console.log('📝 First verse preview:', versesWithText[0]?.text?.substring(0, 50));
 
       setVerses(versesWithText);
       
@@ -304,7 +354,7 @@ const BookContent = () => {
       setDuration(estimatedDuration);
       
     } catch (error) {
-      console.error(`Error fetching chapter ${chapterNum}:`, error);
+      console.error('💥 Error fetching chapter:', error);
       Alert.alert('Error', `Failed to load chapter ${chapterNum}. Please try again.`);
     } finally {
       setLoading(false);

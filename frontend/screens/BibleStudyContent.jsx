@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,14 @@ import {
   StatusBar,
   Platform,
   Alert,
-  Image,
+  Animated,
+  Modal,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
-import * as Sharing from 'expo-sharing';
-import ViewShot from 'react-native-view-shot';
+import BookContent from './BookContentPage';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -25,7 +25,6 @@ const getResponsiveDimensions = () => {
   const isTablet = screenWidth >= 768;
   
   return {
-    headerHeight: isTablet ? 64 : 48,
     fontSize: {
       title: isTablet ? 24 : 20,
       subtitle: isTablet ? 18 : 16,
@@ -51,15 +50,13 @@ const dimensions = getResponsiveDimensions();
 
 const COLORS = {
   primary: '#8B5D33',
-  primaryLight: '#A67C52',
-  primaryDark: '#6A4424',
   accent: '#4A6741',
   background: '#FFFFFF',
   surface: '#FAFAFA',
+  overlay: 'rgba(45, 36, 23, 0.75)',
   text: {
     primary: '#2D2417',
     secondary: '#5A4A33',
-    tertiary: '#8B7355',
     light: '#F7F0E3',
   },
   border: {
@@ -71,7 +68,6 @@ const COLORS = {
   },
 };
 
-// Video Background Component
 const VideoBackground = () => {
   return (
     <View style={styles.videoBackground}>
@@ -89,14 +85,228 @@ const VideoBackground = () => {
   );
 };
 
+const CelebrationOverlay = ({ visible }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.5)).current;
+  const confettiAnims = useRef(
+    Array.from({ length: 50 }, () => {
+      const startX = Math.random() * screenWidth;
+      const startY = -50 - Math.random() * 100; // Start above screen
+      const endY = screenHeight + 100; // End below screen
+      const horizontalDrift = (Math.random() - 0.5) * 200; // Random horizontal movement
+      const initialRotation = Math.random() * 360;
+      const finalRotation = initialRotation + 360 + Math.random() * 180;
+      
+      return {
+        translateY: new Animated.Value(startY),
+        translateX: new Animated.Value(0),
+        rotate: new Animated.Value(initialRotation),
+        scale: new Animated.Value(0),
+        startX,
+        startY,
+        endY,
+        horizontalDrift,
+        initialRotation,
+        finalRotation,
+      };
+    })
+  ).current;
+
+  useEffect(() => {
+    if (visible) {
+      // Reset all animations
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.5);
+      
+      // Animate message
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Animate confetti/balloons falling
+      confettiAnims.forEach((anim, index) => {
+        // Reset position
+        anim.translateY.setValue(anim.startY);
+        anim.translateX.setValue(0);
+        anim.scale.setValue(0);
+        
+        const delay = index * 20; // Stagger the animations
+        const duration = 2000 + Math.random() * 1000; // Vary duration
+        
+        Animated.parallel([
+          // Fall down
+          Animated.timing(anim.translateY, {
+            toValue: anim.endY,
+            duration,
+            delay,
+            useNativeDriver: true,
+          }),
+          // Drift horizontally
+          Animated.timing(anim.translateX, {
+            toValue: anim.horizontalDrift,
+            duration,
+            delay,
+            useNativeDriver: true,
+          }),
+          // Rotate while falling
+          Animated.timing(anim.rotate, {
+            toValue: anim.finalRotation,
+            duration,
+            delay,
+            useNativeDriver: true,
+          }),
+          // Scale in and out
+          Animated.sequence([
+            Animated.timing(anim.scale, {
+              toValue: 1,
+              duration: 300,
+              delay,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim.scale, {
+              toValue: 0.8,
+              duration: duration - 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim.scale, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]).start();
+      });
+
+      // Fade out message after 2.5 seconds
+      setTimeout(() => {
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }).start();
+      }, 2500);
+    } else {
+      // Reset when hidden
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.5);
+      confettiAnims.forEach(anim => {
+        anim.translateY.setValue(anim.startY);
+        anim.translateX.setValue(0);
+        anim.scale.setValue(0);
+        anim.rotate.setValue(anim.initialRotation);
+      });
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  const confettiColors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F8B500', '#FF69B4', '#32CD32', '#FF8C00'];
+
+  return (
+    <View style={styles.celebrationOverlay} pointerEvents="none">
+      {confettiAnims.map((anim, index) => {
+        const size = 12 + Math.random() * 16; // Vary sizes
+        return (
+          <Animated.View
+            key={index}
+            style={[
+              styles.confettiBubble,
+              {
+                backgroundColor: confettiColors[index % confettiColors.length],
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                left: anim.startX,
+                top: anim.startY,
+                transform: [
+                { translateX: anim.translateX },
+                { translateY: anim.translateY },
+                { 
+                  rotate: anim.rotate.interpolate({
+                    inputRange: [0, 360],
+                    outputRange: ['0deg', '360deg'],
+                  })
+                },
+                { scale: anim.scale },
+                ],
+              },
+            ]}
+          />
+        );
+      })}
+
+      <Animated.View
+        style={[
+          styles.celebrationMessage,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }],
+          },
+        ]}
+      >
+        <View style={styles.celebrationIconCircle}>
+          <Ionicons name="checkmark-circle" size={48} color="#4A7742" />
+        </View>
+        <Text style={styles.celebrationText}>Completed! 🎉</Text>
+      </Animated.View>
+    </View>
+  );
+};
+
 const BibleStudyContent = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const [isChecked, setIsChecked] = useState(false);
-  const [isSharing, setIsSharing] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [showBookModal, setShowBookModal] = useState(false);
+  const [bibleId, setBibleId] = useState('65eec8e0b60e656b-01');
+  const [language, setLanguage] = useState('english');
+  
   const reading = route?.params?.bibleReading || {};
   const allReadings = route?.params?.allReadings || [];
-  const viewShotRef = useRef(null);
+
+  // Load Bible preferences
+  useEffect(() => {
+    const loadBiblePreferences = async () => {
+      try {
+        const savedLanguage = await AsyncStorage.getItem('selectedLanguage');
+        const savedBibleId = await AsyncStorage.getItem('selectedBibleId');
+        
+        if (savedLanguage) setLanguage(savedLanguage);
+        if (savedBibleId) setBibleId(savedBibleId);
+      } catch (error) {
+        console.error('Error loading Bible preferences:', error);
+      }
+    };
+    
+    loadBiblePreferences();
+  }, []);
+
+  // Check completion status when screen comes into focus or reading changes
+  useFocusEffect(
+    useCallback(() => {
+      const checkCompletion = async () => {
+        try {
+          const completed = await AsyncStorage.getItem(`lesson_${reading.id}_completed`);
+          setIsChecked(completed === 'true');
+        } catch (error) {
+          console.error('Error loading completion status:', error);
+          setIsChecked(false);
+        }
+      };
+      checkCompletion();
+    }, [reading.id])
+  );
 
   const handleCheckToggle = async () => {
     const newChecked = !isChecked;
@@ -104,170 +314,248 @@ const BibleStudyContent = () => {
     
     try {
       if (newChecked) {
+        // Use current timestamp for completion
+        const completionTimestamp = Date.now();
+        await AsyncStorage.setItem(`lesson_${reading.id}_completed_date`, completionTimestamp.toString());
         await AsyncStorage.setItem(`lesson_${reading.id}_completed`, 'true');
+        
+        const progressData = await AsyncStorage.getItem('bibleProgress');
+        const progressMap = progressData ? JSON.parse(progressData) : {};
+        progressMap[reading.id] = 100;
+        await AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
+        
+        const completedData = await AsyncStorage.getItem('completedStudies');
+        const completedIds = completedData ? JSON.parse(completedData) : [];
+        if (!completedIds.includes(reading.id)) {
+          completedIds.push(reading.id);
+          await AsyncStorage.setItem('completedStudies', JSON.stringify(completedIds));
+        }
+        
+        if (route?.params?.onProgressUpdate) {
+          route.params.onProgressUpdate(100);
+        }
+        
+        setShowCelebration(true);
+        setTimeout(() => {
+          setShowCelebration(false);
+        }, 3000);
       } else {
+        await AsyncStorage.removeItem(`lesson_${reading.id}_completed_date`);
         await AsyncStorage.removeItem(`lesson_${reading.id}_completed`);
+        
+        const progressData = await AsyncStorage.getItem('bibleProgress');
+        const progressMap = progressData ? JSON.parse(progressData) : {};
+        progressMap[reading.id] = 0;
+        await AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
+        
+        const completedData = await AsyncStorage.getItem('completedStudies');
+        const completedIds = completedData ? JSON.parse(completedData) : [];
+        const filtered = completedIds.filter(id => id !== reading.id);
+        await AsyncStorage.setItem('completedStudies', JSON.stringify(filtered));
+        
+        if (route?.params?.onProgressUpdate) {
+          route.params.onProgressUpdate(0);
+        }
       }
     } catch (error) {
       console.error('Error saving completion status:', error);
     }
   };
 
-  const handleOpenReading = () => {
-    navigation.navigate('BibleReader', {
-      verse: reading?.main_verse || '',
-      book: reading?.main_verse?.split(' ')[0] || '',
-    });
-  };
-
-  const handleNext = () => {
-    const currentIndex = allReadings.findIndex(r => r.id === reading.id);
-    if (currentIndex >= 0 && currentIndex < allReadings.length - 1) {
-      const nextReading = allReadings[currentIndex + 1];
-      navigation.replace('BibleStudyContent', {
-        bibleReading: nextReading,
-        allReadings: allReadings,
-      });
-    }
-  };
-
-  // Format books - remove brackets and clean up
   const formatBooks = (books) => {
     if (!books) return 'No reading assigned';
     if (Array.isArray(books)) {
       return books.join(', ');
     }
-    // Remove brackets if present
+    // Try to parse if it's a JSON string
+    if (typeof books === 'string') {
+      try {
+        const parsed = JSON.parse(books);
+        if (Array.isArray(parsed)) {
+          return parsed.join(', ');
+        }
+      } catch (e) {
+        // Not JSON, continue with string replacement
+      }
+    }
     return books.replace(/[\[\]"]/g, '').replace(/,/g, ', ');
   };
 
-  const handleShare = async () => {
+  const getBookInfo = () => {
+    // First, properly parse the books field
+    let booksArray = [];
     try {
-      setIsSharing(true);
-      // Wait for UI to update
-      await new Promise(resolve => setTimeout(resolve, 100));
+      if (!reading?.books) {
+        return { book: { id: 'GEN', name: 'Genesis' }, chapter: { number: '1' } };
+      }
       
-      if (viewShotRef.current) {
-        const uri = await viewShotRef.current.capture();
-        
-        setIsSharing(false);
-        
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, {
-            mimeType: 'image/png',
-            dialogTitle: 'Share Bible Reading',
-          });
-        } else {
-          Alert.alert('Sharing not available', 'Sharing is not available on this device');
+      // Handle different formats
+      if (Array.isArray(reading.books)) {
+        booksArray = reading.books;
+      } else if (typeof reading.books === 'string') {
+        // Try to parse as JSON
+        try {
+          const parsed = JSON.parse(reading.books);
+          booksArray = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+          // Not JSON, treat as single string
+          booksArray = [reading.books];
         }
+      } else {
+        booksArray = [reading.books];
       }
     } catch (error) {
-      console.error('Error sharing:', error);
-      setIsSharing(false);
-      Alert.alert('Error', 'Failed to share the content');
+      console.error('Error parsing books:', error);
+      return { book: { id: 'GEN', name: 'Genesis' }, chapter: { number: '1' } };
     }
-  };
 
-  useEffect(() => {
-    const loadCompletionStatus = async () => {
-      try {
-        const completed = await AsyncStorage.getItem(`lesson_${reading.id}_completed`);
-        setIsChecked(completed === 'true');
-      } catch (error) {
-        console.error('Error loading completion status:', error);
+    // Get the first book entry
+    const firstBook = booksArray[0] || '';
+    if (!firstBook || firstBook === 'No reading assigned') {
+      return { book: { id: 'GEN', name: 'Genesis' }, chapter: { number: '1' } };
+    }
+
+    // Extract book name and chapter from the first book
+    // Examples: "Genesis 1", "Genesis 1-2", "1 Samuel 5", "Psalms 23", "Psalm 23", "Song of Solomon 1"
+    let bookName = '';
+    let chapterNumber = '1';
+    
+    // Remove any brackets or quotes that might be left
+    const cleanBook = String(firstBook).replace(/[\[\]"]/g, '').trim();
+    
+    // Strategy: Find the last number in the string (that's the chapter)
+    // Everything before that is the book name
+    // This handles: "Genesis 1", "1 Samuel 5", "Song of Solomon 1", "Psalms 23"
+    const lastNumberMatch = cleanBook.match(/(\d+)(?:\s*[:\-,]|$)/);
+    
+    if (lastNumberMatch) {
+      chapterNumber = lastNumberMatch[1];
+      // Find the position of the last number
+      const lastNumberIndex = cleanBook.lastIndexOf(lastNumberMatch[0]);
+      // Everything before the last number is the book name
+      bookName = cleanBook.substring(0, lastNumberIndex).trim();
+      
+      // Handle cases like "Genesis 1-2" where we want just "Genesis" and chapter "1"
+      // If there's a dash or colon before the number, extract just the first number
+      const firstNumberMatch = cleanBook.match(/(\d+)/);
+      if (firstNumberMatch && firstNumberMatch.index < lastNumberIndex) {
+        chapterNumber = firstNumberMatch[1];
+        bookName = cleanBook.substring(0, firstNumberMatch.index).trim();
       }
+    } else {
+      // No number found, use entire string as book name
+      bookName = cleanBook.trim();
+      chapterNumber = '1';
+    }
+    
+    // Clean up book name - remove any trailing spaces, dashes, or special characters
+    bookName = bookName.replace(/[\s\-:]+$/, '').replace(/\s+/g, ' ').trim();
+    
+    // Normalize book names (handle common abbreviations and variations)
+    bookName = bookName
+      .replace(/\bPs\b/i, 'Psalms')
+      .replace(/\bPsalm\b/i, 'Psalms')
+      .replace(/\bGen\b/i, 'Genesis')
+      .replace(/\bExo\b/i, 'Exodus')
+      .replace(/\bLev\b/i, 'Leviticus')
+      .replace(/\bNum\b/i, 'Numbers')
+      .replace(/\bDeut\b/i, 'Deuteronomy')
+      .replace(/\b1\s+Sam\b/i, '1 Samuel')
+      .replace(/\b2\s+Sam\b/i, '2 Samuel')
+      .replace(/\b1\s+Kings?\b/i, '1 Kings')
+      .replace(/\b2\s+Kings?\b/i, '2 Kings')
+      .replace(/\b1\s+Cor\b/i, '1 Corinthians')
+      .replace(/\b2\s+Cor\b/i, '2 Corinthians')
+      .trim();
+    
+    const bookMapping = {
+      // Old Testament
+      'Genesis': 'GEN', 'Exodus': 'EXO', 'Leviticus': 'LEV', 'Numbers': 'NUM',
+      'Deuteronomy': 'DEU', 'Joshua': 'JOS', 'Judges': 'JDG', 'Ruth': 'RUT',
+      '1 Samuel': '1SA', '2 Samuel': '2SA', '1 Kings': '1KI', '2 Kings': '2KI',
+      '1 Chronicles': '1CH', '2 Chronicles': '2CH', 'Ezra': 'EZR', 'Nehemiah': 'NEH',
+      'Esther': 'EST', 'Job': 'JOB', 'Psalms': 'PSA', 'Psalm': 'PSA',
+      'Proverbs': 'PRO', 'Ecclesiastes': 'ECC', 'Song of Solomon': 'SNG',
+      'Isaiah': 'ISA', 'Jeremiah': 'JER', 'Lamentations': 'LAM', 'Ezekiel': 'EZK',
+      'Daniel': 'DAN', 'Hosea': 'HOS', 'Joel': 'JOL', 'Amos': 'AMO',
+      'Obadiah': 'OBA', 'Jonah': 'JON', 'Micah': 'MIC', 'Nahum': 'NAM',
+      'Habakkuk': 'HAB', 'Zephaniah': 'ZEP', 'Haggai': 'HAG', 'Zechariah': 'ZEC',
+      'Malachi': 'MAL',
+      // New Testament
+      'Matthew': 'MAT', 'Mark': 'MRK', 'Luke': 'LUK', 'John': 'JHN',
+      'Acts': 'ACT', 'Romans': 'ROM', 
+      '1 Corinthians': '1CO', '2 Corinthians': '2CO',
+      'Galatians': 'GAL', 'Ephesians': 'EPH', 'Philippians': 'PHP',
+      'Colossians': 'COL', '1 Thessalonians': '1TH', '2 Thessalonians': '2TH',
+      '1 Timothy': '1TI', '2 Timothy': '2TI', 'Titus': 'TIT', 'Philemon': 'PHM',
+      'Hebrews': 'HEB', 'James': 'JAS', '1 Peter': '1PE', '2 Peter': '2PE',
+      '1 John': '1JN', '2 John': '2JN', '3 John': '3JN', 'Jude': 'JUD',
+      'Revelation': 'REV',
     };
     
-    if (reading?.id) {
-      loadCompletionStatus();
+    const bookId = bookMapping[bookName] || 'GEN';
+    
+    console.log('📖 Book parsing:', {
+      original: reading?.books,
+      parsedArray: booksArray,
+      firstBook: firstBook,
+      cleanBook: cleanBook,
+      extractedBookName: bookName,
+      extractedChapter: chapterNumber,
+      finalBookId: bookId,
+      finalBookName: bookName
+    });
+    
+    return {
+      book: { id: bookId, name: bookName },
+      chapter: { number: chapterNumber }
+    };
+  };
+
+  const handleNext = () => {
+    if (!allReadings || allReadings.length === 0) {
+      console.log('No next reading available');
+      return;
     }
-  }, [reading?.id]);
+
+    const currentIndex = allReadings.findIndex(r => r.id === reading.id);
+    
+    if (currentIndex === -1 || currentIndex >= allReadings.length - 1) {
+      console.log('Last reading reached');
+      return;
+    }
+
+    const nextReading = allReadings[currentIndex + 1];
+    
+    navigation.replace('BibleStudyContent', {
+      bibleReading: nextReading,
+      allReadings: allReadings,
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
-      {/* Video Background */}
       <VideoBackground />
+      <CelebrationOverlay visible={showCelebration} />
       
-      {/* Header Buttons */}
       <View style={styles.headerButtons}>
         <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={dimensions.iconSize.large} color={COLORS.text.light} />
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-          <Ionicons name="share-social" size={dimensions.iconSize.medium} color={COLORS.text.light} />
+          <Ionicons name="close" size={dimensions.iconSize.large} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
 
-      {/* Hidden Shareable Content Card - Only rendered when sharing */}
-      {isSharing && (
-        <View style={styles.hiddenShareContainer}>
-          <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.9 }} style={styles.shareableCard}>
-            <Image
-              source={require('../assets/images/img4.jpg')}
-              style={styles.shareableBackground}
-              resizeMode="cover"
-            />
-            
-            {/* Overlay */}
-            <View style={styles.shareableOverlay} />
-            
-            {/* Shareable Content */}
-            <View style={styles.shareableContent}>
-              {/* Top Corner - Day Number */}
-              <View style={styles.flyerTopCorner}>
-                <Text style={styles.flyerDayNumber}>Day</Text>
-                <Text style={styles.flyerDayNumberBig}>{reading?.day || '1'}</Text>
-              </View>
-
-              {/* Other Corner - App Name */}
-              <View style={styles.flyerAppCorner}>
-                <Ionicons name="book" size={24} color="#FFFFFF" />
-                <Text style={styles.flyerAppName}>BibleSnap</Text>
-              </View>
-
-              {/* Center Content */}
-              <View style={styles.flyerCenter}>
-                {/* Title */}
-                <Text style={styles.flyerTitle}>{reading?.title || 'Today\'s Reading'}</Text>
-                
-                {/* Book Reference */}
-                <View style={styles.flyerBookSection}>
-                  <Ionicons name="book-outline" size={20} color="#FFFFFF" />
-                  <Text style={styles.flyerBook}>{formatBooks(reading?.books)}</Text>
-                </View>
-
-                {/* Description */}
-                <Text style={styles.flyerDescription}>
-                  {reading?.explanation || 'Discover today\'s spiritual message'}
-                </Text>
-              </View>
-
-              {/* Bottom Message */}
-              <View style={styles.flyerBottom}>
-                <View style={styles.flyerBottomLine} />
-                <Text style={styles.flyerBottomText}>📖 Join the journey ✨</Text>
-              </View>
-            </View>
-          </ViewShot>
-        </View>
-      )}
-
-      {/* Main Content */}
       <ScrollView 
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Title Section */}
         <View style={styles.titleSection}>
           <Text style={styles.mainTitle}>Today's Verse</Text>
           <Text style={styles.dayLabel}>Day {reading?.day || '1'}</Text>
         </View>
 
-        {/* Description Card */}
         <View style={styles.descriptionCard}>
           <View style={styles.cardHeader}>
             <Ionicons name="book" size={dimensions.iconSize.medium} color={COLORS.primary} />
@@ -278,7 +566,6 @@ const BibleStudyContent = () => {
           </Text>
         </View>
 
-        {/* Reading Card with Checkbox */}
         <View style={styles.readingCard}>
           <View style={styles.readingHeader}>
             <View style={styles.readingTitleContainer}>
@@ -296,7 +583,7 @@ const BibleStudyContent = () => {
           </View>
 
           <View style={styles.bookToRead}>
-            <TouchableOpacity style={styles.bookItem} onPress={handleOpenReading}>
+            <TouchableOpacity style={styles.bookItem} onPress={() => setShowBookModal(true)}>
               <View style={styles.bookInfo}>
                 <Ionicons name="book-outline" size={dimensions.iconSize.medium} color={COLORS.primary} />
                 <Text style={styles.bookText}>{formatBooks(reading?.books)}</Text>
@@ -306,7 +593,6 @@ const BibleStudyContent = () => {
           </View>
         </View>
 
-        {/* Upcoming Lesson Preview */}
         {reading?.next_title && (
           <View style={styles.upcomingSection}>
             <Text style={styles.upcomingSectionTitle}>Up Next</Text>
@@ -327,7 +613,6 @@ const BibleStudyContent = () => {
           </View>
         )}
 
-        {/* Add a button to take notes */}
         <TouchableOpacity
           style={styles.noteButton}
           onPress={() => {
@@ -343,6 +628,36 @@ const BibleStudyContent = () => {
           <Text style={styles.noteButtonText}>Take a Note</Text>
         </TouchableOpacity>
       </ScrollView>
+
+  <Modal
+  visible={showBookModal}
+  animationType="slide"
+  transparent={false}
+  onRequestClose={() => setShowBookModal(false)}
+>
+  <View style={styles.modalContainer}>
+    <TouchableOpacity 
+      style={styles.modalCloseButton}
+      onPress={() => setShowBookModal(false)}
+    >
+      <View style={styles.modalCloseButtonInner}>
+        <Ionicons name="close" size={28} color="#FFFFFF" />
+      </View>
+    </TouchableOpacity>
+
+    <BookContent
+      route={{
+        params: {
+          book: getBookInfo().book,
+          chapter: getBookInfo().chapter,
+          bibleId: bibleId,
+          language: language,
+        }
+      }}
+      navigation={navigation}
+    />
+  </View>
+</Modal>
     </SafeAreaView>
   );
 };
@@ -357,43 +672,26 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   videoOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(45, 36, 23, 0.75)',
+    ...StyleSheet.absoluteFillObject, 
+    backgroundColor: COLORS.overlay,
+    zIndex: 0,
   },
   headerButtons: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 50 : 40,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: dimensions.spacing.md,
-    zIndex: 10,
+    right: 16,
+    zIndex: 100,
   },
   closeButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  shareButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 5,
   },
@@ -402,153 +700,8 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: dimensions.spacing.lg,
-    paddingTop: Platform.OS === 'ios' ? 100 : 90,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: dimensions.spacing.xl * 2,
-  },
-  // Hidden container for shareable content
-  hiddenShareContainer: {
-    position: 'absolute',
-    left: -9999,
-    top: 0,
-    width: screenWidth,
-  },
-  shareableCard: {
-    width: screenWidth,
-    minHeight: 420,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  shareableBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
-  shareableOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  shareableContent: {
-    flex: 1,
-    padding: 24,
-    position: 'relative',
-    zIndex: 2,
-    minHeight: 420,
-  },
-  flyerTopCorner: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    zIndex: 10,
-  },
-  flyerDayNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-  },
-  flyerDayNumberBig: {
-    fontSize: 48,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    lineHeight: 48,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  flyerAppCorner: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    zIndex: 10,
-  },
-  flyerAppName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  flyerCenter: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 60,
-  },
-  flyerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 30,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  flyerBookSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(160, 117, 83, 0.9)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 20,
-    gap: 8,
-  },
-  flyerBook: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  flyerDescription: {
-    fontSize: 16,
-    fontStyle: 'italic',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 24,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  flyerBottom: {
-    position: 'absolute',
-    bottom: 30,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  flyerBottomLine: {
-    width: 80,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 2,
-    marginBottom: 10,
-  },
-  flyerBottomText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
   },
   titleSection: {
     alignItems: 'center',
@@ -575,11 +728,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: dimensions.spacing.lg,
     marginBottom: dimensions.spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -602,11 +750,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: dimensions.spacing.lg,
     marginBottom: dimensions.spacing.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
   },
   readingHeader: {
     flexDirection: 'row',
@@ -718,16 +861,61 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: dimensions.spacing.lg,
     gap: dimensions.spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
   noteButtonText: {
     fontSize: dimensions.fontSize.body,
     fontWeight: '700',
     color: COLORS.background,
+  },
+  celebrationOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  confettiBubble: {
+    position: 'absolute',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  celebrationMessage: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    paddingHorizontal: 40,
+    paddingVertical: 24,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  celebrationIconCircle: {
+    marginBottom: 12,
+  },
+  celebrationText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.text.primary,
+    textAlign: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 40,
+    right: 16,
+    zIndex: 9999,
+  },
+  modalCloseButtonInner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(139, 93, 51, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
 });
 

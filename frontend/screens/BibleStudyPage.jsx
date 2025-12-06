@@ -17,10 +17,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
 import { fetchCategories } from '../api/categoryService';
-import { fetchBibleReadings } from '../api/bibleReadingService'; 
+import { fetchBibleReadings } from '../api/bibleReadingService';
+import { fetchBooks } from '../api/bookService';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SplashScreen from '../components/SplashScreen';
+import { createStyles, COLORS } from '../styles/bIbleStudyContent.styles';
 
 let DateTimePicker;
 try {
@@ -33,7 +35,7 @@ try {
 } catch (e) {
   DateTimePicker = ({ value, onChange }) => null;
 }
-
+const styles = createStyles();
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Responsive dimensions
@@ -66,34 +68,6 @@ const getResponsiveDimensions = () => {
 };
 
 const dimensions = getResponsiveDimensions();
-
-// Updated color palette to match BibleStudyContent
-const COLORS = {
-  primary: '#8B5D33',
-  primaryLight: '#A67C52',
-  primaryDark: '#6A4424',
-  accent: '#4A6741',
-  background: '#FFFFFF',
-  surface: '#FAFAFA',
-  text: {
-    primary: '#2D2417',
-    secondary: '#5A4A33',
-    tertiary: '#8B7355',
-    light: '#F7F0E3',
-  },
-  border: {
-    light: '#E7DBC8',
-    medium: '#CCBDA6',
-  },
-  semantic: {
-    success: '#4A7742',
-    warning: '#FF9800',
-    error: '#F44336',
-  },
-  overlay: 'rgba(45, 36, 23, 0.75)',
-  locked: '#D0D0D0',
-};
-
 // Video Background Component
 const VideoBackground = () => {
   return (
@@ -113,7 +87,7 @@ const VideoBackground = () => {
 };
 
 // Vertical Journey Map - Snake path layout
-const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequestUnlock }) => {
+const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequestUnlock, todaysReadingIds = new Set() }) => {
   const dimensions = getResponsiveDimensions();
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const popAnim = useRef(new Animated.Value(1)).current;
@@ -139,6 +113,14 @@ const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequ
   }, []);
 
   const getStatus = (item, index) => {
+    // Books are always accessible (no locking)
+    if (item.id && item.id.toString().startsWith('book_')) {
+      const id = item.id;
+      const prog = progressMap[id] || 0;
+      return (completedSet.has(id) || prog === 100) ? 'completed' : 'current';
+    }
+    
+    // Bible readings follow the normal locking logic
     const id = item.id;
     const prog = progressMap[id] || 0;
     if (completedSet.has(id) || prog === 100) return 'completed';
@@ -225,7 +207,8 @@ const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequ
           const locked = status === 'locked';
           const isCurrent = status === 'current';
           const isCompleted = status === 'completed';
-          const label = item.day ? `Day ${item.day}` : (item.title || `#${item.id}`);
+          const isTodaysReading = todaysReadingIds.has(item.id); // Check if this is today's reading
+          const label = item.day ? `Day ${item.day}` : (item.title || item.name || `#${item.id}`);
           const previousItem = items[index - 1];
           const positionStyle = getNodePosition(index);
           const rotation = getNodeRotation(index);
@@ -244,11 +227,18 @@ const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequ
           let iconColor = '#FFFFFF';
           
           if (isCompleted) {
+            // Green only for successful/completed nodes
             nodeColor = COLORS.semantic.success;
             iconName = 'checkmark';
             iconColor = '#FFFFFF';
+          } else if (isTodaysReading) {
+            // Golden/coffee color for today's readings
+            nodeColor = COLORS.primary; // Coffee/golden color
+            iconName = 'book';
+            iconColor = '#FFFFFF';
           } else if (isCurrent) {
-            nodeColor = COLORS.primary;
+            // Golden/coffee color for current nodes
+            nodeColor = COLORS.primary; // Coffee/golden color
             iconName = 'book';
             iconColor = '#FFFFFF';
           }
@@ -260,14 +250,15 @@ const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequ
                 onPress={handlePress}
                 style={styles.nodeTouchable}
               >
-                {/* Outer pulsing ring for current node */}
-                {isCurrent && (
+                {/* Outer pulsing ring for current node or today's reading */}
+                {(isCurrent || isTodaysReading) && (
                   <Animated.View
                     style={[
                       styles.currentNodeRing,
                       {
                         transform: [{ scale: popAnim }],
                         borderColor: nodeColor,
+                        borderWidth: isTodaysReading ? 3 : 2, // Thicker border for today's readings
                       }
                     ]}
                   />
@@ -284,15 +275,15 @@ const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequ
                       backgroundColor: nodeColor,
                       transform: [
                         { rotate: rotation },
-                        { scale: isCurrent ? pulseAnim : 1 },
+                        { scale: (isCurrent || isTodaysReading) ? pulseAnim : 1 },
                         { perspective: 1000 },
                         { rotateX: '15deg' },
                       ],
                       shadowColor: '#000',
                       shadowOffset: { width: 0, height: 8 },
-                      shadowOpacity: 0.3,
-                      shadowRadius: 12,
-                      elevation: 15,
+                      shadowOpacity: isTodaysReading ? 0.5 : 0.3,
+                      shadowRadius: isTodaysReading ? 16 : 12,
+                      elevation: isTodaysReading ? 20 : 15,
                     }
                   ]}
                 >
@@ -322,7 +313,7 @@ const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequ
                       { color: locked ? COLORS.text.tertiary : 'rgba(247, 240, 227, 0.8)' }
                     ]}
                   >
-                    {item.title || (item.theme ? item.theme : '')}
+                    {item.title || item.name || (item.theme ? item.theme : '')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -342,6 +333,7 @@ const BibleStudyApp = () => {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [bibleReadings, setBibleReadings] = useState([]);
+  const [books, setBooks] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -361,25 +353,28 @@ const BibleStudyApp = () => {
     finishDate: null,
     startDate: null,
   });
+  const [todaysReadingIds, setTodaysReadingIds] = useState(new Set()); // Track today's readings for highlighting
 
   // Unlock modal state
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
   const [unlockTarget, setUnlockTarget] = useState(null);
 
-  // NEW: Reading type modal state
-  const [readingTypeModalVisible, setReadingTypeModalVisible] = useState(false);
-  const [selectedReadingType, setSelectedReadingType] = useState('historical'); // 'historical' or 'books'
+  // Filter modal states
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [selectedType, setSelectedType] = useState('historical'); // 'historical' (shows all), 'pickupbook', 'video'
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
+        
+        // Load categories and bible readings
         const [fetchedCategories, fetchedBibleReadings] = await Promise.all([
           fetchCategories(),
           fetchBibleReadings()
         ]);
 
-        setBibleReadings(fetchedBibleReadings);
+        setBibleReadings(fetchedBibleReadings || []);
 
         const themes = Array.from(new Set(
           (fetchedBibleReadings || [])
@@ -388,6 +383,17 @@ const BibleStudyApp = () => {
         ));
         const themeCategories = themes.map(t => ({ id: t, name: t }));
         setCategories(themeCategories.length ? themeCategories : fetchedCategories);
+
+        // Load books separately - don't fail if this fails
+        try {
+          const fetchedBooks = await fetchBooks();
+          console.log('Books fetched successfully:', fetchedBooks?.length || 0, 'books');
+          setBooks(fetchedBooks || []);
+        } catch (bookError) {
+          console.error('Error fetching books (non-critical):', bookError);
+          console.error('Book error details:', bookError.message);
+          setBooks([]); // Set empty array if books fail to load
+        }
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -429,15 +435,67 @@ const BibleStudyApp = () => {
     }
   }, [progressMap, completedStudies]);
 
+  // Transform books to match node format
+  const transformedBooks = (books || []).map(book => ({
+    ...book,
+    title: book.name,
+    id: `book_${book.id}`,
+  }));
+
+  // Filter books by search query
+  const filteredBooks = transformedBooks.filter(book => {
+    const matchesSearch = searchQuery === '' || 
+      (book.name && book.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesSearch;
+  });
+
+
   const filteredReadings = bibleReadings.filter(item => {
+    // Category filter (theme-based)
     const matchesCategory = selectedCategory === 'all' || 
       (item.theme && item.theme === selectedCategory) ||
       (item.category && item.category.id === selectedCategory);
+    
+    // Type filter: historical shows ALL readings, other types filter by type
+    let matchesType = true;
+    if (selectedType === 'historical') {
+      // Show all readings when historical is selected
+      matchesType = true;
+    } else if (selectedType === 'pickupbook') {
+      // Don't show readings when pickupbook is selected (books will be shown instead)
+      matchesType = false;
+    } else {
+      // For video or other types, filter by type
+      matchesType = 
+        (item.type && item.type.toLowerCase() === selectedType.toLowerCase()) ||
+        (item.category && item.category.name && item.category.name.toLowerCase().includes(selectedType.toLowerCase()));
+    }
+    
+    // Search filter
     const matchesSearch = searchQuery === '' || 
       (item.title && item.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (item.main_verse && item.main_verse.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCategory && matchesSearch;
+    
+    return matchesCategory && matchesType && matchesSearch;
   });
+
+  // Determine which items to display based on selected type
+  const displayItems = selectedType === 'pickupbook' ? filteredBooks : filteredReadings;
+
+  // Debug logging for pickupbook filter
+  useEffect(() => {
+    if (selectedType === 'pickupbook') {
+      console.log('=== Pickupbook Filter Active ===');
+      console.log('Books loaded:', books.length);
+      console.log('Filtered books:', filteredBooks.length);
+      console.log('Display items:', displayItems.length);
+      if (displayItems.length > 0) {
+        console.log('Sample book:', displayItems[0]);
+      } else {
+        console.warn('No books to display!');
+      }
+    }
+  }, [selectedType, books.length, filteredBooks.length, displayItems.length]);
 
   const handleGoBack = () => {
     navigation.goBack();
@@ -445,16 +503,12 @@ const BibleStudyApp = () => {
 
   const handleCategoryFilter = (categoryId) => {
     setSelectedCategory(categoryId);
-    setReadingTypeModalVisible(false);
+    setShowReadingTypeDropdown(false);
   };
 
-  const handleReadingTypeSelect = (type) => {
-    setSelectedReadingType(type);
-    if (type === 'historical') {
-      setSelectedCategory('all');
-      setReadingTypeModalVisible(false);
-    }
-    // Don't close modal for 'books' type, let user select a book
+  const handleTypeFilter = (type) => {
+    setSelectedType(type);
+    setCategoryModalVisible(false);
   };
 
   const handleNavigateToStudy = (study, progress) => {
@@ -466,6 +520,49 @@ const BibleStudyApp = () => {
         setProgressMap((prev) => ({ ...prev, [study.id]: percent }));
       }
     });
+  };
+
+  // Book name to book ID mapping for API
+  const getBookIdFromName = (bookName) => {
+    const bookMapping = {
+      'Genesis': 'GEN', 'Exodus': 'EXO', 'Leviticus': 'LEV', 'Numbers': 'NUM',
+      'Deuteronomy': 'DEU', 'Joshua': 'JOS', 'Judges': 'JDG', 'Ruth': 'RUT',
+      '1 Samuel': '1SA', '2 Samuel': '2SA', '1 Kings': '1KI', '2 Kings': '2KI',
+      '1 Chronicles': '1CH', '2 Chronicles': '2CH', 'Ezra': 'EZR', 'Nehemiah': 'NEH',
+      'Esther': 'EST', 'Job': 'JOB', 'Psalms': 'PSA', 'Proverbs': 'PRO',
+      'Ecclesiastes': 'ECC', 'Song of Solomon': 'SNG', 'Isaiah': 'ISA', 'Jeremiah': 'JER',
+      'Lamentations': 'LAM', 'Ezekiel': 'EZK', 'Daniel': 'DAN', 'Hosea': 'HOS',
+      'Joel': 'JOL', 'Amos': 'AMO', 'Obadiah': 'OBA', 'Jonah': 'JON',
+      'Micah': 'MIC', 'Nahum': 'NAM', 'Habakkuk': 'HAB', 'Zephaniah': 'ZEP',
+      'Haggai': 'HAG', 'Zechariah': 'ZEC', 'Malachi': 'MAL',
+      'Matthew': 'MAT', 'Mark': 'MRK', 'Luke': 'LUK', 'John': 'JHN',
+      'Acts': 'ACT', 'Romans': 'ROM', '1 Corinthians': '1CO', '2 Corinthians': '2CO',
+      'Galatians': 'GAL', 'Ephesians': 'EPH', 'Philippians': 'PHP', 'Colossians': 'COL',
+      '1 Thessalonians': '1TH', '2 Thessalonians': '2TH', '1 Timothy': '1TI', '2 Timothy': '2TI',
+      'Titus': 'TIT', 'Philemon': 'PHM', 'Hebrews': 'HEB', 'James': 'JAS',
+      '1 Peter': '1PE', '2 Peter': '2PE', '1 John': '1JN', '2 John': '2JN',
+      '3 John': '3JN', 'Jude': 'JUD', 'Revelation': 'REV',
+    };
+    return bookMapping[bookName] || 'GEN';
+  };
+
+  const handleNavigateToBook = async (book) => {
+    try {
+      // Get Bible preferences
+      const savedLanguage = await AsyncStorage.getItem('selectedLanguage') || 'english';
+      const savedBibleId = await AsyncStorage.getItem('selectedBibleId') || '65eec8e0b60e656b-01';
+      
+      const bookId = getBookIdFromName(book.name);
+      
+      navigation.navigate('BookContent', {
+        book: { id: bookId, name: book.name },
+        chapter: { number: '1' },
+        bibleId: savedBibleId,
+        language: savedLanguage,
+      });
+    } catch (error) {
+      console.error('Error navigating to book:', error);
+    }
   };
 
   const buildSchedule = (readings, totalDays) => {
@@ -518,6 +615,7 @@ const BibleStudyApp = () => {
   useEffect(() => {
     if (!studyPlan || !bibleReadings || bibleReadings.length === 0) {
       setPlanStats(prev => ({...prev, percent: 0, elapsedDays: 0, daysRemaining: 0, finishDate: null, startDate: null}));
+      setTodaysReadingIds(new Set());
       return;
     }
     const start = new Date(studyPlan.startDate);
@@ -534,6 +632,23 @@ const BibleStudyApp = () => {
       finishDate: finishDate.toISOString(),
       startDate: studyPlan.startDate,
     });
+    
+    // Calculate today's readings if plan is not 365 days
+    if (studyPlan.days !== 365 && studyPlan.schedule && studyPlan.schedule.length > 0) {
+      const dayIndex = Math.max(0, Math.min(studyPlan.days - 1, diff));
+      const todayDayIds = studyPlan.schedule[dayIndex] || [];
+      
+      // Find reading IDs that match today's day IDs
+      const todayIds = new Set();
+      bibleReadings.forEach(reading => {
+        if (todayDayIds.includes(reading.day)) {
+          todayIds.add(reading.id);
+        }
+      });
+      setTodaysReadingIds(todayIds);
+    } else {
+      setTodaysReadingIds(new Set());
+    }
   }, [studyPlan, bibleReadings]);
 
   if (loading && bibleReadings.length === 0) {
@@ -557,12 +672,13 @@ const BibleStudyApp = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
       {/* Video Background */}
       <VideoBackground />
 
+      {/* Loading overlay */}
       {loading && (
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingContent}>
@@ -619,54 +735,69 @@ const BibleStudyApp = () => {
         </View>
       )}
 
-      {/* Filter Bar with Buttons */}
+      {/* Filter Bar with Modal Buttons */}
       <View style={styles.filterBar}>
-        {/* Reading Type Button */}
+        {/* Types Filter Button */}
         <TouchableOpacity 
           style={styles.filterButton}
-          onPress={() => setReadingTypeModalVisible(true)}
+          onPress={() => setCategoryModalVisible(true)}
         >
-          <Ionicons name="book-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
-          <Text style={styles.filterButtonText}>
-            {selectedReadingType === 'historical' ? 'Historical' : 
-             selectedCategory === 'all' ? 'All Books' : 
-             categories.find(c => c.id === selectedCategory)?.name || 'Books'}
+          <Ionicons name="book-outline" size={14} color={COLORS.text.light} />
+          <Text style={styles.filterButtonText} numberOfLines={1}>
+            {selectedType.charAt(0).toUpperCase() + selectedType.slice(1)}
           </Text>
         </TouchableOpacity>
 
-        {/* Days Plan Button - Click to open modal */}
+        {/* Study Plan Button */}
         <TouchableOpacity 
           style={styles.filterButton}
           onPress={() => setPlanModalVisible(true)}
         >
-          <Ionicons name="calendar-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
-          <Text style={styles.filterButtonText}>
-            {studyPlan ? `${studyPlan.days}d Plan` : 'Set Plan'}
+          <Ionicons name="time-outline" size={14} color={COLORS.text.light} />
+          <Text style={styles.filterButtonText} numberOfLines={1}>
+            {studyPlan ? `${studyPlan.days}d` : 'Plan'}
           </Text>
         </TouchableOpacity>
       </View>
 
+      
       {/* Main Content */}
       <View style={styles.mainContent}>
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {filteredReadings.length === 0 ? (
+          {displayItems.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="book-outline" size={64} color="rgba(247, 240, 227, 0.3)" />
               <Text style={[styles.emptyTitle, { fontSize: dimensions.fontSize.subtitle }]}>
-                No studies found
+                {selectedType === 'pickupbook' ? 'No books found' : 'No studies found'}
               </Text>
               <Text style={[styles.emptyText, { fontSize: dimensions.fontSize.body }]}>
-                Start your Bible study journey today
+                {selectedType === 'pickupbook' ? 'Try searching for a different book' : 'Start your Bible study journey today'}
               </Text>
             </View>
           ) : (
-            <VerticalGameMap
-              items={filteredReadings}
-              progressMap={progressMap}
-              completedSet={completedStudies}
-              onPressItem={handleNavigateToStudy}
-              onRequestUnlock={handleRequestUnlock}
-            />
+            <>
+              {/* Lessons per day separator - only show if plan is not 365 days */}
+              {studyPlan && studyPlan.days !== 365 && selectedType !== 'pickupbook' && (
+                <View style={styles.lessonsPerDaySeparator}>
+                  <View style={styles.separatorLine} />
+                  <View style={styles.lessonsPerDayContainer}>
+                    <Ionicons name="calendar" size={16} color={COLORS.accent} />
+                    <Text style={styles.lessonsPerDayText}>
+                      {Math.ceil((bibleReadings?.length || 0) / studyPlan.days)} lessons per day
+                    </Text>
+                  </View>
+                  <View style={styles.separatorLine} />
+                </View>
+              )}
+              <VerticalGameMap
+                items={displayItems}
+                progressMap={progressMap}
+                completedSet={completedStudies}
+                onPressItem={selectedType === 'pickupbook' ? handleNavigateToBook : handleNavigateToStudy}
+                onRequestUnlock={handleRequestUnlock}
+                todaysReadingIds={todaysReadingIds}
+              />
+            </>
           )}
         </ScrollView>
 
@@ -702,79 +833,108 @@ const BibleStudyApp = () => {
         onRequestClose={() => setPlanModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContentCompact}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="calendar" size={32} color={COLORS.primary} />
-              <View style={styles.modalHeaderText}>
-                <Text style={styles.modalTitleCompact}>Study Plan</Text>
-                <Text style={styles.modalSubtitleCompact}>Set your reading duration</Text>
-              </View>
-              <TouchableOpacity 
-                onPress={() => setPlanModalVisible(false)}
-                style={styles.modalCloseIcon}
+          <View style={styles.modalContent}>
+            <Ionicons name="calendar" size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
+            <Text style={styles.modalTitle}>Choose Your Journey</Text>
+            <Text style={styles.modalSubtitle}>Select a reading plan duration</Text>
+            
+            <View style={{ marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
+              <Text style={[styles.modalLabel, { fontSize: 12, marginBottom: 0 }]}>Start Date</Text>
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(true)}
+                style={[styles.dateButton, { paddingVertical: 6, paddingHorizontal: 10, minWidth: 120 }]}
               >
-                <Ionicons name="close" size={24} color={COLORS.text.secondary} />
+                <Ionicons name="calendar-outline" size={14} color={COLORS.text.secondary} />
+                <Text style={[styles.dateButtonText, { fontSize: 12 }]}>{formatDate(startDate)}</Text>
               </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={startDate || new Date()}
+                  mode="date"
+                  display="default"
+                  onChange={(event, selected) => {
+                    setShowDatePicker(false);
+                    if (selected) setStartDate(selected);
+                  }}
+                />
+              )}
             </View>
             
-            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
-              {/* Start Date Selector */}
-              <View style={styles.compactSection}>
-                <Text style={styles.compactLabel}>Start Date</Text>
-                <TouchableOpacity
-                  onPress={() => setShowDatePicker(true)}
-                  style={styles.dateButtonCompact}
-                >
-                  <Ionicons name="calendar-outline" size={18} color={COLORS.text.secondary} />
-                  <Text style={styles.dateButtonTextCompact}>{formatDate(startDate)}</Text>
-                  <Ionicons name="chevron-down" size={18} color={COLORS.text.tertiary} />
-                </TouchableOpacity>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={startDate || new Date()}
-                    mode="date"
-                    display="default"
-                    onChange={(event, selected) => {
-                      setShowDatePicker(false);
-                      if (selected) setStartDate(selected);
-                    }}
+            {[365, 180, 120, 90, 60, 30].map(d => (
+              <TouchableOpacity
+                key={d}
+                onPress={() => {
+                  setPlanDays(d);
+                  savePlan(d);
+                }}
+                style={[styles.planOption, planDays===d && styles.planOptionActive]}
+              >
+                <View style={styles.planOptionContent}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Text style={[styles.planOptionText, planDays===d && styles.planOptionTextActive]}>
+                      {d} Days
+                    </Text>
+                    <Text style={[styles.planOptionSubtext, planDays===d && styles.planOptionSubtextActive, { marginLeft: 8, marginTop: 0 }]}>
+                      • {Math.ceil((bibleReadings?.length || 365)/d)} per day
+                    </Text>
+                  </View>
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={20} 
+                    color={planDays===d ? '#FFF' : COLORS.border.medium} 
                   />
-                )}
-              </View>
-              
-              {/* Plan Duration */}
-              <View style={styles.compactSection}>
-                <Text style={styles.compactLabel}>Duration</Text>
-                <View style={styles.planGrid}>
-                  {[365, 180, 120, 90, 60, 30].map(d => (
-                    <TouchableOpacity
-                      key={d}
-                      onPress={() => {
-                        setPlanDays(d);
-                        savePlan(d);
-                      }}
-                      style={[
-                        styles.planOptionCompact,
-                        planDays === d && styles.planOptionCompactActive
-                      ]}
-                    >
-                      <Text style={[
-                        styles.planOptionTextCompact,
-                        planDays === d && styles.planOptionTextCompactActive
-                      ]}>
-                        {d}d
-                      </Text>
-                      <Text style={[
-                        styles.planOptionSubtextCompact,
-                        planDays === d && styles.planOptionSubtextCompactActive
-                      ]}>
-                        {Math.ceil((bibleReadings?.length || 365)/d )}section/day
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
                 </View>
-              </View>
-            </ScrollView>
+              </TouchableOpacity>
+            ))}
+            
+            <TouchableOpacity 
+              onPress={() => setPlanModalVisible(false)} 
+              style={styles.modalCloseButton}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Types Filter Modal */}
+      <Modal
+        visible={categoryModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCategoryModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Ionicons name="book" size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
+            <Text style={styles.modalTitle}>Filter by Type</Text>
+            <Text style={styles.modalSubtitle}>Select a type to filter studies</Text>
+            
+            {['historical', 'pickupbook', 'video'].map((type) => (
+              <TouchableOpacity
+                key={type}
+                onPress={() => handleTypeFilter(type)}
+                style={[styles.planOption, selectedType === type && styles.planOptionActive]}
+              >
+                <View style={styles.planOptionContent}>
+                  <Text style={[styles.planOptionText, selectedType === type && styles.planOptionTextActive]}>
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </Text>
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={24} 
+                    color={selectedType === type ? '#FFF' : COLORS.border.medium} 
+                  />
+                </View>
+              </TouchableOpacity>
+            ))}
+            
+            <TouchableOpacity 
+              onPress={() => setCategoryModalVisible(false)} 
+              style={styles.modalCloseButton}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -832,697 +992,8 @@ const BibleStudyApp = () => {
           </View>
         </View>
       </Modal>
-
-      {/* Reading Type Modal (NEW) */}
-      <Modal
-        visible={readingTypeModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setReadingTypeModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons name="book" size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
-            <Text style={styles.modalTitle}>Choose Reading Type</Text>
-            <Text style={styles.modalSubtitle}>Select how you want to read</Text>
-
-            {/* Historical Reading Option */}
-            <TouchableOpacity
-              onPress={() => handleReadingTypeSelect('historical')}
-              style={[
-                styles.readingTypeOption,
-                selectedReadingType === 'historical' && styles.readingTypeOptionActive
-              ]}
-            >
-              <View style={styles.readingTypeContent}>
-                <View style={styles.readingTypeLeft}>
-                  <Ionicons 
-                    name="time-outline" 
-                    size={24} 
-                    color={selectedReadingType === 'historical' ? '#FFF' : COLORS.primary} 
-                  />
-                  <View style={styles.readingTypeTextContainer}>
-                    <Text style={[
-                      styles.readingTypeTitle,
-                      selectedReadingType === 'historical' && styles.readingTypeTextActive
-                    ]}>
-                      Historical Order
-                    </Text>
-                    <Text style={[
-                      styles.readingTypeSubtitle,
-                      selectedReadingType === 'historical' && styles.readingTypeSubtitleActive
-                    ]}>
-                      Follow chronological timeline
-                    </Text>
-                  </View>
-                </View>
-                <Ionicons 
-                  name="checkmark-circle" 
-                  size={24} 
-                  color={selectedReadingType === 'historical' ? '#FFF' : COLORS.border.medium} 
-                />
-              </View>
-            </TouchableOpacity>
-
-            {/* Books Selection Option */}
-            <TouchableOpacity
-              onPress={() => setSelectedReadingType('books')}
-              style={[
-                styles.readingTypeOption,
-                selectedReadingType === 'books' && styles.readingTypeOptionActive
-              ]}
-            >
-              <View style={styles.readingTypeContent}>
-                <View style={styles.readingTypeLeft}>
-                  <Ionicons 
-                    name="library-outline" 
-                    size={24} 
-                    color={selectedReadingType === 'books' ? '#FFF' : COLORS.primary} 
-                  />
-                  <View style={styles.readingTypeTextContainer}>
-                    <Text style={[
-                      styles.readingTypeTitle,
-                      selectedReadingType === 'books' && styles.readingTypeTextActive
-                    ]}>
-                      Pick Books
-                    </Text>
-                    <Text style={[
-                      styles.readingTypeSubtitle,
-                      selectedReadingType === 'books' && styles.readingTypeSubtitleActive
-                    ]}>
-                      Choose specific books
-                    </Text>
-                  </View>
-                </View>
-                <Ionicons 
-                  name="checkmark-circle" 
-                  size={24} 
-                  color={selectedReadingType === 'books' ? '#FFF' : COLORS.border.medium} 
-                />
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              onPress={() => setReadingTypeModalVisible(false)} 
-              style={styles.modalCloseButton}
-            >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-  },
-  videoBackground: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: -1,
-  },
-  videoOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.overlay,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  loadingContent: {
-    backgroundColor: COLORS.background,
-    padding: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  loadingOverlayText: {
-    marginTop: 16,
-    color: COLORS.text.primary,
-    fontWeight: '600',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 10 : 30,
-    paddingBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 22,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  headerTitle: {
-    fontWeight: '800',
-    color: COLORS.text.light,
-    letterSpacing: 0.5,
-  },
-  headerActionButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  headerActionButtonActive: {
-    backgroundColor: COLORS.primary,
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    color: COLORS.text.light,
-  },
-  clearSearchButton: {
-    padding: 4,
-  },
-  filterBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 12,
-  },
-  filterButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  filterButtonText: {
-    flex: 1,
-    color: COLORS.text.light,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  mainContent: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-  },
-  planSummaryBottom: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  planSummaryContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  planInfoLeft: {
-    flex: 1,
-  },
-  planTitle: {
-    fontWeight: '700',
-    color: COLORS.text.light,
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  planSubtitle: {
-    color: 'rgba(247, 240, 227, 0.8)',
-    fontSize: 12,
-  },
-  planStatsRight: {
-    alignItems: 'flex-end',
-  },
-  planPercentBadge: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  planPercentText: {
-    fontWeight: '700',
-    color: '#FFF',
-    fontSize: 16,
-  },
-  planProgressBar: {
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  planProgressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-  },
-  gameMapWrap: {
-    flex: 1,
-  },
-  journeyContainer: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 20, // Add space for bottom bar
-  },
-  nodeWrapper: {
-    alignItems: 'center',
-    width: 150,
-    position: 'relative',
-    marginVertical: 0,
-  },
-  nodeTouchable: {
-    alignItems: 'center',
-    position: 'relative',
-  },
-  nodeExternalShadow: {
-    position: 'absolute',
-    width: 66,
-    height: 66,
-    borderRadius: 25,
-    top: 10,
-    left: 36,
-    opacity: 0.25,
-    zIndex: -1,
-  },
-  currentNodeRing: {
-    position: 'absolute',
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    borderWidth: 3,
-    top: -10,
-    opacity: 0.3,
-    zIndex: 0,
-  },
-  nodeCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  nodeInnerShadow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '30%',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderTopLeftRadius: 35,
-    borderTopRightRadius: 35,
-    zIndex: 1,
-  },
-  nodeLabelContainer: {
-    marginTop: 16,
-    alignItems: 'center',
-    width: 140,
-  },
-  nodeLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  nodeSubtitle: {
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  emptyContainer: {
-    padding: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    fontWeight: '700',
-    color: COLORS.text.light,
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptyText: {
-    color: 'rgba(247, 240, 227, 0.8)',
-    textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-  },
-  modalContent: {
-    backgroundColor: COLORS.background,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  modalContentCompact: {
-    backgroundColor: COLORS.background,
-    borderRadius: 20,
-    maxWidth: 400,
-    width: '90%',
-    maxHeight: '70%',
-    alignSelf: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-    overflow: 'hidden',
-    padding:20
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
-    gap: 12,
-  },
-  modalHeaderText: {
-    flex: 1,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  modalTitleCompact: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-  },
-  modalSubtitle: {
-    color: COLORS.text.secondary,
-    marginBottom: 24,
-    textAlign: 'center',
-    fontSize: 14,
-  },
-  modalSubtitleCompact: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    marginTop: 2,
-  },
-  modalLabel: {
-    color: COLORS.text.secondary,
-    marginBottom: 8,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
-    backgroundColor: COLORS.surface,
-  },
-  dateButtonCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
-  },
-  dateButtonText: {
-    color: COLORS.text.primary,
-    fontWeight: '600',
-  },
-  dateButtonTextCompact: {
-    flex: 1,
-    color: COLORS.text.primary,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  planGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  planOption: {
-    width: '100%',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: COLORS.border.light,
-  },
-  planOptionCompact: {
-    width: '30%',
-    aspectRatio: 1,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    borderWidth: 2,
-    borderColor: COLORS.border.light,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  planOptionActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  planOptionCompactActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  planOptionContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  planOptionText: {
-    color: COLORS.text.primary,
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  planOptionTextCompact: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  planOptionTextCompactActive: {
-    color: '#FFF', // Changed to white for visibility
-    fontWeight: '800',
-  },
-  planOptionSubtext: {
-    color: COLORS.text.secondary,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  planOptionSubtextCompact: {
-    fontSize: 10,
-    color: COLORS.text.tertiary,
-    fontWeight: '600',
-    textAlign: 'center', // Center align the text
-  },
-  planOptionSubtextCompactActive: {
-    color: 'rgba(255, 255, 255, 0.95)', // Brighter white for better visibility
-    opacity: 1, // Full opacity
-    fontWeight: '600',
-  },
-  unlockInfo: {
-    backgroundColor: COLORS.surface,
-    padding: 16,
-    borderRadius: 12,
-    marginVertical: 16,
-    width: '100%',
-  },
-  unlockLabel: {
-    color: COLORS.text.secondary,
-    fontSize: 12,
-    marginBottom: 4,
-    fontWeight: '600',
-  },
-  unlockValue: {
-    color: COLORS.text.primary,
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-    width: '100%',
-  },
-  modalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
-  },
-  modalButtonPrimary: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  modalButtonText: {
-    color: COLORS.text.primary,
-    fontWeight: '700',
-  },
-  modalButtonPrimaryText: {
-    color: '#FFF',
-    fontWeight: '700',
-  },
-  modalCloseButton: {
-    marginTop: 16,
-    alignSelf: 'center',
-    padding: 10,
-  },
-  modalCloseIcon: {
-    padding: 4,
-  },
-  modalCloseText: {
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-  },
-  readingTypeOption: {
-    width: '100%',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: COLORS.border.light,
-  },
-  readingTypeOptionActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  readingTypeContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  readingTypeLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  readingTypeTextContainer: {
-    flex: 1,
-  },
-  readingTypeTitle: {
-    color: COLORS.text.primary,
-    fontWeight: '700',
-    fontSize: 16,
-    marginBottom: 2,
-  },
-  readingTypeTextActive: {
-    color: '#FFF',
-  },
-  readingTypeSubtitle: {
-    color: COLORS.text.secondary,
-    fontSize: 12,
-  },
-  readingTypeSubtitleActive: {
-    color: '#FFF',
-    opacity: 0.9,
-  },
-  booksList: {
-    maxHeight: 250,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 8,
-    marginBottom: 12,
-    width: '100%',
-  },
-  bookItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginVertical: 2,
-  },
-  bookItemActive: {
-    backgroundColor: COLORS.primaryLight,
-  },
-  bookItemText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  bookItemTextActive: {
-    color: '#FFF',
-  },
-  compactSection: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
-  },
-  compactLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.text.secondary,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingTop: 8, // Add padding at top
-  },
-});
 
 export default BibleStudyApp;
