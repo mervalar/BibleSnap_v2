@@ -206,42 +206,52 @@ const loadChallengeProgress = async () => {
     const bibleProgress = await AsyncStorage.getItem('bibleProgress');
     const completedStudies = await AsyncStorage.getItem('completedStudies');
     
-    let finalProgress = null;
+    // Check if completed - prioritize completion status
+    let isCompleted = false;
+    if (completedStudies) {
+      const completedSet = new Set(JSON.parse(completedStudies));
+      isCompleted = completedSet.has(todayReading.id);
+    }
     
+    // Also check progress map for completion (100% = completed)
+    let studyProgress = undefined;
     if (bibleProgress) {
       const progressMap = JSON.parse(bibleProgress);
-      const studyProgress = progressMap[todayReading.id];
-      
-      if (studyProgress !== undefined) {
-        finalProgress = {
-          studyId: todayReading.id,
-          percent: studyProgress,
-          lastUpdated: Date.now()
-        };
+      studyProgress = progressMap[todayReading.id];
+      if (studyProgress === 100) {
+        isCompleted = true;
       }
     }
     
-    // Check if completed
-    if (completedStudies) {
-      const completedSet = new Set(JSON.parse(completedStudies));
-      if (completedSet.has(todayReading.id)) {
-        finalProgress = {
-          studyId: todayReading.id,
-          percent: 100,
-          lastUpdated: Date.now()
-        };
-      }
+    // Set progress - if completed, always show 100%
+    let finalProgress = null;
+    if (isCompleted) {
+      finalProgress = {
+        studyId: todayReading.id,
+        percent: 100,
+        lastUpdated: Date.now(),
+        completed: true
+      };
+    } else if (studyProgress !== undefined) {
+      finalProgress = {
+        studyId: todayReading.id,
+        percent: studyProgress,
+        lastUpdated: Date.now(),
+        completed: false
+      };
     }
     
     console.log('HomePage - Final challenge state:', {
       readingTitle: todayReading?.title,
       readingId: todayReading?.id,
-      progress: finalProgress?.percent || 0
+      progress: finalProgress?.percent || 0,
+      isCompleted: isCompleted
     });
     
     setTodaysChallenge({
       ...todayReading,
-      progress: finalProgress
+      progress: finalProgress,
+      isCompleted: isCompleted
     });
     
     // Cache the challenge for today
@@ -346,58 +356,8 @@ const loadChallengeProgress = async () => {
   
   const handleChallengePress = () => {
     handleAuthenticatedAction(() => {
-      if (todaysChallenge && todaysChallenge.id) {
-        // Get the current progress from progressMap
-        const currentProgress = todaysChallenge.progress?.percent || 0;
-        
-        // Navigate to the specific bible study
-        navigation.navigate('BibleStudyContent', {
-          bibleReading: todaysChallenge,
-          progress: currentProgress,
-          isChallenge: true, // Mark this as a challenge
-          onProgressUpdate: async (percent) => {
-            try {
-              // Update the challenge progress in AsyncStorage
-              const progressData = {
-                studyId: todaysChallenge.id,
-                percent: percent,
-                lastUpdated: Date.now()
-              };
-              
-              const today = new Date().toDateString();
-              await AsyncStorage.setItem('challengeProgress', JSON.stringify(progressData));
-              await AsyncStorage.setItem('challengeProgressDate', today);
-              
-              // Also update in the main bible progress map
-              const existingProgress = await AsyncStorage.getItem('bibleProgress');
-              const progressMap = existingProgress ? JSON.parse(existingProgress) : {};
-              progressMap[todaysChallenge.id] = percent;
-              await AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
-              
-              // Update completed studies if 100%
-              if (percent === 100) {
-                const completedData = await AsyncStorage.getItem('completedStudies');
-                const completedSet = completedData ? new Set(JSON.parse(completedData)) : new Set();
-                completedSet.add(todaysChallenge.id);
-                await AsyncStorage.setItem('completedStudies', JSON.stringify([...completedSet]));
-              }
-              
-              // Update local state safely
-              setTimeout(() => {
-                setTodaysChallenge(prev => ({
-                  ...prev,
-                  progress: progressData
-                }));
-              }, 0);
-            } catch (error) {
-              console.error('Error saving challenge progress:', error);
-            }
-          }
-        });
-      } else {
-        // Navigate to bible studies list
-        navigation.navigate('BibleStudy');
-      }
+      // Navigate to BibleStudyPage
+      navigation.navigate('BibleStudy');
     });
   };
 
@@ -592,9 +552,23 @@ const loadChallengeProgress = async () => {
         <View style={styles.spacer} />
 
         {/* Today's Challenge - Reduced size and moved to bottom */}
-        <TouchableOpacity style={styles.challengeCard} onPress={handleChallengePress}>
+        <TouchableOpacity 
+          style={[
+            styles.challengeCard,
+            todaysChallenge?.isCompleted && styles.challengeCardCompleted
+          ]} 
+          onPress={handleChallengePress}
+        >
           <View style={styles.challengeHeader}>
-            <Text style={styles.challengeTitle}>Today's Challenge</Text>
+            <View style={styles.challengeTitleRow}>
+              <Text style={styles.challengeTitle}>Today's Challenge</Text>
+              {todaysChallenge?.isCompleted && (
+                <View style={styles.completedBadge}>
+                  <Ionicons name="checkmark-circle" size={18} color="#4A7742" />
+                  <Text style={styles.completedBadgeText}>Completed</Text>
+                </View>
+              )}
+            </View>
             {todaysChallenge?.category && (
               <View style={styles.challengeBadge}>
                 <Text style={styles.challengeBadgeText}>{todaysChallenge.category.name}</Text>
@@ -609,7 +583,10 @@ const loadChallengeProgress = async () => {
             </View>
           ) : (
             <>
-              <Text style={styles.challengeDesc}>
+              <Text style={[
+                styles.challengeDesc,
+                todaysChallenge?.isCompleted && styles.challengeDescCompleted
+              ]}>
                 {todaysChallenge?.title || "Share God's love with someone today"}
               </Text>
               {todaysChallenge?.main_verse && (
@@ -621,21 +598,38 @@ const loadChallengeProgress = async () => {
           )}
           
          <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
+          <View style={[
+            styles.progressBar,
+            todaysChallenge?.isCompleted && styles.progressBarCompleted
+          ]}>
             <View style={[
               styles.progressFill, 
               { 
                 width: todaysChallenge?.progress?.percent 
                   ? `${todaysChallenge.progress.percent}%` 
-                  : '0%' 
+                  : '0%',
+                backgroundColor: todaysChallenge?.isCompleted 
+                  ? '#4A7742' 
+                  : '#A07553'
               }
             ]} />
           </View>
-          <Text style={styles.progressText}>
-            {todaysChallenge?.progress?.percent 
-              ? `${todaysChallenge.progress.percent}% Complete` 
-              : 'Start'}
-          </Text>
+          <View style={styles.progressTextRow}>
+            {todaysChallenge?.isCompleted ? (
+              <>
+                <Ionicons name="checkmark-circle" size={16} color="#4A7742" />
+                <Text style={[styles.progressText, styles.progressTextCompleted]}>
+                  Completed! 🎉
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.progressText}>
+                {todaysChallenge?.progress?.percent 
+                  ? `${todaysChallenge.progress.percent}% Complete` 
+                  : 'Start'}
+              </Text>
+            )}
+          </View>
         </View>
         </TouchableOpacity>
       </View>
@@ -1023,16 +1017,41 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  challengeCardCompleted: {
+    backgroundColor: '#E8F5E9',
+    borderWidth: 2,
+    borderColor: '#4A7742',
+  },
   challengeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8, // Reduced from 12
   },
+  challengeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
   challengeTitle: {
     color: '#333',
     fontWeight: 'bold',
     fontSize: 14, // Reduced from 16
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(74, 119, 66, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  completedBadgeText: {
+    color: '#4A7742',
+    fontSize: 11,
+    fontWeight: '700',
   },
   challengeBadge: {
     backgroundColor: '#A07553',
@@ -1062,6 +1081,10 @@ const styles = StyleSheet.create({
     marginBottom: 8, // Reduced from 12
     lineHeight: 18, // Reduced from 20
   },
+  challengeDescCompleted: {
+    color: '#4A7742',
+    fontWeight: '600',
+  },
   challengeVerse: {
     color: '#9E795D',
     fontSize: 10, // Reduced from 11
@@ -1081,16 +1104,28 @@ const styles = StyleSheet.create({
     borderRadius: 3, 
     overflow: 'hidden',
   },
+  progressBarCompleted: {
+    borderColor: '#4A7742',
+  },
   progressFill: {
     height: '100%',
     width: '0%',
     backgroundColor: '#A07553',
     borderRadius: 3, 
   },
+  progressTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   progressText: {
     color: '#9E795D',
     fontWeight: 'bold',
     fontSize: 11, // Reduced from 12
+  },
+  progressTextCompleted: {
+    color: '#4A7742',
+    fontWeight: '700',
   },
 });
 

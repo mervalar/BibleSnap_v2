@@ -18,6 +18,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Video } from 'expo-av';
 import { fetchJournals } from '../api/journalApi';
+import BottomNavBar from '../components/BottomNavBar';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -106,6 +107,9 @@ const ProfilePage = () => {
   const [weeklyProgress, setWeeklyProgress] = useState([0, 0, 0, 0, 0, 0, 0]);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [weekTotal, setWeekTotal] = useState(0);
+  const [weekAverage, setWeekAverage] = useState(0);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(null);
+  const [chartInsight, setChartInsight] = useState(null);
 
   // Fetch user data
   const fetchUserData = async () => {
@@ -171,7 +175,50 @@ const ProfilePage = () => {
       }
       
       setCurrentStreak(streak);
-      setWeekTotal(weekData.reduce((sum, val) => sum + val, 0));
+      const total = weekData.reduce((sum, val) => sum + val, 0);
+      setWeekTotal(total);
+      setWeekAverage(Math.round((total / 7) * 10) / 10); // Round to 1 decimal
+      
+      // Generate insights
+      const activeDays = weekData.filter(val => val > 0).length;
+      const maxDay = Math.max(...weekData);
+      const maxDayIndex = weekData.indexOf(maxDay);
+      const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      
+      let insight = null;
+      if (total === 0) {
+        insight = {
+          type: 'motivation',
+          emoji: '🌟',
+          text: "Start your journey today! Even one lesson makes a difference.",
+        };
+      } else if (activeDays >= 5) {
+        insight = {
+          type: 'excellent',
+          emoji: '🔥',
+          text: `Amazing! You're reading ${activeDays} days this week! Keep the momentum!`,
+        };
+      } else if (maxDay >= 3) {
+        insight = {
+          type: 'great',
+          emoji: '💪',
+          text: `Wow! ${maxDay} lessons on ${dayNames[maxDayIndex]}! You're on fire!`,
+        };
+      } else if (activeDays >= 3) {
+        insight = {
+          type: 'good',
+          emoji: '✨',
+          text: `Good progress! ${activeDays} active days. Try to read every day for best results!`,
+        };
+      } else {
+        insight = {
+          type: 'encourage',
+          emoji: '📖',
+          text: `You've completed ${total} lessons this week. Try to read a bit more each day!`,
+        };
+      }
+      
+      setChartInsight(insight);
     } catch (error) {
       console.error('Error loading weekly progress:', error);
     }
@@ -263,6 +310,41 @@ const ProfilePage = () => {
       const finishTimestamp = now + (daysRemaining * 24 * 60 * 60 * 1000);
       const finishDate = new Date(finishTimestamp);
       
+      // Calculate lessons ahead/behind
+      const start = new Date(plan.startDate);
+      const today = new Date();
+      const diff = Math.floor((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) - 
+        Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / (1000 * 60 * 60 * 24));
+      const elapsedDays = Math.max(0, Math.min(plan.days, diff + 1));
+      
+      let expectedCompleted = 0;
+      if (plan.days !== 365 && plan.schedule) {
+        for (let i = 0; i <= Math.min(elapsedDays - 1, plan.schedule.length - 1); i++) {
+          expectedCompleted += (plan.schedule[i] || []).length;
+        }
+      } else {
+        expectedCompleted = elapsedDays;
+      }
+      
+      const lessonsAhead = completedLessons - expectedCompleted;
+      
+      // Calculate consistency (last 7 days)
+      const dailyHistory = await AsyncStorage.getItem('dailyReadingHistory');
+      const history = dailyHistory ? JSON.parse(dailyHistory) : {};
+      const last7Days = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateKey = date.toISOString().split('T')[0];
+        last7Days.push(history[dateKey] || 0);
+      }
+      const daysWithReading = last7Days.filter(count => count > 0).length;
+      const consistency = Math.round((daysWithReading / 7) * 100);
+      
+      // Get reading streak
+      const streakData = await AsyncStorage.getItem('readingStreak');
+      const streak = streakData ? parseInt(streakData, 10) : 0;
+      
       setStudyPlanSummary({
         days: plan.days,
         percent,
@@ -271,6 +353,9 @@ const ProfilePage = () => {
         startDate: plan.startDate,
         totalLessons,
         completedLessons,
+        lessonsAhead,
+        consistency,
+        streak,
       });
     } catch (error) {
       console.error('Error loading study plan:', error);
@@ -475,65 +560,126 @@ const ProfilePage = () => {
         {/* Weekly Progress Chart */}
         <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
-            <View>
-              <Text style={styles.chartTitle}>Spiritual Growth</Text>
-              <Text style={styles.chartSubtitle}>
-                Last 7 days • {weekTotal} lessons completed
-              </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.chartTitle}>Weekly Reading Progress</Text>
+              <View style={styles.chartStatsRow}>
+                <View style={styles.chartStatItem}>
+                  <Ionicons name="book" size={14} color={COLORS.text.secondary} />
+                  <Text style={styles.chartStatText}>{weekTotal} lessons</Text>
+                </View>
+                <View style={styles.chartStatItem}>
+                  <Ionicons name="trending-up" size={14} color={COLORS.text.secondary} />
+                  <Text style={styles.chartStatText}>{weekAverage}/day avg</Text>
+                </View>
+                {currentStreak > 0 && (
+                  <View style={styles.chartStatItem}>
+                    <Ionicons name="flame" size={14} color={COLORS.primary} />
+                    <Text style={[styles.chartStatText, { color: COLORS.primary, fontWeight: '700' }]}>
+                      {currentStreak} day streak
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-            {currentStreak > 0 && (
-              <View style={styles.streakBadge}>
-                <Ionicons 
-                  name={currentStreak >= 3 ? "trending-up" : "flame"} 
-                  size={dimensions.iconSize.small} 
-                  color={COLORS.text.light} 
-                />
-                <Text style={styles.streakText}>
-                  {currentStreak} day{currentStreak !== 1 ? 's' : ''}
+          </View>
+          
+          {/* Insight Message */}
+          {chartInsight && (
+            <View style={[
+              styles.chartInsight,
+              chartInsight.type === 'excellent' && styles.chartInsightExcellent,
+              chartInsight.type === 'great' && styles.chartInsightGreat,
+              chartInsight.type === 'good' && styles.chartInsightGood,
+              chartInsight.type === 'encourage' && styles.chartInsightEncourage,
+            ]}>
+              <Text style={styles.chartInsightEmoji}>{chartInsight.emoji}</Text>
+              <Text style={styles.chartInsightText}>{chartInsight.text}</Text>
+            </View>
+          )}
+          
+          {/* Bar Chart */}
+          <View style={styles.chartArea}>
+            <View style={styles.barChartContainer}>
+              {weeklyProgress.map((value, index) => {
+                const maxValue = Math.max(...weeklyProgress, 1);
+                const barHeight = maxValue > 0 ? (value / maxValue) * 100 : 0;
+                const isSelected = selectedDayIndex === index;
+                const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.barContainer}
+                    onPress={() => setSelectedDayIndex(isSelected ? null : index)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.barWrapper}>
+                      {/* Bar */}
+                      <View style={[
+                        styles.bar,
+                        { height: `${barHeight}%` },
+                        value > 0 && styles.barFilled,
+                        isSelected && styles.barSelected,
+                      ]}>
+                        {value > 0 && (
+                          <Text style={styles.barValue}>{value}</Text>
+                        )}
+                      </View>
+                      
+                      {/* Average line indicator */}
+                      {weekAverage > 0 && value > 0 && (
+                        <View style={[
+                          styles.averageIndicator,
+                          { bottom: `${(weekAverage / maxValue) * 100}%` }
+                        ]} />
+                      )}
+                    </View>
+                    
+                    {/* Day Label */}
+                    <Text style={[
+                      styles.barDayLabel,
+                      value > 0 && styles.barDayLabelActive,
+                      isSelected && styles.barDayLabelSelected,
+                    ]}>
+                      {dayNames[index]}
+                    </Text>
+                    
+                    {/* Selected Day Details */}
+                    {isSelected && value > 0 && (
+                      <View style={styles.dayTooltip}>
+                        <Text style={styles.dayTooltipText}>
+                          {value} lesson{value !== 1 ? 's' : ''} on {dayNames[index]}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            
+            {/* Average Line */}
+            {weekAverage > 0 && (
+              <View style={styles.averageLineContainer}>
+                <View style={styles.averageLine} />
+                <Text style={styles.averageLineLabel}>
+                  Avg: {weekAverage}/day
                 </Text>
               </View>
             )}
           </View>
           
-          <View style={styles.chartArea}>
-            <View style={styles.chartLine}>
-              {weeklyProgress.map((value, index) => {
-                const maxValue = Math.max(...weeklyProgress, 1);
-                const bottomPercent = (value / maxValue) * 60;
-                const leftPercent = (index / 6) * 85 + 7.5;
-                
-                return value > 0 ? (
-                  <View 
-                    key={index}
-                    style={[
-                      styles.chartPoint, 
-                      {
-                        left: `${leftPercent}%`, 
-                        bottom: `${20 + bottomPercent}%`,
-                      }
-                    ]} 
-                  />
-                ) : null;
-              })}
+          {/* Chart Legend */}
+          <View style={styles.chartLegend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: COLORS.primary }]} />
+              <Text style={styles.legendText}>Lessons completed</Text>
             </View>
-            
-            <View style={styles.chartLabels}>
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => (
-                <View key={day} style={styles.chartLabelContainer}>
-                  <Text style={[
-                    styles.chartLabel,
-                    weeklyProgress[index] > 0 && styles.chartLabelActive
-                  ]}>
-                    {day}
-                  </Text>
-                  {weeklyProgress[index] > 0 && (
-                    <View style={styles.chartDot}>
-                      <Text style={styles.chartDotText}>{weeklyProgress[index]}</Text>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
+            {weekAverage > 0 && (
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, styles.legendDotDashed, { borderColor: COLORS.text.secondary }]} />
+                <Text style={styles.legendText}>Daily average</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -557,6 +703,50 @@ const ProfilePage = () => {
                 <Text style={styles.planStatValue}>{studyPlanSummary.daysRemaining}</Text>
               </View>
             </View>
+            
+            {/* New Stats Row */}
+            {studyPlanSummary.lessonsAhead !== undefined && (
+              <View style={[styles.planStats, { marginTop: dimensions.spacing.sm }]}>
+                <View>
+                  <Text style={styles.planStatLabel}>
+                    {studyPlanSummary.lessonsAhead >= 0 ? 'Lessons Ahead' : 'Lessons Behind'}
+                  </Text>
+                  <Text style={[
+                    styles.planStatValue,
+                    studyPlanSummary.lessonsAhead >= 0 ? { color: COLORS.semantic.success } : { color: COLORS.semantic.error }
+                  ]}>
+                    {studyPlanSummary.lessonsAhead >= 0 ? '+' : ''}{studyPlanSummary.lessonsAhead}
+                  </Text>
+                </View>
+                {studyPlanSummary.consistency !== undefined && (
+                  <View style={styles.planStatRight}>
+                    <Text style={styles.planStatLabel}>Consistency</Text>
+                    <Text style={styles.planStatValue}>{studyPlanSummary.consistency}%</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            
+            {/* Encouragement Message */}
+            {studyPlanSummary.consistency !== undefined && (
+              <View style={[
+                styles.encouragementCard,
+                studyPlanSummary.consistency < 30 && styles.encouragementCardSad,
+                studyPlanSummary.consistency >= 80 && styles.encouragementCardHappy,
+              ]}>
+                <Text style={styles.encouragementCardEmoji}>
+                  {studyPlanSummary.consistency < 30 ? '😔' : 
+                   studyPlanSummary.consistency >= 80 ? '✨' : '📖'}
+                </Text>
+                <Text style={styles.encouragementCardText}>
+                  {studyPlanSummary.consistency < 30 
+                    ? "You've been a bit inconsistent. Read more today to achieve your goal!"
+                    : studyPlanSummary.consistency >= 80
+                    ? "Great consistency! You're doing amazing!"
+                    : "Keep going! You're making progress."}
+                </Text>
+              </View>
+            )}
             
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${studyPlanSummary.percent}%` }]} />
@@ -654,6 +844,9 @@ const ProfilePage = () => {
           </View>
         </View>
       </Modal>
+      
+      {/* Bottom Navigation Bar */}
+      <BottomNavBar />
     </SafeAreaView>
   );
 };
@@ -860,72 +1053,210 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text.primary,
   },
-  chartSubtitle: {
-    fontSize: dimensions.fontSize.caption,
-    color: COLORS.text.secondary,
-    marginTop: 2,
-  },
-  streakBadge: {
+  chartStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: dimensions.spacing.sm,
-    paddingVertical: dimensions.spacing.xs,
-    borderRadius: 12,
+    marginTop: dimensions.spacing.xs,
+    gap: dimensions.spacing.md,
+    flexWrap: 'wrap',
   },
-  streakText: {
-    marginLeft: dimensions.spacing.xs,
+  chartStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  chartStatText: {
     fontSize: dimensions.fontSize.caption,
-    color: COLORS.text.light,
+    color: COLORS.text.secondary,
+    fontWeight: '500',
+  },
+  chartInsight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 93, 51, 0.1)',
+    borderRadius: 12,
+    padding: dimensions.spacing.sm,
+    marginTop: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  chartInsightExcellent: {
+    backgroundColor: 'rgba(74, 119, 66, 0.15)',
+    borderLeftColor: COLORS.semantic.success,
+  },
+  chartInsightGreat: {
+    backgroundColor: 'rgba(139, 93, 51, 0.15)',
+    borderLeftColor: COLORS.primary,
+  },
+  chartInsightGood: {
+    backgroundColor: 'rgba(139, 93, 51, 0.1)',
+    borderLeftColor: COLORS.primary,
+  },
+  chartInsightEncourage: {
+    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+    borderLeftColor: COLORS.semantic.error,
+  },
+  chartInsightEmoji: {
+    fontSize: 20,
+    marginRight: dimensions.spacing.xs,
+  },
+  chartInsightText: {
+    flex: 1,
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.primary,
     fontWeight: '600',
+    lineHeight: 16,
   },
   chartArea: {
-    height: 160,
+    marginTop: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.sm,
   },
-  chartLine: {
-    flex: 1,
-    position: 'relative',
-    height: 120,
-  },
-  chartPoint: {
-    position: 'absolute',
-    width: 10,
-    height: 10,
-    backgroundColor: COLORS.primary,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: COLORS.background,
-  },
-  chartLabels: {
+  barChartContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: dimensions.spacing.sm,
+    alignItems: 'flex-end',
+    height: 180,
+    paddingHorizontal: dimensions.spacing.xs,
+    marginBottom: dimensions.spacing.md,
   },
-  chartLabelContainer: {
+  barContainer: {
+    flex: 1,
     alignItems: 'center',
-    width: 30,
+    position: 'relative',
+    marginHorizontal: 2,
   },
-  chartLabel: {
+  barWrapper: {
+    width: '100%',
+    height: 150,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  bar: {
+    width: '80%',
+    minHeight: 4,
+    backgroundColor: COLORS.border.light,
+    borderRadius: 8,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  barFilled: {
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  barSelected: {
+    backgroundColor: COLORS.accent,
+    transform: [{ scaleX: 1.1 }],
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  barValue: {
+    color: COLORS.background,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  averageIndicator: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 2,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.text.secondary,
+    borderTopStyle: 'dashed',
+    opacity: 0.5,
+  },
+  barDayLabel: {
     fontSize: dimensions.fontSize.caption,
     color: COLORS.text.secondary,
+    marginTop: dimensions.spacing.xs,
+    fontWeight: '500',
   },
-  chartLabelActive: {
-    fontWeight: '600',
+  barDayLabelActive: {
+    fontWeight: '700',
     color: COLORS.primary,
   },
-  chartDot: {
-    marginTop: 4,
-    backgroundColor: COLORS.primary,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+  barDayLabelSelected: {
+    color: COLORS.accent,
+    fontSize: dimensions.fontSize.caption + 1,
   },
-  chartDotText: {
+  dayTooltip: {
+    position: 'absolute',
+    bottom: 30,
+    backgroundColor: COLORS.text.primary,
+    paddingHorizontal: dimensions.spacing.sm,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: 8,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  dayTooltipText: {
     color: COLORS.background,
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: dimensions.fontSize.caption,
+    fontWeight: '600',
+  },
+  averageLineContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: dimensions.spacing.sm,
+    paddingTop: dimensions.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border.light,
+  },
+  averageLine: {
+    flex: 1,
+    height: 1,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.text.secondary,
+    borderStyle: 'dashed',
+    marginRight: dimensions.spacing.sm,
+    opacity: 0.5,
+  },
+  averageLineLabel: {
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.secondary,
+    fontWeight: '600',
+  },
+  chartLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: dimensions.spacing.md,
+    marginTop: dimensions.spacing.sm,
+    flexWrap: 'wrap',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendDotDashed: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  legendText: {
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.secondary,
+    fontWeight: '500',
   },
   planCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -960,6 +1291,35 @@ const styles = StyleSheet.create({
   },
   planStatRight: {
     alignItems: 'flex-end',
+  },
+  encouragementCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: dimensions.spacing.md,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  encouragementCardSad: {
+    backgroundColor: 'rgba(255, 235, 235, 0.7)',
+    borderLeftColor: COLORS.semantic.error,
+  },
+  encouragementCardHappy: {
+    backgroundColor: 'rgba(235, 255, 235, 0.7)',
+    borderLeftColor: COLORS.semantic.success,
+  },
+  encouragementCardEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  encouragementCardText: {
+    flex: 1,
+    fontSize: dimensions.fontSize.caption,
+    color: COLORS.text.primary,
+    fontWeight: '600',
+    lineHeight: 18,
   },
   progressBar: {
     height: 8,

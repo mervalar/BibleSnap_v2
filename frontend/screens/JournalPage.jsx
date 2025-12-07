@@ -18,6 +18,7 @@ import { fetchJournals, updateJournal, deleteJournal, createJournal } from '../a
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JournalPreview from '../components/JournalPreview';
 import SplashScreen from '../components/SplashScreen';
+import BottomNavBar from '../components/BottomNavBar';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -589,6 +590,9 @@ const JournalApp = ({ navigation }) => {
           handleDeleteJournal(journalId);
         }}
       />
+      
+      {/* Bottom Navigation Bar */}
+      <BottomNavBar />
     </SafeAreaView>
   );
 };

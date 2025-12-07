@@ -297,10 +297,10 @@ export const createStyles = () => StyleSheet.create({
   },
   planSummaryBottom: {
     marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
+    marginBottom: 50, // Increased to position higher above navbar
+    padding: 12, // Reduced from 16 to make it shorter
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
+    borderRadius: 14, // Slightly reduced
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
@@ -308,7 +308,7 @@ export const createStyles = () => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8, // Reduced from 12
   },
   planInfoLeft: {
     flex: 1,
@@ -316,37 +316,37 @@ export const createStyles = () => StyleSheet.create({
   planTitle: {
     fontWeight: '700',
     color: COLORS.text.light,
-    fontSize: 16,
-    marginBottom: 4,
+    fontSize: 14, // Reduced from 16
+    marginBottom: 2, // Reduced from 4
   },
   planSubtitle: {
     color: 'rgba(247, 240, 227, 0.8)',
-    fontSize: 12,
+    fontSize: 11, // Reduced from 12
   },
   planStatsRight: {
     alignItems: 'flex-end',
   },
   planPercentBadge: {
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 10, // Reduced from 12
+    paddingVertical: 4, // Reduced from 6
+    borderRadius: 10, // Reduced from 12
   },
   planPercentText: {
     fontWeight: '700',
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 14, // Reduced from 16
   },
   planProgressBar: {
-    height: 8,
+    height: 6, // Reduced from 8
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
+    borderRadius: 6, // Reduced from 8
     overflow: 'hidden',
   },
   planProgressFill: {
     height: '100%',
     backgroundColor: COLORS.primary,
-    borderRadius: 8,
+    borderRadius: 6, // Reduced from 8 to match progress bar
   },
   gameMapWrap: {
     flex: 1,
@@ -606,5 +606,94 @@ export const createStyles = () => StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  encouragementBanner: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 40,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  encouragementBannerSad: {
+    backgroundColor: 'rgba(255, 235, 235, 0.95)',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.semantic.error,
+  },
+  encouragementBannerHappy: {
+    backgroundColor: 'rgba(235, 255, 235, 0.95)',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.semantic.success,
+  },
+  encouragementEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  encouragementText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+  },
+  encouragementClose: {
+    padding: 4,
+  },
+  aheadPopupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  aheadPopupContent: {
+    backgroundColor: COLORS.background,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: 300,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 15,
+  },
+  aheadPopupEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  aheadPopupTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.text.primary,
+    marginBottom: 8,
+  },
+  aheadPopupText: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  aheadPopupButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 25,
+    minWidth: 120,
+  },
+  aheadPopupButtonText: {
+    color: COLORS.text.light,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

@@ -23,6 +23,7 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SplashScreen from '../components/SplashScreen';
 import { createStyles, COLORS } from '../styles/bIbleStudyContent.styles';
+import BottomNavBar from '../components/BottomNavBar';
 
 let DateTimePicker;
 try {
@@ -354,6 +355,13 @@ const BibleStudyApp = () => {
     startDate: null,
   });
   const [todaysReadingIds, setTodaysReadingIds] = useState(new Set()); // Track today's readings for highlighting
+  const [encouragementMessage, setEncouragementMessage] = useState(null); // Track encouragement/sad messages
+  const [planJustChanged, setPlanJustChanged] = useState(false); // Track if plan just changed
+  const [readingStats, setReadingStats] = useState({
+    lessonsAhead: 0,
+    consistency: 0,
+    streak: 0,
+  });
 
   // Unlock modal state
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
@@ -582,17 +590,64 @@ const BibleStudyApp = () => {
 
   const savePlan = async (days) => {
     if (!bibleReadings || bibleReadings.length === 0) return;
+    
+    // Check if plan days changed - if so, reset all progress
+    const existingPlan = await AsyncStorage.getItem('studyPlan');
+    const previousPlan = existingPlan ? JSON.parse(existingPlan) : null;
+    const planChanged = previousPlan && previousPlan.days !== days;
+    
+    if (planChanged) {
+      // Reset all progress when plan changes
+      await AsyncStorage.removeItem('bibleProgress');
+      await AsyncStorage.removeItem('completedStudies');
+      
+      // Clear all lesson completion flags
+      const allKeys = await AsyncStorage.getAllKeys();
+      const lessonKeys = allKeys.filter(key => key.startsWith('lesson_') && key.includes('_completed'));
+      await AsyncStorage.multiRemove(lessonKeys);
+      
+      // Reset progress map and completed studies
+      setProgressMap({});
+      setCompletedStudies(new Set());
+      
+      // Clear daily reading tracking
+      await AsyncStorage.removeItem('dailyReadingHistory');
+      await AsyncStorage.removeItem('readingStreak');
+      await AsyncStorage.removeItem('lastReadingDate');
+      
+      // Set flag to show challenge start message
+      setPlanJustChanged(true);
+    }
+    
     const schedule = buildSchedule(bibleReadings, days);
     const chosenStart = startDate ? startDate : new Date();
     const plan = {
       days,
       startDate: chosenStart.toISOString(),
-      schedule
+      schedule,
+      planChangedAt: new Date().toISOString(), // Track when plan was set/changed
     };
     await AsyncStorage.setItem('studyPlan', JSON.stringify(plan));
     setStudyPlan(plan);
     setPlanModalVisible(false);
     setShowDaysDropdown(false);
+    
+    // Show challenge start message if plan changed or is new
+    if (planChanged || !previousPlan) {
+      const challengeMessage = {
+        type: 'happy',
+        emoji: '🎯',
+        text: `You've started a ${days}-day Bible reading challenge! Let's do this!`,
+      };
+      setEncouragementMessage(challengeMessage);
+      setTimeout(() => {
+        setEncouragementMessage(null);
+        // Clear the flag after message is dismissed
+        setTimeout(() => {
+          setPlanJustChanged(false);
+        }, 1000);
+      }, 5000);
+    }
   };
 
   useEffect(() => {
@@ -612,44 +667,204 @@ const BibleStudyApp = () => {
     loadPlan();
   }, []);
 
-  useEffect(() => {
-    if (!studyPlan || !bibleReadings || bibleReadings.length === 0) {
-      setPlanStats(prev => ({...prev, percent: 0, elapsedDays: 0, daysRemaining: 0, finishDate: null, startDate: null}));
-      setTodaysReadingIds(new Set());
-      return;
-    }
+  // Calculate reading statistics and encouragement
+  const calculateReadingStats = async () => {
+    if (!studyPlan || !bibleReadings || bibleReadings.length === 0) return;
+    
     const start = new Date(studyPlan.startDate);
     const now = new Date();
     const diff = Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()) - Date.UTC(start.getFullYear(),start.getMonth(),start.getDate())) / (1000*60*60*24));
     const elapsedDays = Math.max(0, Math.min(studyPlan.days, diff + 1));
-    const percent = Math.min(100, Math.round((elapsedDays / studyPlan.days) * 100));
-    const daysRemaining = Math.max(0, studyPlan.days - elapsedDays);
-    const finishDate = new Date(start.getTime() + (studyPlan.days - 1) * 24 * 60 * 60 * 1000);
-    setPlanStats({
-      percent,
-      elapsedDays,
-      daysRemaining,
-      finishDate: finishDate.toISOString(),
-      startDate: studyPlan.startDate,
-    });
     
-    // Calculate today's readings if plan is not 365 days
-    if (studyPlan.days !== 365 && studyPlan.schedule && studyPlan.schedule.length > 0) {
-      const dayIndex = Math.max(0, Math.min(studyPlan.days - 1, diff));
-      const todayDayIds = studyPlan.schedule[dayIndex] || [];
-      
-      // Find reading IDs that match today's day IDs
-      const todayIds = new Set();
-      bibleReadings.forEach(reading => {
-        if (todayDayIds.includes(reading.day)) {
-          todayIds.add(reading.id);
-        }
-      });
-      setTodaysReadingIds(todayIds);
+    // Get completed studies
+    const completedData = await AsyncStorage.getItem('completedStudies');
+    const completedIds = completedData ? JSON.parse(completedData) : [];
+    const completedSet = new Set(completedIds);
+    
+    // Calculate how many lessons should be completed by now
+    let expectedCompleted = 0;
+    if (studyPlan.days !== 365 && studyPlan.schedule) {
+      // For custom plans, count lessons up to today
+      for (let i = 0; i <= Math.min(elapsedDays - 1, studyPlan.schedule.length - 1); i++) {
+        expectedCompleted += (studyPlan.schedule[i] || []).length;
+      }
     } else {
-      setTodaysReadingIds(new Set());
+      // For 365-day plan, 1 lesson per day
+      expectedCompleted = elapsedDays;
     }
-  }, [studyPlan, bibleReadings]);
+    
+    // Count actually completed lessons
+    const actualCompleted = completedIds.length;
+    const lessonsAhead = actualCompleted - expectedCompleted;
+    
+    // Calculate consistency (last 7 days)
+    const dailyHistory = await AsyncStorage.getItem('dailyReadingHistory');
+    const history = dailyHistory ? JSON.parse(dailyHistory) : {};
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dateKey = date.toISOString().split('T')[0];
+      last7Days.push(history[dateKey] || 0);
+    }
+    const daysWithReading = last7Days.filter(count => count > 0).length;
+    const consistency = Math.round((daysWithReading / 7) * 100);
+    
+    // Calculate streak
+    let streak = 0;
+    const lastReadingDate = await AsyncStorage.getItem('lastReadingDate');
+    if (lastReadingDate) {
+      const lastDate = new Date(lastReadingDate);
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      lastDate.setHours(0, 0, 0, 0);
+      const daysSince = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
+      if (daysSince === 0) {
+        // Count consecutive days
+        let currentDate = new Date(today);
+        streak = 0;
+        while (true) {
+          const dateKey = currentDate.toISOString().split('T')[0];
+          if (history[dateKey] && history[dateKey] > 0) {
+            streak++;
+            currentDate.setDate(currentDate.getDate() - 1);
+          } else {
+            break;
+          }
+        }
+      }
+    }
+    
+    setReadingStats({ lessonsAhead, consistency, streak });
+    
+    // Generate encouragement message - prioritize ahead message, then don't show consistency if plan just changed
+    let message = null;
+    
+    // Don't show consistency messages if plan just changed (challenge message is showing)
+    if (!planJustChanged) {
+      // Priority 1: If ahead of schedule, show celebration banner (not modal)
+      if (lessonsAhead >= 1) {
+        message = {
+          type: 'happy',
+          emoji: '🎉',
+          text: `Amazing! You're ${lessonsAhead} lesson${lessonsAhead > 1 ? 's' : ''} ahead of schedule! Keep it up!`,
+        };
+      } 
+      // Priority 2: Streak message
+      else if (streak >= 7) {
+        message = {
+          type: 'happy',
+          emoji: '🔥',
+          text: `Incredible ${streak}-day streak! You're on fire!`,
+        };
+      }
+      // Priority 3: Consistency messages
+      else if (consistency < 30) {
+        message = {
+          type: 'sad',
+          emoji: '😔',
+          text: `You've been a bit inconsistent. Read more today to achieve your goal!`,
+        };
+      } else if (consistency < 60) {
+        message = {
+          type: 'neutral',
+          emoji: '📖',
+          text: `Keep going! You're making progress.`,
+        };
+      } else if (consistency >= 80) {
+        message = {
+          type: 'happy',
+          emoji: '✨',
+          text: `Great consistency! You're doing amazing!`,
+        };
+      }
+    }
+    
+    // Set message and auto-dismiss after 5 seconds
+    // Only update if we have a new message and plan didn't just change
+    if (message && !planJustChanged) {
+      setEncouragementMessage(message);
+      setTimeout(() => {
+        setEncouragementMessage(null);
+      }, 5000);
+    }
+    // Don't clear message if plan just changed (to preserve challenge message)
+  };
+
+  useEffect(() => {
+    const updatePlanStats = async () => {
+      if (!studyPlan || !bibleReadings || bibleReadings.length === 0) {
+        setPlanStats(prev => ({...prev, percent: 0, elapsedDays: 0, daysRemaining: 0, finishDate: null, startDate: null}));
+        setTodaysReadingIds(new Set());
+        return;
+      }
+      const start = new Date(studyPlan.startDate);
+      const now = new Date();
+      const diff = Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()) - Date.UTC(start.getFullYear(),start.getMonth(),start.getDate())) / (1000*60*60*24));
+      const elapsedDays = Math.max(0, Math.min(studyPlan.days, diff + 1));
+      
+      // Calculate progress based on actual completed lessons, not just elapsed days
+      try {
+        const completedData = await AsyncStorage.getItem('completedStudies');
+        const completedIds = completedData ? JSON.parse(completedData) : [];
+        const totalLessons = bibleReadings.length;
+        const completedLessons = completedIds.length;
+        
+        // Calculate percent based on actual progress (completed lessons / total lessons)
+        const percent = totalLessons > 0 
+          ? Math.min(100, Math.round((completedLessons / totalLessons) * 100))
+          : 0;
+        
+        const daysRemaining = Math.max(0, studyPlan.days - elapsedDays);
+        const finishDate = new Date(start.getTime() + (studyPlan.days - 1) * 24 * 60 * 60 * 1000);
+        
+        setPlanStats({
+          percent,
+          elapsedDays,
+          daysRemaining,
+          finishDate: finishDate.toISOString(),
+          startDate: studyPlan.startDate,
+        });
+      } catch (error) {
+        console.error('Error calculating progress:', error);
+        // Fallback to time-based progress
+        const percent = Math.min(100, Math.round((elapsedDays / studyPlan.days) * 100));
+        const daysRemaining = Math.max(0, studyPlan.days - elapsedDays);
+        const finishDate = new Date(start.getTime() + (studyPlan.days - 1) * 24 * 60 * 60 * 1000);
+        setPlanStats({
+          percent,
+          elapsedDays,
+          daysRemaining,
+          finishDate: finishDate.toISOString(),
+          startDate: studyPlan.startDate,
+        });
+      }
+      
+      // Calculate today's readings if plan is not 365 days
+      if (studyPlan.days !== 365 && studyPlan.schedule && studyPlan.schedule.length > 0) {
+        const dayIndex = Math.max(0, Math.min(studyPlan.days - 1, diff));
+        const todayDayIds = studyPlan.schedule[dayIndex] || [];
+        
+        // Find reading IDs that match today's day IDs
+        const todayIds = new Set();
+        bibleReadings.forEach(reading => {
+          if (todayDayIds.includes(reading.day)) {
+            todayIds.add(reading.id);
+          }
+        });
+        setTodaysReadingIds(todayIds);
+      } else {
+        setTodaysReadingIds(new Set());
+      }
+      
+      // Calculate reading stats and encouragement (only if plan didn't just change)
+      if (!planJustChanged) {
+        calculateReadingStats();
+      }
+    };
+    
+    updatePlanStats();
+  }, [studyPlan, bibleReadings, progressMap, completedStudies, planJustChanged]);
 
   if (loading && bibleReadings.length === 0) {
     return (
@@ -677,6 +892,26 @@ const BibleStudyApp = () => {
       
       {/* Video Background */}
       <VideoBackground />
+
+      {/* Encouragement Message Banner */}
+      {encouragementMessage && (
+        <View style={[
+          styles.encouragementBanner,
+          encouragementMessage.type === 'sad' && styles.encouragementBannerSad,
+          encouragementMessage.type === 'happy' && styles.encouragementBannerHappy,
+        ]}>
+          <Text style={styles.encouragementEmoji}>{encouragementMessage.emoji}</Text>
+          <Text style={styles.encouragementText}>{encouragementMessage.text}</Text>
+          <TouchableOpacity
+            onPress={() => setEncouragementMessage(null)}
+            style={styles.encouragementClose}
+          >
+            <Ionicons name="close" size={20} color={COLORS.text.light} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Modal removed - using banner notification instead for being ahead */}
 
       {/* Loading overlay */}
       {loading && (
@@ -992,6 +1227,9 @@ const BibleStudyApp = () => {
           </View>
         </View>
       </Modal>
+      
+      {/* Bottom Navigation Bar */}
+      <BottomNavBar />
     </SafeAreaView>
   );
 };

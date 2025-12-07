@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
 import BookContent from './BookContentPage';
+import BottomNavBar from '../components/BottomNavBar';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -329,6 +330,32 @@ const BibleStudyContent = () => {
         if (!completedIds.includes(reading.id)) {
           completedIds.push(reading.id);
           await AsyncStorage.setItem('completedStudies', JSON.stringify(completedIds));
+        }
+        
+        // Track daily reading activity
+        const today = new Date().toISOString().split('T')[0];
+        const dailyHistory = await AsyncStorage.getItem('dailyReadingHistory');
+        const history = dailyHistory ? JSON.parse(dailyHistory) : {};
+        history[today] = (history[today] || 0) + 1;
+        await AsyncStorage.setItem('dailyReadingHistory', JSON.stringify(history));
+        await AsyncStorage.setItem('lastReadingDate', new Date().toISOString());
+        
+        // Update reading streak
+        const lastReadingDate = await AsyncStorage.getItem('lastReadingDate');
+        if (lastReadingDate) {
+          const lastDate = new Date(lastReadingDate);
+          const todayDate = new Date();
+          todayDate.setHours(0, 0, 0, 0);
+          lastDate.setHours(0, 0, 0, 0);
+          const daysDiff = Math.floor((todayDate - lastDate) / (1000 * 60 * 60 * 24));
+          if (daysDiff <= 1) {
+            // Continue or start streak
+            const currentStreak = await AsyncStorage.getItem('readingStreak');
+            const streak = currentStreak ? parseInt(currentStreak, 10) : 0;
+            await AsyncStorage.setItem('readingStreak', (daysDiff === 0 ? streak : streak + 1).toString());
+          }
+        } else {
+          await AsyncStorage.setItem('readingStreak', '1');
         }
         
         if (route?.params?.onProgressUpdate) {
@@ -658,6 +685,9 @@ const BibleStudyContent = () => {
     />
   </View>
 </Modal>
+      
+      {/* Bottom Navigation Bar */}
+      <BottomNavBar />
     </SafeAreaView>
   );
 };
