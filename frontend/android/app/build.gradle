@@ -2,21 +2,6 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
-// Add configuration to handle resource conflicts
-android {
-    // Add this to handle resource conflicts
-    lintOptions {
-        checkReleaseBuilds false
-        abortOnError false
-    }
-    
-    // Add this to handle resource conflicts during build
-    aaptOptions {
-        // Tells AAPT to ignore duplicate resources
-        ignoreAssetsPattern "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
-    }
-}
-
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
 /**
@@ -79,9 +64,9 @@ react {
 }
 
 /**
- * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
+ * Set this to true in release builds to optimize the app using [R8](https://developer.android.com/topic/performance/app-optimization/enable-app-optimization).
  */
-def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInReleaseBuilds') ?: false).toBoolean()
+def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBuilds') ?: false).toBoolean()
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -107,8 +92,10 @@ android {
         applicationId 'com.mer.bibleapp'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 19
+        versionName "1.0.3"
+
+        buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
     signingConfigs {
         debug {
@@ -126,19 +113,117 @@ android {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
-            shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
-            minifyEnabled enableProguardInReleaseBuilds
+            def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
+            shrinkResources enableShrinkResources.toBoolean()
+            minifyEnabled enableMinifyInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-            crunchPngs (findProperty('android.enablePngCrunchInReleaseBuilds')?.toBoolean() ?: true)
+            def enablePngCrunchInRelease = findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true'
+            crunchPngs enablePngCrunchInRelease.toBoolean()
         }
     }
     packagingOptions {
         jniLibs {
-            useLegacyPackaging (findProperty('expo.useLegacyPackaging')?.toBoolean() ?: false)
+            def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
+            useLegacyPackaging enableLegacyPackaging.toBoolean()
+        }
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libfbjni.so'
+        // Exclude duplicate classes from old support library
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/NOTICE.txt'
+    }
+    
+    // Fix duplicate resource conflicts by forcing specific library versions
+    configurations.all {
+        resolutionStrategy {
+            force 'com.google.android.material:material:1.11.0'
+            force 'androidx.appcompat:appcompat:1.6.1'
         }
     }
+    
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+    
+    // Fix duplicate resource conflicts by handling resource merging
+    afterEvaluate {
+        android.applicationVariants.all { variant ->
+            def variantName = variant.name.capitalize()
+            def mergeResourcesTask = tasks.findByName("merge${variantName}Resources")
+            if (mergeResourcesTask != null) {
+                mergeResourcesTask.doLast {
+                    def mergedDir = file("${buildDir}/intermediates/incremental/${variant.name}/merge${variantName}Resources/merged.dir/values")
+                    def valuesFile = file("${mergedDir}/values.xml")
+                    
+                    if (valuesFile.exists()) {
+                        try {
+                            def content = valuesFile.text
+                            
+                            // Count how many times actionBarSize appears
+                            def count = (content =~ /name="actionBarSize"/).count
+                            
+                            if (count > 1) {
+                                println "Found ${count} occurrences of actionBarSize, removing duplicates..."
+                                
+                                // Process line by line to remove duplicates
+                                def lines = content.split('\n')
+                                def result = []
+                                def foundFirst = false
+                                def skipLines = 0
+                                
+                                lines.eachWithIndex { line, index ->
+                                    if (skipLines > 0) {
+                                        skipLines--
+                                        return
+                                    }
+                                    
+                                    if (line.contains('name="actionBarSize"')) {
+                                        if (!foundFirst) {
+                                            foundFirst = true
+                                            result.add(line)
+                                            // If it's not self-closing, we need to skip until closing tag
+                                            if (!line.trim().endsWith('/>')) {
+                                                // Find the closing </attr> tag
+                                                def i = index + 1
+                                                while (i < lines.size() && !lines[i].contains('</attr>')) {
+                                                    result.add(lines[i])
+                                                    i++
+                                                }
+                                                if (i < lines.size()) {
+                                                    result.add(lines[i])
+                                                }
+                                            }
+                                        } else {
+                                            // Skip this duplicate
+                                            println "Skipping duplicate actionBarSize at line ${index + 1}"
+                                            if (!line.trim().endsWith('/>')) {
+                                                // Skip until closing tag
+                                                def i = index + 1
+                                                while (i < lines.size() && !lines[i].contains('</attr>')) {
+                                                    i++
+                                                }
+                                                skipLines = i - index
+                                            }
+                                        }
+                                    } else {
+                                        result.add(line)
+                                    }
+                                }
+                                
+                                valuesFile.text = result.join('\n')
+                                println "Successfully removed duplicate actionBarSize definition(s)"
+                            }
+                        } catch (Exception e) {
+                            println "Error fixing duplicate resources: ${e.message}"
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -160,6 +245,13 @@ android {
             android.packagingOptions[prop] += it
         }
     }
+}
+
+configurations.all {
+    exclude group: 'com.android.support', module: 'support-v4'
+    exclude group: 'com.android.support', module: 'support-compat'
+    exclude group: 'com.android.support', module: 'support-annotations'
+    exclude group: 'com.android.support', module: 'support-core-utils'
 }
 
 dependencies {
