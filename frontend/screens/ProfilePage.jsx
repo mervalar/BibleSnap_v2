@@ -110,6 +110,8 @@ const ProfilePage = () => {
   const [weekAverage, setWeekAverage] = useState(0);
   const [selectedDayIndex, setSelectedDayIndex] = useState(null);
   const [chartInsight, setChartInsight] = useState(null);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [selectedDayData, setSelectedDayData] = useState(null);
 
   // Fetch user data
   const fetchUserData = async () => {
@@ -610,7 +612,18 @@ const ProfilePage = () => {
                   <TouchableOpacity
                     key={index}
                     style={styles.barContainer}
-                    onPress={() => setSelectedDayIndex(isSelected ? null : index)}
+                    onPress={() => {
+                      if (value > 0) {
+                        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                        setSelectedDayData({
+                          day: dayNames[index],
+                          dayShort: dayNames[index].substring(0, 3),
+                          value: value,
+                          index: index
+                        });
+                        setShowProgressModal(true);
+                      }
+                    }}
                     activeOpacity={0.7}
                   >
                     <View style={styles.barWrapper}>
@@ -644,14 +657,6 @@ const ProfilePage = () => {
                       {dayNames[index]}
                     </Text>
                     
-                    {/* Selected Day Details */}
-                    {isSelected && value > 0 && (
-                      <View style={styles.dayTooltip}>
-                        <Text style={styles.dayTooltipText}>
-                          {value} lesson{value !== 1 ? 's' : ''} on {dayNames[index]}
-                        </Text>
-                      </View>
-                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -841,6 +846,87 @@ const ProfilePage = () => {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Progress Details Modal */}
+      <Modal
+        visible={showProgressModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowProgressModal(false)}
+      >
+        <View style={styles.progressModalOverlay}>
+          <View style={styles.progressModalContent}>
+            <View style={styles.progressModalHeader}>
+              <Ionicons name="stats-chart" size={32} color={COLORS.primary} />
+              <Text style={styles.progressModalTitle}>Daily Progress</Text>
+              <TouchableOpacity 
+                style={styles.progressModalCloseButton}
+                onPress={() => setShowProgressModal(false)}
+              >
+                <Ionicons name="close" size={24} color={COLORS.text.secondary} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedDayData && (
+              <View style={styles.progressModalBody}>
+                <View style={styles.progressModalSection}>
+                  <View style={styles.progressModalDayHeader}>
+                    <Ionicons name="calendar" size={28} color={COLORS.primary} />
+                    <Text style={styles.progressModalDayTitle}>{selectedDayData.day}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.progressModalSection}>
+                  <View style={styles.progressModalStatCard}>
+                    <Ionicons name="book" size={32} color={COLORS.primary} />
+                    <View style={styles.progressModalStatContent}>
+                      <Text style={styles.progressModalStatValue}>{selectedDayData.value}</Text>
+                      <Text style={styles.progressModalStatLabel}>
+                        Lesson{selectedDayData.value !== 1 ? 's' : ''} Completed
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.progressModalSection}>
+                  <Text style={styles.progressModalSectionTitle}>Weekly Comparison</Text>
+                  <View style={styles.progressModalComparison}>
+                    <View style={styles.progressModalComparisonItem}>
+                      <Text style={styles.progressModalComparisonLabel}>This Day</Text>
+                      <Text style={styles.progressModalComparisonValue}>
+                        {selectedDayData.value} lesson{selectedDayData.value !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                    <View style={styles.progressModalComparisonDivider} />
+                    <View style={styles.progressModalComparisonItem}>
+                      <Text style={styles.progressModalComparisonLabel}>Daily Average</Text>
+                      <Text style={styles.progressModalComparisonValue}>
+                        {weekAverage.toFixed(1)} lesson{weekAverage !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {selectedDayData.value >= weekAverage ? (
+                  <View style={styles.progressModalEncouragement}>
+                    <Ionicons name="checkmark-circle" size={24} color={COLORS.semantic.success} />
+                    <Text style={styles.progressModalEncouragementText}>
+                      Great job! You're above your daily average! 🎉
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.progressModalEncouragement, styles.progressModalEncouragementNeutral]}>
+                    <Ionicons name="trending-up" size={24} color={COLORS.primary} />
+                    <Text style={styles.progressModalEncouragementText}>
+                      Keep going! Try to reach your daily average of {weekAverage.toFixed(1)} lessons.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -1447,6 +1533,134 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  progressModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  progressModalContent: {
+    backgroundColor: COLORS.background,
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  progressModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
+  },
+  progressModalTitle: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.text.primary,
+    marginLeft: 12,
+  },
+  progressModalCloseButton: {
+    padding: 4,
+  },
+  progressModalBody: {
+    padding: 20,
+  },
+  progressModalSection: {
+    marginBottom: 24,
+  },
+  progressModalDayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  progressModalDayTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.text.primary,
+  },
+  progressModalStatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    padding: 20,
+    borderRadius: 16,
+    gap: 16,
+  },
+  progressModalStatContent: {
+    flex: 1,
+  },
+  progressModalStatValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  progressModalStatLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  progressModalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 12,
+  },
+  progressModalComparison: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    gap: 16,
+  },
+  progressModalComparisonItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  progressModalComparisonDivider: {
+    width: 1,
+    backgroundColor: COLORS.border.light,
+  },
+  progressModalComparisonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+    marginBottom: 8,
+  },
+  progressModalComparisonValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  progressModalEncouragement: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(74, 119, 66, 0.1)',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.semantic.success,
+  },
+  progressModalEncouragementNeutral: {
+    backgroundColor: 'rgba(139, 93, 51, 0.1)',
+    borderLeftColor: COLORS.primary,
+  },
+  progressModalEncouragementText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    lineHeight: 20,
   },
 });
 

@@ -115,7 +115,7 @@ const BottomNavBar = () => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 0,
+    bottom: Platform.OS === 'ios' ? 8 : 12, // Move it a little bit higher
     left: 0,
     right: 0,
     backgroundColor: 'transparent',

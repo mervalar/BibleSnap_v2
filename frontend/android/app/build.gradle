@@ -136,94 +136,8 @@ android {
         exclude 'META-INF/NOTICE.txt'
     }
     
-    // Fix duplicate resource conflicts by forcing specific library versions
-    configurations.all {
-        resolutionStrategy {
-            force 'com.google.android.material:material:1.11.0'
-            force 'androidx.appcompat:appcompat:1.6.1'
-        }
-    }
-    
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
-    }
-    
-    // Fix duplicate resource conflicts by handling resource merging
-    afterEvaluate {
-        android.applicationVariants.all { variant ->
-            def variantName = variant.name.capitalize()
-            def mergeResourcesTask = tasks.findByName("merge${variantName}Resources")
-            if (mergeResourcesTask != null) {
-                mergeResourcesTask.doLast {
-                    def mergedDir = file("${buildDir}/intermediates/incremental/${variant.name}/merge${variantName}Resources/merged.dir/values")
-                    def valuesFile = file("${mergedDir}/values.xml")
-                    
-                    if (valuesFile.exists()) {
-                        try {
-                            def content = valuesFile.text
-                            
-                            // Count how many times actionBarSize appears
-                            def count = (content =~ /name="actionBarSize"/).count
-                            
-                            if (count > 1) {
-                                println "Found ${count} occurrences of actionBarSize, removing duplicates..."
-                                
-                                // Process line by line to remove duplicates
-                                def lines = content.split('\n')
-                                def result = []
-                                def foundFirst = false
-                                def skipLines = 0
-                                
-                                lines.eachWithIndex { line, index ->
-                                    if (skipLines > 0) {
-                                        skipLines--
-                                        return
-                                    }
-                                    
-                                    if (line.contains('name="actionBarSize"')) {
-                                        if (!foundFirst) {
-                                            foundFirst = true
-                                            result.add(line)
-                                            // If it's not self-closing, we need to skip until closing tag
-                                            if (!line.trim().endsWith('/>')) {
-                                                // Find the closing </attr> tag
-                                                def i = index + 1
-                                                while (i < lines.size() && !lines[i].contains('</attr>')) {
-                                                    result.add(lines[i])
-                                                    i++
-                                                }
-                                                if (i < lines.size()) {
-                                                    result.add(lines[i])
-                                                }
-                                            }
-                                        } else {
-                                            // Skip this duplicate
-                                            println "Skipping duplicate actionBarSize at line ${index + 1}"
-                                            if (!line.trim().endsWith('/>')) {
-                                                // Skip until closing tag
-                                                def i = index + 1
-                                                while (i < lines.size() && !lines[i].contains('</attr>')) {
-                                                    i++
-                                                }
-                                                skipLines = i - index
-                                            }
-                                        }
-                                    } else {
-                                        result.add(line)
-                                    }
-                                }
-                                
-                                valuesFile.text = result.join('\n')
-                                println "Successfully removed duplicate actionBarSize definition(s)"
-                            }
-                        } catch (Exception e) {
-                            println "Error fixing duplicate resources: ${e.message}"
-                            e.printStackTrace()
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -247,7 +161,14 @@ android {
     }
 }
 
+// Force specific library versions to avoid conflicts
 configurations.all {
+    resolutionStrategy {
+        force 'com.google.android.material:material:1.12.0'
+        force 'androidx.appcompat:appcompat:1.6.1'
+    }
+    
+    // Exclude old support libraries
     exclude group: 'com.android.support', module: 'support-v4'
     exclude group: 'com.android.support', module: 'support-compat'
     exclude group: 'com.android.support', module: 'support-annotations'

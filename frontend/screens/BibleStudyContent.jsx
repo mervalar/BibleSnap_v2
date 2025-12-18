@@ -450,29 +450,51 @@ const BibleStudyContent = () => {
     // Remove any brackets or quotes that might be left
     const cleanBook = String(firstBook).replace(/[\[\]"]/g, '').trim();
     
-    // Strategy: Find the last number in the string (that's the chapter)
-    // Everything before that is the book name
-    // This handles: "Genesis 1", "1 Samuel 5", "Song of Solomon 1", "Psalms 23"
-    const lastNumberMatch = cleanBook.match(/(\d+)(?:\s*[:\-,]|$)/);
+    // Strategy: Find the chapter number - it's usually the last number in the string
+    // Handle formats like: "Genesis 1", "Genesis 1:1", "1 Samuel 5", "Song of Solomon 1"
     
-    if (lastNumberMatch) {
-      chapterNumber = lastNumberMatch[1];
-      // Find the position of the last number
-      const lastNumberIndex = cleanBook.lastIndexOf(lastNumberMatch[0]);
-      // Everything before the last number is the book name
-      bookName = cleanBook.substring(0, lastNumberIndex).trim();
-      
-      // Handle cases like "Genesis 1-2" where we want just "Genesis" and chapter "1"
-      // If there's a dash or colon before the number, extract just the first number
-      const firstNumberMatch = cleanBook.match(/(\d+)/);
-      if (firstNumberMatch && firstNumberMatch.index < lastNumberIndex) {
-        chapterNumber = firstNumberMatch[1];
-        bookName = cleanBook.substring(0, firstNumberMatch.index).trim();
-      }
+    // First, check for chapter:verse format (e.g., "Genesis 1:1")
+    const chapterVerseMatch = cleanBook.match(/(\d+):(\d+)/);
+    if (chapterVerseMatch) {
+      chapterNumber = chapterVerseMatch[1];
+      bookName = cleanBook.substring(0, chapterVerseMatch.index).trim();
     } else {
-      // No number found, use entire string as book name
-      bookName = cleanBook.trim();
-      chapterNumber = '1';
+      // Find all numbers in the string
+      const allNumbers = cleanBook.match(/\d+/g);
+      
+      if (allNumbers && allNumbers.length > 0) {
+        // For books with numbers in the name (1 Samuel, 2 Kings, etc.)
+        // The pattern is usually: "[Number] [Book Name] [Chapter Number]"
+        // So if there are 2+ numbers, the last one is the chapter
+        
+        if (allNumbers.length === 1) {
+          // Single number - could be book number or chapter
+          // Check if it's at the start (likely book number) or end (likely chapter)
+          const numberStr = allNumbers[0];
+          const numberIndex = cleanBook.indexOf(numberStr);
+          const wordsBeforeNumber = cleanBook.substring(0, numberIndex).trim().split(/\s+/).filter(w => w).length;
+          
+          if (wordsBeforeNumber === 0) {
+            // Number at start - it's part of book name, default to chapter 1
+            bookName = cleanBook.trim();
+            chapterNumber = '1';
+          } else {
+            // Number after text - it's the chapter
+            chapterNumber = numberStr;
+            bookName = cleanBook.substring(0, numberIndex).trim();
+          }
+        } else {
+          // Multiple numbers - last one is the chapter, everything before is book name
+          const lastNumber = allNumbers[allNumbers.length - 1];
+          const lastNumberIndex = cleanBook.lastIndexOf(lastNumber);
+          chapterNumber = lastNumber;
+          bookName = cleanBook.substring(0, lastNumberIndex).trim();
+        }
+      } else {
+        // No numbers found - use entire string as book name, default to chapter 1
+        bookName = cleanBook.trim();
+        chapterNumber = '1';
+      }
     }
     
     // Clean up book name - remove any trailing spaces, dashes, or special characters
@@ -533,9 +555,19 @@ const BibleStudyContent = () => {
       finalBookName: bookName
     });
     
+    // Ensure we have valid values
+    const finalBookId = bookId || 'GEN';
+    const finalBookName = bookName || 'Genesis';
+    const finalChapterNumber = chapterNumber || '1';
+    
+    console.log('📖 Final book info to pass:', {
+      book: { id: finalBookId, name: finalBookName },
+      chapter: { number: finalChapterNumber }
+    });
+    
     return {
-      book: { id: bookId, name: bookName },
-      chapter: { number: chapterNumber }
+      book: { id: finalBookId, name: finalBookName },
+      chapter: { number: finalChapterNumber }
     };
   };
 
@@ -672,17 +704,28 @@ const BibleStudyContent = () => {
       </View>
     </TouchableOpacity>
 
-    <BookContent
-      route={{
-        params: {
-          book: getBookInfo().book,
-          chapter: getBookInfo().chapter,
-          bibleId: bibleId,
-          language: language,
-        }
-      }}
-      navigation={navigation}
-    />
+    {(() => {
+      const bookInfo = getBookInfo();
+      console.log('📖 Passing to BookContent:', {
+        book: bookInfo.book,
+        chapter: bookInfo.chapter,
+        bibleId: bibleId,
+        language: language,
+      });
+      return (
+        <BookContent
+          route={{
+            params: {
+              book: bookInfo.book,
+              chapter: bookInfo.chapter,
+              bibleId: bibleId,
+              language: language,
+            }
+          }}
+          navigation={navigation}
+        />
+      );
+    })()}
   </View>
 </Modal>
       

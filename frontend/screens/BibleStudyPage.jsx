@@ -369,7 +369,7 @@ const BibleStudyApp = () => {
 
   // Filter modal states
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
-  const [selectedType, setSelectedType] = useState('historical'); // 'historical' (shows all), 'pickupbook', 'video'
+  const [selectedType, setSelectedType] = useState('historical'); // 'historical' (shows all), 'pickupbook'
 
   useEffect(() => {
     const loadData = async () => {
@@ -657,6 +657,7 @@ const BibleStudyApp = () => {
         if (raw) {
           const plan = JSON.parse(raw);
           setStudyPlan(plan);
+          setPlanDays(plan.days); // Set planDays from loaded plan
         } else {
           setTimeout(() => setPlanModalVisible(true), 600);
         }
@@ -666,6 +667,13 @@ const BibleStudyApp = () => {
     };
     loadPlan();
   }, []);
+
+  // Update planDays when modal opens and studyPlan exists
+  useEffect(() => {
+    if (planModalVisible && studyPlan) {
+      setPlanDays(studyPlan.days);
+    }
+  }, [planModalVisible, studyPlan]);
 
   // Calculate reading statistics and encouragement
   const calculateReadingStats = async () => {
@@ -1141,35 +1149,105 @@ const BibleStudyApp = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Ionicons name="book" size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
-            <Text style={styles.modalTitle}>Filter by Type</Text>
-            <Text style={styles.modalSubtitle}>Select a type to filter studies</Text>
-            
-            {['historical', 'pickupbook', 'video'].map((type) => (
-              <TouchableOpacity
-                key={type}
-                onPress={() => handleTypeFilter(type)}
-                style={[styles.planOption, selectedType === type && styles.planOptionActive]}
-              >
-                <View style={styles.planOptionContent}>
-                  <Text style={[styles.planOptionText, selectedType === type && styles.planOptionTextActive]}>
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </Text>
-                  <Ionicons 
-                    name="checkmark-circle" 
-                    size={24} 
-                    color={selectedType === type ? '#FFF' : COLORS.border.medium} 
-                  />
-                </View>
-              </TouchableOpacity>
-            ))}
-            
-            <TouchableOpacity 
-              onPress={() => setCategoryModalVisible(false)} 
-              style={styles.modalCloseButton}
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 10 }}
             >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </TouchableOpacity>
+              <View style={styles.filterModalHeader}>
+                <Ionicons name="filter" size={32} color={COLORS.primary} />
+                <Text style={styles.modalTitle}>Filter by Type</Text>
+                <Text style={styles.filterExplanation}>
+                  Choose your vibe. Pick how you want to dive into the Word.
+                </Text>
+              </View>
+              
+              <View style={styles.filterCardsContainer}>
+              {[
+                { 
+                  type: 'historical', 
+                  title: 'Historical Studies', 
+                  description: 'Journey through biblical events chronologically',
+                  icon: 'time',
+                  imagePosition: 'top-right'
+                },
+                { 
+                  type: 'pickupbook', 
+                  title: 'Pick a Book', 
+                  description: 'Read any book of the Bible at your pace',
+                  icon: 'library',
+                  imagePosition: 'left-behind'
+                }
+              ].map((item, index) => (
+                <View key={item.type} style={styles.filterCardWrapper}>
+                  {/* Icon behind card for pickupbook */}
+                  {item.imagePosition === 'left-behind' && (
+                    <View style={[
+                      styles.filterCardImageBehind,
+                      selectedType === item.type && styles.filterCardImageBehindActive,
+                    ]}>
+                      <Ionicons 
+                        name={item.icon} 
+                        size={42} 
+                        color={selectedType === item.type ? COLORS.primary : 'rgba(139, 93, 51, 0.3)'} 
+                      />
+                    </View>
+                  )}
+                  
+                  <TouchableOpacity
+                    onPress={() => handleTypeFilter(item.type)}
+                    style={[
+                      styles.filterCard,
+                      item.imagePosition === 'left-behind' && styles.filterCardPickupBook,
+                      selectedType === item.type && styles.filterCardActive
+                    ]}
+                  >
+                    {/* Icon on top-right for historical */}
+                    {item.imagePosition === 'top-right' && (
+                      <View style={[
+                        styles.filterCardImageTopRight,
+                        selectedType === item.type && styles.filterCardImageTopRightActive,
+                      ]}>
+                        <Ionicons 
+                          name={item.icon} 
+                          size={32} 
+                          color={selectedType === item.type ? '#FFFFFF' : COLORS.primary} 
+                        />
+                      </View>
+                    )}
+                    
+                    <View style={styles.filterCardContent}>
+                      <View style={styles.filterCardHeader}>
+                        <Text style={[
+                          styles.filterCardTitle,
+                          selectedType === item.type && styles.filterCardTitleActive
+                        ]}>
+                          {item.title}
+                        </Text>
+                        <Ionicons 
+                          name={selectedType === item.type ? "checkmark-circle" : "ellipse-outline"} 
+                          size={20} 
+                          color={selectedType === item.type ? '#FFFFFF' : COLORS.border.medium} 
+                        />
+                      </View>
+                      <Text style={[
+                        styles.filterCardDescription,
+                        selectedType === item.type && styles.filterCardDescriptionActive
+                      ]}>
+                        {item.description}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              </View>
+              
+              <TouchableOpacity 
+                onPress={() => setCategoryModalVisible(false)} 
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1181,51 +1259,23 @@ const BibleStudyApp = () => {
         animationType="fade"
         onRequestClose={() => setUnlockModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons name="lock-closed" size={48} color={COLORS.semantic.warning} style={{ marginBottom: 16 }} />
-            <Text style={styles.modalTitle}>Lesson Locked</Text>
-            <Text style={styles.modalSubtitle}>
-              Complete the previous lesson to unlock this one
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setUnlockModalVisible(false)}
+        >
+          <TouchableOpacity 
+            style={styles.unlockModalContent}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <Ionicons name="lock-closed" size={28} color={COLORS.semantic.warning} style={{ marginBottom: 8 }} />
+            <Text style={styles.unlockModalTitle}>Lesson Locked</Text>
+            <Text style={styles.unlockModalSubtitle}>
+              Complete previous lessons to unlock
             </Text>
-
-            {unlockTarget?.previousItem ? (
-              <>
-                <View style={styles.unlockInfo}>
-                  <Text style={styles.unlockLabel}>Previous Lesson:</Text>
-                  <Text style={styles.unlockValue}>
-                    {unlockTarget.previousItem.title || `Day ${unlockTarget.previousItem.day || unlockTarget.previousItem.id}`}
-                  </Text>
-                </View>
-
-                <View style={styles.modalActions}>
-                  <TouchableOpacity 
-                    onPress={() => setUnlockModalVisible(false)} 
-                    style={styles.modalButton}
-                  >
-                    <Text style={styles.modalButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setUnlockModalVisible(false);
-                      handleNavigateToStudy(unlockTarget.previousItem, progressMap[unlockTarget.previousItem.id] || 0);
-                    }}
-                    style={[styles.modalButton, styles.modalButtonPrimary]}
-                  >
-                    <Text style={styles.modalButtonPrimaryText}>Go There</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <TouchableOpacity 
-                onPress={() => setUnlockModalVisible(false)} 
-                style={[styles.modalButton, styles.modalButtonPrimary, { marginTop: 20 }]}
-              >
-                <Text style={styles.modalButtonPrimaryText}>Understood</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
       
       {/* Bottom Navigation Bar */}

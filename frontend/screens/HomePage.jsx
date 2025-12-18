@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image, Modal, ScrollView, Animated } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Video } from 'expo-av'; 
@@ -51,6 +51,8 @@ const HomePage = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [todaysChallenge, setTodaysChallenge] = useState(null);
   const [challengeLoading, setChallengeLoading] = useState(true);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const waveAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Load verse of the day
@@ -95,6 +97,27 @@ const HomePage = () => {
       reloadChallenge();
     }, []) // Empty dependency array - reload every time screen comes into focus
   );
+
+  // Wave animation effect
+  useEffect(() => {
+    const animateWave = () => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(waveAnim, {
+            toValue: 1,
+            duration: 3000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(waveAnim, {
+            toValue: 0,
+            duration: 3000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    };
+    animateWave();
+  }, [waveAnim]);
 
 const loadChallengeProgress = async () => {
   try {
@@ -361,6 +384,11 @@ const loadChallengeProgress = async () => {
     });
   };
 
+  const handleProgressPress = (e) => {
+    e.stopPropagation(); // Prevent triggering challenge press
+    setShowProgressModal(true);
+  };
+
   // Show loading state while checking authentication
   if (authLoading) {
     return (
@@ -559,7 +587,46 @@ const loadChallengeProgress = async () => {
           ]} 
           onPress={handleChallengePress}
         >
-          <View style={styles.challengeHeader}>
+          {/* Animated Wave Background */}
+          <View style={styles.waveContainer}>
+            {[0, 1, 2, 3].map((index) => {
+              const translateX = waveAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-300 + (index * 150), 300 + (index * 150)],
+              });
+              const translateY = waveAnim.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0, -20, 0],
+              });
+              const opacity = waveAnim.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0.1, 0.2, 0.1],
+              });
+              const scale = waveAnim.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [1, 1.1, 1],
+              });
+              return (
+                <Animated.View
+                  key={index}
+                  style={[
+                    styles.wave,
+                    {
+                      transform: [
+                        { translateX },
+                        { translateY },
+                        { scale },
+                      ],
+                      opacity,
+                      left: -150 + (index * 100),
+                    },
+                  ]}
+                />
+              );
+            })}
+          </View>
+          
+          <View style={[styles.challengeHeader, { zIndex: 1 }]}>
             <View style={styles.challengeTitleRow}>
               <Text style={styles.challengeTitle}>Today's Challenge</Text>
               {todaysChallenge?.isCompleted && (
@@ -577,7 +644,7 @@ const loadChallengeProgress = async () => {
           </View>
           
           {challengeLoading ? (
-            <View style={styles.challengeLoadingContainer}>
+            <View style={[styles.challengeLoadingContainer, { zIndex: 1 }]}>
               <ActivityIndicator size="small" color="#A07553" />
               <Text style={styles.challengeLoadingText}>Loading challenge...</Text>
             </View>
@@ -597,7 +664,11 @@ const loadChallengeProgress = async () => {
             </>
           )}
           
-         <View style={styles.progressContainer}>
+         <TouchableOpacity 
+          style={styles.progressContainer}
+          onPress={handleProgressPress}
+          activeOpacity={0.7}
+        >
           <View style={[
             styles.progressBar,
             todaysChallenge?.isCompleted && styles.progressBarCompleted
@@ -623,14 +694,17 @@ const loadChallengeProgress = async () => {
                 </Text>
               </>
             ) : (
-              <Text style={styles.progressText}>
-                {todaysChallenge?.progress?.percent 
-                  ? `${todaysChallenge.progress.percent}% Complete` 
-                  : 'Start'}
-              </Text>
+              <>
+                <Text style={styles.progressText}>
+                  {todaysChallenge?.progress?.percent 
+                    ? `${todaysChallenge.progress.percent}% Complete` 
+                    : 'Start'}
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color="#9E795D" />
+              </>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
         </TouchableOpacity>
       </View>
 
@@ -643,6 +717,107 @@ const loadChallengeProgress = async () => {
           setShowAuthModal(false);
         }}
       />
+
+      {/* Progress Details Modal */}
+      <Modal
+        visible={showProgressModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowProgressModal(false)}
+      >
+        <View style={styles.progressModalOverlay}>
+          <View style={styles.progressModalContent}>
+            <View style={styles.progressModalHeader}>
+              <Ionicons name="stats-chart" size={32} color="#A07553" />
+              <Text style={styles.progressModalTitle}>Challenge Progress</Text>
+              <TouchableOpacity 
+                style={styles.progressModalCloseButton}
+                onPress={() => setShowProgressModal(false)}
+              >
+                <Ionicons name="close" size={24} color="#9E795D" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.progressModalBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.progressModalSection}>
+                <Text style={styles.progressModalSectionTitle}>Today's Challenge</Text>
+                <Text style={styles.progressModalChallengeTitle}>
+                  {todaysChallenge?.title || "Share God's love with someone today"}
+                </Text>
+                {todaysChallenge?.category && (
+                  <View style={styles.progressModalCategory}>
+                    <Text style={styles.progressModalCategoryText}>
+                      {todaysChallenge.category.name}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.progressModalSection}>
+                <View style={styles.progressModalStatsRow}>
+                  <View style={styles.progressModalStatItem}>
+                    <Ionicons name="checkmark-circle" size={28} color={todaysChallenge?.isCompleted ? "#4A7742" : "#9E795D"} />
+                    <Text style={styles.progressModalStatValue}>
+                      {todaysChallenge?.isCompleted ? "Completed" : "In Progress"}
+                    </Text>
+                  </View>
+                  <View style={styles.progressModalStatItem}>
+                    <Ionicons name="bar-chart" size={28} color="#A07553" />
+                    <Text style={styles.progressModalStatValue}>
+                      {todaysChallenge?.progress?.percent || 0}%
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.progressModalSection}>
+                <Text style={styles.progressModalSectionTitle}>Progress Bar</Text>
+                <View style={styles.progressModalProgressContainer}>
+                  <View style={styles.progressModalProgressBar}>
+                    <View style={[
+                      styles.progressModalProgressFill, 
+                      { 
+                        width: todaysChallenge?.progress?.percent 
+                          ? `${todaysChallenge.progress.percent}%` 
+                          : '0%',
+                        backgroundColor: todaysChallenge?.isCompleted 
+                          ? '#4A7742' 
+                          : '#A07553'
+                      }
+                    ]} />
+                  </View>
+                  <Text style={styles.progressModalProgressText}>
+                    {todaysChallenge?.progress?.percent || 0}% Complete
+                  </Text>
+                </View>
+              </View>
+
+              {todaysChallenge?.main_verse && (
+                <View style={styles.progressModalSection}>
+                  <Text style={styles.progressModalSectionTitle}>Verse Reference</Text>
+                  <View style={styles.progressModalVerseContainer}>
+                    <Ionicons name="book" size={20} color="#A07553" />
+                    <Text style={styles.progressModalVerseText}>
+                      {todaysChallenge.main_verse}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              <TouchableOpacity 
+                style={styles.progressModalActionButton}
+                onPress={() => {
+                  setShowProgressModal(false);
+                  handleChallengePress();
+                }}
+              >
+                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                <Text style={styles.progressModalActionButtonText}>Continue Challenge</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1022,6 +1197,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#4A7742',
   },
+  waveContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
+  wave: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: '#A07553',
+    top: -100,
+  },
   challengeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1126,6 +1317,137 @@ const styles = StyleSheet.create({
   progressTextCompleted: {
     color: '#4A7742',
     fontWeight: '700',
+  },
+  progressModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  progressModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  progressModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEDED2',
+  },
+  progressModalTitle: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#2D2417',
+    marginLeft: 12,
+  },
+  progressModalCloseButton: {
+    padding: 4,
+  },
+  progressModalBody: {
+    padding: 20,
+  },
+  progressModalSection: {
+    marginBottom: 24,
+  },
+  progressModalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#A07553',
+    marginBottom: 12,
+  },
+  progressModalChallengeTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2D2417',
+    marginBottom: 8,
+    lineHeight: 26,
+  },
+  progressModalCategory: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EEDED2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  progressModalCategoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#A07553',
+  },
+  progressModalStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 8,
+  },
+  progressModalStatItem: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  progressModalStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D2417',
+  },
+  progressModalProgressContainer: {
+    marginTop: 12,
+  },
+  progressModalProgressBar: {
+    height: 12,
+    backgroundColor: '#EEDED2',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  progressModalProgressFill: {
+    height: '100%',
+    borderRadius: 6,
+  },
+  progressModalProgressText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9E795D',
+    textAlign: 'center',
+  },
+  progressModalVerseContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F6F2',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  progressModalVerseText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#5A4A33',
+    fontStyle: 'italic',
+  },
+  progressModalActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#A07553',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+    marginTop: 8,
+  },
+  progressModalActionButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 
