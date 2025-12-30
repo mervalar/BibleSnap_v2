@@ -119,32 +119,65 @@ const HomePage = () => {
     animateWave();
   }, [waveAnim]);
 
+// Calculate overall progress (all completed lessons / total lessons)
+const calculateOverallProgress = async () => {
+  try {
+    const readingsStr = await AsyncStorage.getItem('bibleReadings');
+    const completedData = await AsyncStorage.getItem('completedStudies');
+    
+    if (!readingsStr) {
+      return 0;
+    }
+    
+    const allReadings = JSON.parse(readingsStr);
+    const totalLessons = allReadings.length;
+    
+    if (totalLessons === 0) {
+      return 0;
+    }
+    
+    const completedIds = completedData ? JSON.parse(completedData) : [];
+    const completedLessons = completedIds.length;
+    
+    // Calculate percent based on actual progress (completed lessons / total lessons)
+    const percent = Math.min(100, Math.round((completedLessons / totalLessons) * 100));
+    
+    return percent;
+  } catch (error) {
+    console.error('Error calculating overall progress:', error);
+    return 0;
+  }
+};
+
 const loadChallengeProgress = async () => {
   try {
     const today = new Date().toDateString();
     const progress = await AsyncStorage.getItem('challengeProgress');
     const progressDate = await AsyncStorage.getItem('challengeProgressDate');
     
+    // Always recalculate overall progress to ensure it's up-to-date
+    const overallProgressPercent = await calculateOverallProgress();
+    
     // Check if we have progress for today
     if (progress && progressDate === today) {
       const progressData = JSON.parse(progress);
       
-      // Also check the main bible progress map for consistency
-      const bibleProgress = await AsyncStorage.getItem('bibleProgress');
-      if (bibleProgress) {
-        const progressMap = JSON.parse(bibleProgress);
-        const studyProgress = progressMap[progressData.studyId];
-        
-        // Use the most recent progress
-        if (studyProgress !== undefined && studyProgress !== progressData.percent) {
-          progressData.percent = studyProgress;
-          await AsyncStorage.setItem('challengeProgress', JSON.stringify(progressData));
-        }
-      }
+      // Update with overall progress (which accumulates all completed lessons)
+      progressData.percent = overallProgressPercent;
+      progressData.isOverallProgress = true;
+      progressData.lastUpdated = Date.now();
+      
+      await AsyncStorage.setItem('challengeProgress', JSON.stringify(progressData));
       
       return progressData;
     }
-    return null;
+    
+    // If no progress for today, return overall progress
+    return {
+      percent: overallProgressPercent,
+      isOverallProgress: true,
+      lastUpdated: Date.now()
+    };
   } catch (error) {
     console.error('Error loading challenge progress:', error);
     return null;
@@ -246,28 +279,45 @@ const loadChallengeProgress = async () => {
       }
     }
     
-    // Set progress - if completed, always show 100%
+    // Calculate overall progress (all completed lessons / total lessons)
+    const overallProgressPercent = await calculateOverallProgress();
+    
+    // Set progress - use overall progress instead of just today's challenge progress
     let finalProgress = null;
     if (isCompleted) {
+      // If today's challenge is completed, use overall progress (which includes this completion)
       finalProgress = {
         studyId: todayReading.id,
-        percent: 100,
+        percent: overallProgressPercent, // Use overall progress
         lastUpdated: Date.now(),
-        completed: true
+        completed: true,
+        isOverallProgress: true // Flag to indicate this is overall progress
       };
     } else if (studyProgress !== undefined) {
+      // If in progress, use overall progress (which accumulates all completed lessons)
       finalProgress = {
         studyId: todayReading.id,
-        percent: studyProgress,
+        percent: overallProgressPercent, // Use overall progress
         lastUpdated: Date.now(),
-        completed: false
+        completed: false,
+        isOverallProgress: true // Flag to indicate this is overall progress
+      };
+    } else {
+      // No progress yet, but still show overall progress
+      finalProgress = {
+        studyId: todayReading.id,
+        percent: overallProgressPercent, // Use overall progress
+        lastUpdated: Date.now(),
+        completed: false,
+        isOverallProgress: true // Flag to indicate this is overall progress
       };
     }
     
     console.log('HomePage - Final challenge state:', {
       readingTitle: todayReading?.title,
       readingId: todayReading?.id,
-      progress: finalProgress?.percent || 0,
+      todayProgress: studyProgress || 0,
+      overallProgress: overallProgressPercent,
       isCompleted: isCompleted
     });
     
@@ -363,17 +413,32 @@ const loadChallengeProgress = async () => {
   };
 
   // Safe function for updating today's challenge progress
-  const updateChallengeProgress = (percent, studyId) => {
+  const updateChallengeProgress = async (percent, studyId) => {
+    // Recalculate overall progress when a lesson is completed
+    const overallProgressPercent = await calculateOverallProgress();
+    
     setTimeout(() => {
       setTodaysChallenge(prev => ({
         ...prev,
         progress: {
           ...prev.progress,
-          percent,
+          percent: overallProgressPercent, // Use overall progress instead of individual lesson progress
           studyId,
-          lastUpdated: Date.now()
+          lastUpdated: Date.now(),
+          isOverallProgress: true
         }
       }));
+      
+      // Also save to AsyncStorage
+      const today = new Date().toDateString();
+      const progressData = {
+        studyId: studyId,
+        percent: overallProgressPercent,
+        lastUpdated: Date.now(),
+        isOverallProgress: true
+      };
+      AsyncStorage.setItem('challengeProgress', JSON.stringify(progressData));
+      AsyncStorage.setItem('challengeProgressDate', today);
     }, 0);
   };
   

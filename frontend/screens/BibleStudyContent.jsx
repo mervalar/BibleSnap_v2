@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -272,9 +272,16 @@ const BibleStudyContent = () => {
   const [showBookModal, setShowBookModal] = useState(false);
   const [bibleId, setBibleId] = useState('65eec8e0b60e656b-01');
   const [language, setLanguage] = useState('english');
+  const scrollViewRef = useRef(null);
+  const contentHeightRef = useRef(0);
+  const scrollYRef = useRef(0);
+  const currentProgressRef = useRef(1); // Use ref to track current progress
+  const [currentProgress, setCurrentProgress] = useState(1); // Start from 1% instead of 0%
   
   const reading = route?.params?.bibleReading || {};
   const allReadings = route?.params?.allReadings || [];
+  const [apiBooks, setApiBooks] = useState([]);
+  const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
 
   // Load Bible preferences
   useEffect(() => {
@@ -293,21 +300,150 @@ const BibleStudyContent = () => {
     loadBiblePreferences();
   }, []);
 
-  // Check completion status when screen comes into focus or reading changes
+  // Fetch books list from API for book ID mapping
+  useEffect(() => {
+    const fetchBooks = async () => {
+      try {
+        const cacheKey = `api_books_${bibleId}`;
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          setApiBooks(JSON.parse(cached));
+          return;
+        }
+
+        const response = await fetch(
+          `https://api.scripture.api.bible/v1/bibles/${bibleId}/books`,
+          { headers: { 'api-key': API_KEY } }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          const books = data.data || [];
+          setApiBooks(books);
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(books));
+        }
+      } catch (error) {
+        console.error('Error fetching books list:', error);
+      }
+    };
+
+    if (bibleId) {
+      fetchBooks();
+    }
+  }, [bibleId]);
+
+  // Initialize progress when component mounts
+  useEffect(() => {
+    const initializeProgress = async () => {
+      try {
+        const progressData = await AsyncStorage.getItem('bibleProgress');
+        if (progressData) {
+          const progressMap = JSON.parse(progressData);
+          const savedProgress = progressMap[reading.id];
+          if (savedProgress !== undefined && savedProgress >= 1) {
+            const progressValue = Math.min(100, savedProgress);
+            currentProgressRef.current = progressValue;
+            setCurrentProgress(progressValue);
+            // Notify parent of current progress
+            if (route?.params?.onProgressUpdate) {
+              route.params.onProgressUpdate(progressValue);
+            }
+          } else {
+            // Start from 1% and notify parent
+            currentProgressRef.current = 1;
+            setCurrentProgress(1);
+            if (route?.params?.onProgressUpdate) {
+              route.params.onProgressUpdate(1);
+            }
+          }
+        } else {
+          // No progress exists, start from 1%
+          currentProgressRef.current = 1;
+          setCurrentProgress(1);
+          if (route?.params?.onProgressUpdate) {
+            route.params.onProgressUpdate(1);
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing progress:', error);
+        setCurrentProgress(1);
+      }
+    };
+    
+    if (reading.id) {
+      initializeProgress();
+    }
+  }, [reading.id, route?.params?.onProgressUpdate]);
+
+  // Load initial progress when screen comes into focus or reading changes
   useFocusEffect(
     useCallback(() => {
-      const checkCompletion = async () => {
+      const loadProgress = async () => {
         try {
           const completed = await AsyncStorage.getItem(`lesson_${reading.id}_completed`);
           setIsChecked(completed === 'true');
+          
+          // Load saved progress (start from 1% if no progress exists)
+          const progressData = await AsyncStorage.getItem('bibleProgress');
+          if (progressData) {
+            const progressMap = JSON.parse(progressData);
+            const savedProgress = progressMap[reading.id];
+            if (savedProgress !== undefined && savedProgress >= 1) {
+              const progressValue = Math.max(1, Math.min(100, savedProgress));
+              currentProgressRef.current = progressValue;
+              setCurrentProgress(progressValue);
+            } else {
+              currentProgressRef.current = 1;
+              setCurrentProgress(1); // Start from 1%
+            }
+          } else {
+            currentProgressRef.current = 1;
+            setCurrentProgress(1); // Start from 1%
+          }
         } catch (error) {
-          console.error('Error loading completion status:', error);
+          console.error('Error loading progress:', error);
           setIsChecked(false);
+          currentProgressRef.current = 1;
+          setCurrentProgress(1); // Default to 1%
         }
       };
-      checkCompletion();
+      loadProgress();
     }, [reading.id])
   );
+
+  // Update progress based on scroll position
+  const updateProgressFromScroll = useCallback(async (contentHeight, scrollY, layoutHeight) => {
+    if (contentHeight <= 0) return;
+    
+    // Calculate how much of the content has been viewed
+    const scrolledHeight = scrollY + layoutHeight;
+    const progressRatio = Math.min(1, Math.max(0, scrolledHeight / contentHeight));
+    
+    // Convert to percentage (1% to 100%)
+    // Start from 1% and go up to 100%
+    const newProgress = Math.max(1, Math.min(100, Math.round(progressRatio * 99) + 1));
+    
+    // Only update if progress increased (don't decrease progress)
+    if (newProgress > currentProgressRef.current) {
+      currentProgressRef.current = newProgress;
+      setCurrentProgress(newProgress);
+      
+      // Save progress to AsyncStorage
+      try {
+        const progressData = await AsyncStorage.getItem('bibleProgress');
+        const progressMap = progressData ? JSON.parse(progressData) : {};
+        progressMap[reading.id] = newProgress;
+        await AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
+        
+        // Update parent component
+        if (route?.params?.onProgressUpdate) {
+          route.params.onProgressUpdate(newProgress);
+        }
+      } catch (error) {
+        console.error('Error saving progress:', error);
+      }
+    }
+  }, [reading.id, route?.params?.onProgressUpdate]);
 
   const handleCheckToggle = async () => {
     const newChecked = !isChecked;
@@ -322,8 +458,12 @@ const BibleStudyContent = () => {
         
         const progressData = await AsyncStorage.getItem('bibleProgress');
         const progressMap = progressData ? JSON.parse(progressData) : {};
-        progressMap[reading.id] = 100;
+        // Use current progress or 100%, whichever is higher
+        const finalProgress = Math.max(currentProgressRef.current, 100);
+        progressMap[reading.id] = finalProgress;
         await AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
+        currentProgressRef.current = 100;
+        setCurrentProgress(100);
         
         const completedData = await AsyncStorage.getItem('completedStudies');
         const completedIds = completedData ? JSON.parse(completedData) : [];
@@ -359,7 +499,7 @@ const BibleStudyContent = () => {
         }
         
         if (route?.params?.onProgressUpdate) {
-          route.params.onProgressUpdate(100);
+          route.params.onProgressUpdate(Math.max(currentProgressRef.current, 100));
         }
         
         setShowCelebration(true);
@@ -372,8 +512,10 @@ const BibleStudyContent = () => {
         
         const progressData = await AsyncStorage.getItem('bibleProgress');
         const progressMap = progressData ? JSON.parse(progressData) : {};
-        progressMap[reading.id] = 0;
+        progressMap[reading.id] = 1; // Reset to 1% instead of 0%
         await AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
+        currentProgressRef.current = 1;
+        setCurrentProgress(1);
         
         const completedData = await AsyncStorage.getItem('completedStudies');
         const completedIds = completedData ? JSON.parse(completedData) : [];
@@ -381,7 +523,7 @@ const BibleStudyContent = () => {
         await AsyncStorage.setItem('completedStudies', JSON.stringify(filtered));
         
         if (route?.params?.onProgressUpdate) {
-          route.params.onProgressUpdate(0);
+          route.params.onProgressUpdate(1); // Reset to 1% instead of 0%
         }
       }
     } catch (error) {
@@ -408,12 +550,22 @@ const BibleStudyContent = () => {
     return books.replace(/[\[\]"]/g, '').replace(/,/g, ', ');
   };
 
-  const getBookInfo = () => {
+  // Use useMemo to recalculate book info when apiBooks or reading changes
+  const bookInfo = useMemo(() => {
     // First, properly parse the books field
     let booksArray = [];
     try {
       if (!reading?.books) {
-        return { book: { id: 'GEN', name: 'Genesis' }, chapter: { number: '1' } };
+        // Try to find Genesis in API books, otherwise return null ID
+        let defaultBookId = null;
+        if (apiBooks.length > 0) {
+          const genesisBook = apiBooks.find(b => 
+            b.name?.toLowerCase().includes('genesis') ||
+            b.abbreviation?.toLowerCase().includes('gen')
+          );
+          defaultBookId = genesisBook?.id || apiBooks[0]?.id || null;
+        }
+        return { book: { id: defaultBookId, name: 'Genesis' }, chapter: { number: '1' } };
       }
       
       // Handle different formats
@@ -433,7 +585,16 @@ const BibleStudyContent = () => {
       }
     } catch (error) {
       console.error('Error parsing books:', error);
-      return { book: { id: 'GEN', name: 'Genesis' }, chapter: { number: '1' } };
+      // Try to find Genesis in API books, otherwise return null ID
+      let defaultBookId = null;
+      if (apiBooks.length > 0) {
+        const genesisBook = apiBooks.find(b => 
+          b.name?.toLowerCase().includes('genesis') ||
+          b.abbreviation?.toLowerCase().includes('gen')
+        );
+        defaultBookId = genesisBook?.id || apiBooks[0]?.id || null;
+      }
+      return { book: { id: defaultBookId, name: 'Genesis' }, chapter: { number: '1' } };
     }
 
     // Get the first book entry
@@ -517,59 +678,146 @@ const BibleStudyContent = () => {
       .replace(/\b2\s+Cor\b/i, '2 Corinthians')
       .trim();
     
-    const bookMapping = {
-      // Old Testament
-      'Genesis': 'GEN', 'Exodus': 'EXO', 'Leviticus': 'LEV', 'Numbers': 'NUM',
-      'Deuteronomy': 'DEU', 'Joshua': 'JOS', 'Judges': 'JDG', 'Ruth': 'RUT',
-      '1 Samuel': '1SA', '2 Samuel': '2SA', '1 Kings': '1KI', '2 Kings': '2KI',
-      '1 Chronicles': '1CH', '2 Chronicles': '2CH', 'Ezra': 'EZR', 'Nehemiah': 'NEH',
-      'Esther': 'EST', 'Job': 'JOB', 'Psalms': 'PSA', 'Psalm': 'PSA',
-      'Proverbs': 'PRO', 'Ecclesiastes': 'ECC', 'Song of Solomon': 'SNG',
-      'Isaiah': 'ISA', 'Jeremiah': 'JER', 'Lamentations': 'LAM', 'Ezekiel': 'EZK',
-      'Daniel': 'DAN', 'Hosea': 'HOS', 'Joel': 'JOL', 'Amos': 'AMO',
-      'Obadiah': 'OBA', 'Jonah': 'JON', 'Micah': 'MIC', 'Nahum': 'NAM',
-      'Habakkuk': 'HAB', 'Zephaniah': 'ZEP', 'Haggai': 'HAG', 'Zechariah': 'ZEC',
-      'Malachi': 'MAL',
-      // New Testament
-      'Matthew': 'MAT', 'Mark': 'MRK', 'Luke': 'LUK', 'John': 'JHN',
-      'Acts': 'ACT', 'Romans': 'ROM', 
-      '1 Corinthians': '1CO', '2 Corinthians': '2CO',
-      'Galatians': 'GAL', 'Ephesians': 'EPH', 'Philippians': 'PHP',
-      'Colossians': 'COL', '1 Thessalonians': '1TH', '2 Thessalonians': '2TH',
-      '1 Timothy': '1TI', '2 Timothy': '2TI', 'Titus': 'TIT', 'Philemon': 'PHM',
-      'Hebrews': 'HEB', 'James': 'JAS', '1 Peter': '1PE', '2 Peter': '2PE',
-      '1 John': '1JN', '2 John': '2JN', '3 John': '3JN', 'Jude': 'JUD',
-      'Revelation': 'REV',
-    };
+    // Try to find book ID from API books list first
+    let bookId = null;
+    if (apiBooks.length > 0) {
+      // Debug: log first few books to see structure
+      if (apiBooks.length > 0 && apiBooks[0]) {
+        console.log('🔍 Sample API book structure:', {
+          id: apiBooks[0].id,
+          name: apiBooks[0].name,
+          abbreviation: apiBooks[0].abbreviation,
+          lookingFor: bookName
+        });
+      }
+      
+      // Try exact match first
+      let foundBook = apiBooks.find(b => 
+        b.name?.toLowerCase() === bookName.toLowerCase() ||
+        b.abbreviation?.toLowerCase() === bookName.toLowerCase()
+      );
+      
+      // Try partial match if exact match fails
+      if (!foundBook) {
+        foundBook = apiBooks.find(b => 
+          b.name?.toLowerCase().includes(bookName.toLowerCase()) ||
+          bookName.toLowerCase().includes(b.name?.toLowerCase())
+        );
+      }
+      
+      // Try matching with normalized names (remove "The" prefix, handle "1st", "2nd", etc.)
+      if (!foundBook) {
+        const normalizeName = (name) => {
+          return name.toLowerCase()
+            .replace(/^the\s+/, '')
+            .replace(/\b1st\b|\bfirst\b/g, '1')
+            .replace(/\b2nd\b|\bsecond\b/g, '2')
+            .replace(/\b3rd\b|\bthird\b/g, '3')
+            .trim();
+        };
+        
+        const normalizedBookName = normalizeName(bookName);
+        foundBook = apiBooks.find(b => {
+          const normalizedApiName = normalizeName(b.name || '');
+          return normalizedApiName === normalizedBookName ||
+                 normalizedApiName.includes(normalizedBookName) ||
+                 normalizedBookName.includes(normalizedApiName);
+        });
+      }
+      
+      if (foundBook) {
+        bookId = foundBook.id;
+        console.log('✅ Found book in API:', { name: foundBook.name, id: foundBook.id, abbreviation: foundBook.abbreviation });
+      } else {
+        console.log('❌ Book not found in API by name, trying abbreviation lookup...');
+      }
+    }
     
-    const bookId = bookMapping[bookName] || 'GEN';
+    // If we still don't have a book ID and API books are loaded, try abbreviation lookup
+    if (!bookId && apiBooks.length > 0) {
+      // Create abbreviation mapping for lookup
+      const bookAbbrevMapping = {
+        'Genesis': 'GEN', 'Exodus': 'EXO', 'Leviticus': 'LEV', 'Numbers': 'NUM',
+        'Deuteronomy': 'DEU', 'Joshua': 'JOS', 'Judges': 'JDG', 'Ruth': 'RUT',
+        '1 Samuel': '1SA', '2 Samuel': '2SA', '1 Kings': '1KI', '2 Kings': '2KI',
+        '1 Chronicles': '1CH', '2 Chronicles': '2CH', 'Ezra': 'EZR', 'Nehemiah': 'NEH',
+        'Esther': 'EST', 'Job': 'JOB', 'Psalms': 'PSA', 'Psalm': 'PSA',
+        'Proverbs': 'PRO', 'Ecclesiastes': 'ECC', 'Song of Solomon': 'SNG',
+        'Isaiah': 'ISA', 'Jeremiah': 'JER', 'Lamentations': 'LAM', 'Ezekiel': 'EZK',
+        'Daniel': 'DAN', 'Hosea': 'HOS', 'Joel': 'JOL', 'Amos': 'AMO',
+        'Obadiah': 'OBA', 'Jonah': 'JON', 'Micah': 'MIC', 'Nahum': 'NAM',
+        'Habakkuk': 'HAB', 'Zephaniah': 'ZEP', 'Haggai': 'HAG', 'Zechariah': 'ZEC',
+        'Malachi': 'MAL',
+        'Matthew': 'MAT', 'Mark': 'MRK', 'Luke': 'LUK', 'John': 'JHN',
+        'Acts': 'ACT', 'Romans': 'ROM', 
+        '1 Corinthians': '1CO', '2 Corinthians': '2CO',
+        'Galatians': 'GAL', 'Ephesians': 'EPH', 'Philippians': 'PHP',
+        'Colossians': 'COL', '1 Thessalonians': '1TH', '2 Thessalonians': '2TH',
+        '1 Timothy': '1TI', '2 Timothy': '2TI', 'Titus': 'TIT', 'Philemon': 'PHM',
+        'Hebrews': 'HEB', 'James': 'JAS', '1 Peter': '1PE', '2 Peter': '2PE',
+        '1 John': '1JN', '2 John': '2JN', '3 John': '3JN', 'Jude': 'JUD',
+        'Revelation': 'REV',
+      };
+      const abbrev = bookAbbrevMapping[bookName];
+      if (abbrev) {
+        // Look up by abbreviation OR by ID in API books (API book IDs ARE the abbreviations)
+        const foundByAbbrev = apiBooks.find(b => 
+          b.abbreviation?.toUpperCase() === abbrev.toUpperCase() ||
+          b.id?.toUpperCase() === abbrev.toUpperCase()
+        );
+        if (foundByAbbrev) {
+          bookId = foundByAbbrev.id;
+          console.log('✅ Found book by abbreviation lookup:', { abbrev, foundId: foundByAbbrev.id, name: foundByAbbrev.name });
+        } else {
+          console.log('❌ Book not found by abbreviation:', abbrev, 'Available books:', apiBooks.slice(0, 5).map(b => ({ id: b.id, name: b.name, abbrev: b.abbreviation })));
+        }
+      }
+    }
     
-    console.log('📖 Book parsing:', {
+    // Final fallback: if still no ID and API books are loaded, try to find Genesis
+    let finalBookId = bookId;
+    if (!finalBookId && apiBooks.length > 0) {
+      console.log('⚠️ No book ID found yet, trying Genesis fallback...');
+      const genesisBook = apiBooks.find(b => 
+        b.name?.toLowerCase().includes('genesis') ||
+        b.abbreviation?.toLowerCase().includes('gen') ||
+        b.id?.toUpperCase() === 'GEN'
+      );
+      if (genesisBook) {
+        finalBookId = genesisBook.id;
+        console.log('✅ Using Genesis fallback:', { id: genesisBook.id, name: genesisBook.name });
+      } else if (apiBooks.length > 0) {
+        // Last resort: use first book
+        finalBookId = apiBooks[0]?.id || null;
+        console.log('⚠️ Using first book as last resort:', { id: apiBooks[0]?.id, name: apiBooks[0]?.name });
+      }
+    }
+    
+    console.log('📖 Book parsing result:', {
       original: reading?.books,
-      parsedArray: booksArray,
-      firstBook: firstBook,
-      cleanBook: cleanBook,
       extractedBookName: bookName,
       extractedChapter: chapterNumber,
-      finalBookId: bookId,
-      finalBookName: bookName
+      finalBookId: finalBookId,
+      apiBooksLoaded: apiBooks.length > 0,
+      apiBooksCount: apiBooks.length,
+      bookIdBeforeFallback: bookId
     });
     
-    // Ensure we have valid values
-    const finalBookId = bookId || 'GEN';
+    if (!finalBookId) {
+      console.warn('⚠️ Could not determine book ID for:', bookName, 'API books available:', apiBooks.length);
+    }
+    
     const finalBookName = bookName || 'Genesis';
     const finalChapterNumber = chapterNumber || '1';
-    
-    console.log('📖 Final book info to pass:', {
-      book: { id: finalBookId, name: finalBookName },
-      chapter: { number: finalChapterNumber }
-    });
     
     return {
       book: { id: finalBookId, name: finalBookName },
       chapter: { number: finalChapterNumber }
     };
-  };
+  }, [reading?.books, apiBooks, reading?.id]); // Recalculate when these change
+
+  // Keep getBookInfo function for compatibility
+  const getBookInfo = () => bookInfo;
 
   const handleNext = () => {
     if (!allReadings || allReadings.length === 0) {
@@ -606,9 +854,37 @@ const BibleStudyContent = () => {
       </View>
 
       <ScrollView 
+        ref={scrollViewRef}
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        onScroll={(event) => {
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+          scrollYRef.current = contentOffset.y;
+          contentHeightRef.current = contentSize.height;
+          
+          // Update progress based on scroll
+          updateProgressFromScroll(
+            contentSize.height,
+            contentOffset.y,
+            layoutMeasurement.height
+          );
+        }}
+        scrollEventThrottle={100} // Update every 100ms for smooth progress tracking
+        onContentSizeChange={(contentWidth, contentHeight) => {
+          contentHeightRef.current = contentHeight;
+        }}
+        onLayout={(event) => {
+          const { height } = event.nativeEvent.layout;
+          // Initial progress calculation when layout is known
+          if (contentHeightRef.current > 0) {
+            updateProgressFromScroll(
+              contentHeightRef.current,
+              scrollYRef.current,
+              height
+            );
+          }
+        }}
       >
         <View style={styles.titleSection}>
           <Text style={styles.mainTitle}>Today's Verse</Text>
@@ -706,12 +982,23 @@ const BibleStudyContent = () => {
 
     {(() => {
       const bookInfo = getBookInfo();
-      console.log('📖 Passing to BookContent:', {
-        book: bookInfo.book,
-        chapter: bookInfo.chapter,
-        bibleId: bibleId,
-        language: language,
+      console.log('🚀 About to render BookContent with:', {
+        bookId: bookInfo.book.id,
+        bookName: bookInfo.book.name,
+        chapter: bookInfo.chapter.number,
+        bibleId: bibleId
       });
+      // Only render BookContent if we have a valid book ID
+      if (!bookInfo.book.id) {
+        console.warn('⚠️ No book ID, showing loading message');
+        return (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <Text style={{ fontSize: 16, color: '#666', textAlign: 'center' }}>
+              Loading Bible content...
+            </Text>
+          </View>
+        );
+      }
       return (
         <BookContent
           route={{

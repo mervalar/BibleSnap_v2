@@ -1,3 +1,5 @@
+rootProject.name = 'BibleSnap'
+
 pluginManagement {
   def reactNativeGradlePlugin = new File(
     providers.exec {
@@ -6,34 +8,23 @@ pluginManagement {
     }.standardOutput.asText.get().trim()
   ).getParentFile().absolutePath
   includeBuild(reactNativeGradlePlugin)
-  
-  def expoPluginsPath = new File(
-    providers.exec {
-      workingDir(rootDir)
-      commandLine("node", "--print", "require.resolve('expo-modules-autolinking/package.json', { paths: [require.resolve('expo/package.json')] })")
-    }.standardOutput.asText.get().trim(),
-    "../android/expo-gradle-plugin"
-  ).absolutePath
-  includeBuild(expoPluginsPath)
+
+  repositories {
+    google()
+    mavenCentral()
+    gradlePluginPortal()
+  }
 }
 
 plugins {
   id("com.facebook.react.settings")
-  id("expo-autolinking-settings")
 }
+
+apply from: new File(["node", "--print", "require.resolve('expo/package.json')"].execute(null, rootDir).text.trim(), "../scripts/autolinking.gradle")
+useExpoModules()
 
 extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
-  if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
-    ex.autolinkLibrariesFromCommand()
-  } else {
-    ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand)
-  }
+  ex.autolinkLibrariesFromCommand()
 }
-expoAutolinking.useExpoModules()
-
-rootProject.name = 'frontend'
-
-expoAutolinking.useExpoVersionCatalog()
 
 include ':app'
-includeBuild(expoAutolinking.reactNativeGradlePlugin)

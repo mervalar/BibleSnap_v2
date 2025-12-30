@@ -50,14 +50,6 @@ const BookContent = () => {
   const routeBibleId = params.bibleId || '65eec8e0b60e656b-01';
   const routeLanguage = params.language || 'english';
   
-  console.log('📚 BookContent initialized with:', {
-    book,
-    initialChapter,
-    routeBibleId,
-    routeLanguage,
-    allParams: params
-  });
-  
   // State variables
   const [videoRef, setVideoRef] = useState(null);
   const [verses, setVerses] = useState([]);

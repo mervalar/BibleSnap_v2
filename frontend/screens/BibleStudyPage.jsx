@@ -370,6 +370,10 @@ const BibleStudyApp = () => {
   // Filter modal states
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [selectedType, setSelectedType] = useState('historical'); // 'historical' (shows all), 'pickupbook'
+  
+  // Plan confirmation modal state
+  const [planConfirmationModalVisible, setPlanConfirmationModalVisible] = useState(false);
+  const [planConfirmationData, setPlanConfirmationData] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -811,17 +815,47 @@ const BibleStudyApp = () => {
       const diff = Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()) - Date.UTC(start.getFullYear(),start.getMonth(),start.getDate())) / (1000*60*60*24));
       const elapsedDays = Math.max(0, Math.min(studyPlan.days, diff + 1));
       
-      // Calculate progress based on actual completed lessons, not just elapsed days
+      // Calculate progress based on plan type
       try {
         const completedData = await AsyncStorage.getItem('completedStudies');
         const completedIds = completedData ? JSON.parse(completedData) : [];
         const totalLessons = bibleReadings.length;
         const completedLessons = completedIds.length;
         
-        // Calculate percent based on actual progress (completed lessons / total lessons)
-        const percent = totalLessons > 0 
-          ? Math.min(100, Math.round((completedLessons / totalLessons) * 100))
-          : 0;
+        let percent = 0;
+        
+        // For 365-day plan, calculate progress to show meaningful percentage
+        if (studyPlan.days === 365) {
+          // Show progress as percentage of days elapsed
+          // For first 100 days: day number = percentage (Day 1 = 1%, Day 10 = 10%, Day 100 = 100%)
+          // After 100 days: continue to increase but cap at 100%
+          if (elapsedDays <= 100) {
+            // For first 100 days, show day number as percentage
+            percent = Math.max(1, elapsedDays);
+          } else {
+            // After 100 days, still show 100% (you've completed the meaningful milestone)
+            // Or if you want it to continue: percent = Math.min(100, Math.round((elapsedDays / 365) * 100));
+            // But since elapsedDays can be up to 365, (elapsedDays/365)*100 = up to 100%
+            percent = 100; // Cap at 100% after day 100
+          }
+          
+          // If user has completed more lessons than days elapsed, reward them
+          // Use lessons-based progress if it's higher
+          const lessonsBasedProgress = Math.min(100, Math.round((completedLessons / 365) * 100));
+          if (completedLessons > elapsedDays && lessonsBasedProgress > percent) {
+            percent = lessonsBasedProgress;
+          }
+          
+          // Ensure at least 1% if any progress has been made
+          if (elapsedDays > 0 || completedLessons > 0) {
+            percent = Math.max(1, percent);
+          }
+        } else {
+          // For custom plans, use completed lessons / total lessons
+          percent = totalLessons > 0 
+            ? Math.min(100, Math.round((completedLessons / totalLessons) * 100))
+            : 0;
+        }
         
         const daysRemaining = Math.max(0, studyPlan.days - elapsedDays);
         const finishDate = new Date(start.getTime() + (studyPlan.days - 1) * 24 * 60 * 60 * 1000);
@@ -1147,15 +1181,28 @@ const BibleStudyApp = () => {
         animationType="slide"
         onRequestClose={() => setCategoryModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setCategoryModalVisible(false)}
+        >
+          <View 
+            style={[styles.modalContent, { 
+              padding: 18,
+              maxWidth: screenWidth * 0.9,
+              maxHeight: screenHeight * 0.6,
+            }]}
+            onStartShouldSetResponder={() => true}
+          >
             <ScrollView 
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 10 }}
+              contentContainerStyle={{ paddingBottom: 8 }}
             >
               <View style={styles.filterModalHeader}>
-                <Ionicons name="filter" size={32} color={COLORS.primary} />
-                <Text style={styles.modalTitle}>Filter by Type</Text>
+                <Ionicons name="sparkles" size={28} color={COLORS.primary} />
+                <Text style={[styles.modalTitle, { fontSize: 20, marginTop: 8, marginBottom: 4 }]}>
+                  Filter by Type
+                </Text>
                 <Text style={styles.filterExplanation}>
                   Choose your vibe. Pick how you want to dive into the Word.
                 </Text>
@@ -1167,28 +1214,44 @@ const BibleStudyApp = () => {
                   type: 'historical', 
                   title: 'Historical Studies', 
                   description: 'Journey through biblical events chronologically',
-                  icon: 'time',
-                  imagePosition: 'top-right'
+                  icon: 'hourglass',
+                  iconActive: 'hourglass-outline',
+                  imagePosition: 'right-behind'
                 },
                 { 
                   type: 'pickupbook', 
                   title: 'Pick a Book', 
                   description: 'Read any book of the Bible at your pace',
                   icon: 'library',
+                  iconActive: 'library-outline',
                   imagePosition: 'left-behind'
                 }
               ].map((item, index) => (
                 <View key={item.type} style={styles.filterCardWrapper}>
-                  {/* Icon behind card for pickupbook */}
+                  {/* Icon behind card on left for pickupbook */}
                   {item.imagePosition === 'left-behind' && (
                     <View style={[
                       styles.filterCardImageBehind,
                       selectedType === item.type && styles.filterCardImageBehindActive,
                     ]}>
                       <Ionicons 
-                        name={item.icon} 
-                        size={42} 
-                        color={selectedType === item.type ? COLORS.primary : 'rgba(139, 93, 51, 0.3)'} 
+                        name={selectedType === item.type ? item.icon : item.iconActive} 
+                        size={40} 
+                        color={selectedType === item.type ? COLORS.accent : '#6B8E6F'} 
+                      />
+                    </View>
+                  )}
+                  
+                  {/* Icon behind card on right for historical */}
+                  {item.imagePosition === 'right-behind' && (
+                    <View style={[
+                      styles.filterCardImageBehindRight,
+                      selectedType === item.type && styles.filterCardImageBehindRightActive,
+                    ]}>
+                      <Ionicons 
+                        name={selectedType === item.type ? item.icon : item.iconActive} 
+                        size={40} 
+                        color={selectedType === item.type ? '#D4A574' : '#B8956A'} 
                       />
                     </View>
                   )}
@@ -1198,23 +1261,11 @@ const BibleStudyApp = () => {
                     style={[
                       styles.filterCard,
                       item.imagePosition === 'left-behind' && styles.filterCardPickupBook,
+                      item.imagePosition === 'right-behind' && styles.filterCardHistorical,
                       selectedType === item.type && styles.filterCardActive
                     ]}
+                    activeOpacity={0.7}
                   >
-                    {/* Icon on top-right for historical */}
-                    {item.imagePosition === 'top-right' && (
-                      <View style={[
-                        styles.filterCardImageTopRight,
-                        selectedType === item.type && styles.filterCardImageTopRightActive,
-                      ]}>
-                        <Ionicons 
-                          name={item.icon} 
-                          size={32} 
-                          color={selectedType === item.type ? '#FFFFFF' : COLORS.primary} 
-                        />
-                      </View>
-                    )}
-                    
                     <View style={styles.filterCardContent}>
                       <View style={styles.filterCardHeader}>
                         <Text style={[
@@ -1225,7 +1276,7 @@ const BibleStudyApp = () => {
                         </Text>
                         <Ionicons 
                           name={selectedType === item.type ? "checkmark-circle" : "ellipse-outline"} 
-                          size={20} 
+                          size={24} 
                           color={selectedType === item.type ? '#FFFFFF' : COLORS.border.medium} 
                         />
                       </View>
@@ -1243,13 +1294,13 @@ const BibleStudyApp = () => {
               
               <TouchableOpacity 
                 onPress={() => setCategoryModalVisible(false)} 
-                style={styles.modalCloseButton}
+                style={[styles.modalCloseButton, { marginTop: 8 }]}
               >
                 <Text style={styles.modalCloseText}>Close</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Unlock Modal */}
