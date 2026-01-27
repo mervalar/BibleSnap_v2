@@ -92,7 +92,7 @@ android {
         applicationId 'com.mer.bibleapp'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 19
+        versionCode 1
         versionName "1.0.3"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
@@ -126,16 +126,7 @@ android {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
             useLegacyPackaging enableLegacyPackaging.toBoolean()
         }
-        pickFirst '**/libc++_shared.so'
-        pickFirst '**/libfbjni.so'
-        // Exclude duplicate classes from old support library
-        exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/LICENSE.txt'
-        exclude 'META-INF/NOTICE'
-        exclude 'META-INF/NOTICE.txt'
     }
-    
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
@@ -159,20 +150,6 @@ android {
             android.packagingOptions[prop] += it
         }
     }
-}
-
-// Force specific library versions to avoid conflicts
-configurations.all {
-    resolutionStrategy {
-        force 'com.google.android.material:material:1.12.0'
-        force 'androidx.appcompat:appcompat:1.6.1'
-    }
-    
-    // Exclude old support libraries
-    exclude group: 'com.android.support', module: 'support-v4'
-    exclude group: 'com.android.support', module: 'support-compat'
-    exclude group: 'com.android.support', module: 'support-annotations'
-    exclude group: 'com.android.support', module: 'support-core-utils'
 }
 
 dependencies {
