@@ -1,5 +1,33 @@
 // filepath: /home/merveille/projetPerso/BibleSnap_v2/frontend/styles/bIbleStudyContent.styles.js
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet, Platform, Dimensions } from 'react-native';
+
+const { width: screenWidth } = Dimensions.get('window');
+
+// Responsive dimensions helper
+export const getResponsiveDimensions = () => {
+  const isTablet = screenWidth >= 768;
+  
+  return {
+    fontSize: {
+      title: isTablet ? 24 : 20,
+      subtitle: isTablet ? 18 : 16,
+      body: isTablet ? 16 : 14,
+      caption: isTablet ? 14 : 12,
+    },
+    spacing: {
+      xs: 4,
+      sm: 8,
+      md: 16,
+      lg: 24,
+      xl: 32,
+    },
+    iconSize: {
+      small: isTablet ? 20 : 16,
+      medium: isTablet ? 24 : 20,
+      large: isTablet ? 32 : 24,
+    }
+  };
+};
 
 // Import your color constants (you can also move this to a separate file)
 const COLORS = {
@@ -42,6 +70,7 @@ export const createStyles = () => StyleSheet.create({
   videoOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.overlay,
+    zIndex: 0,
   },
   loadingOverlay: {
     position: 'absolute',
@@ -871,5 +900,378 @@ export const createStyles = () => StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 13,
+  },
+  // BibleStudyContent specific styles
+  headerButtons: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 40,
+    right: 16,
+    zIndex: 100,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  contentContainer: {
+    padding: 24,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 64,
+  },
+  titleSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  mainTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.text.light,
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  dayLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.light,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  descriptionCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 24,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cardHeaderText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginLeft: 8,
+  },
+  descriptionText: {
+    fontSize: 16,
+    color: COLORS.text.secondary,
+    lineHeight: 24,
+  },
+  readingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 32,
+  },
+  readingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.light,
+  },
+  readingTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  readingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginLeft: 8,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: COLORS.border.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: COLORS.semantic.success,
+    borderColor: COLORS.semantic.success,
+  },
+  bookToRead: {
+    marginBottom: 24,
+  },
+  bookItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+  },
+  bookInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+  },
+  bookText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    flex: 1,
+  },
+  upcomingSection: {
+    marginTop: 8,
+  },
+  upcomingSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text.light,
+    marginBottom: 16,
+  },
+  upcomingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  upcomingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  upcomingIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  upcomingInfo: {
+    flex: 1,
+  },
+  upcomingDay: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text.light,
+    marginBottom: 4,
+  },
+  upcomingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text.light,
+  },
+  noteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.accent,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 24,
+    gap: 8,
+  },
+  noteButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.background,
+  },
+  celebrationOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  confettiBubble: {
+    position: 'absolute',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  celebrationMessage: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    paddingHorizontal: 40,
+    paddingVertical: 24,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  celebrationIconCircle: {
+    marginBottom: 12,
+  },
+  celebrationText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.text.primary,
+    textAlign: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 40,
+    right: 16,
+    zIndex: 9999,
+  },
+  modalCloseButtonInner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(139, 93, 51, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  // Share button
+  shareButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    marginTop: 4,
+  },
+  // Shareable card styles - Matching the provided image design
+  shareableCard: {
+    width: 1080,
+    height: 1080,
+    overflow: 'hidden',
+  },
+  shareableTopSection: {
+    flex: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 80,
+    paddingTop: 150,
+    paddingBottom: 40,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  shareableContentWrapper: {
+    width: '100%',
+    marginTop: 120,
+    alignItems: 'center',
+  },
+  shareableBottomSection: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 80,
+    paddingTop: 40,
+    paddingBottom: 40,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  shareableHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 0,
+  },
+  shareableDate: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    opacity: 0.95,
+  },
+  shareableDay: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    opacity: 0.95,
+  },
+ 
+ 
+  shareableDescription: {
+    fontSize: 20,
+    lineHeight: 30,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    textAlign: 'center',
+    marginTop: 60,
+    marginBottom: 40,
+    paddingHorizontal: 20,
+    fontStyle: 'italic',
+  },
+  shareableBooksToRead: {
+    fontSize: 50,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    opacity: 0.9,
+    textAlign: 'center',
+    marginTop: 70,
+    marginBottom: 50,
+  },
+  shareableVerseText: {
+    fontSize: 36,
+    lineHeight: 52,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    fontWeight: '300',
+    letterSpacing: 0.5,
+    marginTop: 50,
+    marginBottom: 40,
+    paddingHorizontal: 20,
+  },
+  shareableDecorativeLine: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  shareableLine: {
+    width: 150,
+    height: 2,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 10,
+  },
+  shareableDots: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  shareableDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+  },
+  shareableReference: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  shareableFooterText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    opacity: 0.9,
   },
 });

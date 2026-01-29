@@ -9,14 +9,11 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Dimensions,
-  Modal,
-  Platform,
   Animated,
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
-import { fetchCategories } from '../api/categoryService';
 import { fetchBibleReadings } from '../api/bibleReadingService';
 import { fetchBooks } from '../api/bookService';
 import { useNavigation } from '@react-navigation/native';
@@ -24,18 +21,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import SplashScreen from '../components/SplashScreen';
 import { createStyles, COLORS } from '../styles/bIbleStudyContent.styles';
 import BottomNavBar from '../components/BottomNavBar';
-
-let DateTimePicker;
-try {
-  if (Platform.OS !== 'web') {
-    const moduleName = '@react-native-community/datetimepicker';
-    DateTimePicker = eval('require')(moduleName).default;
-  } else {
-    DateTimePicker = ({ value, onChange }) => null;
-  }
-} catch (e) {
-  DateTimePicker = ({ value, onChange }) => null;
-}
+import StudyPlanModal from '../components/StudyPlanModal';
+import TypeFilterModal from '../components/TypeFilterModal';
+import UnlockModal from '../components/UnlockModal';
 const styles = createStyles();
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -46,7 +34,6 @@ const getResponsiveDimensions = () => {
   return {
     headerHeight: isTablet ? 80 : 60,
     cardPadding: isTablet ? 24 : 16,
-    imageHeight: isTablet ? 180 : 140,
     fontSize: {
       title: isTablet ? 24 : 20,
       subtitle: isTablet ? 18 : 16,
@@ -332,10 +319,8 @@ const VerticalGameMap = ({ items, progressMap, completedSet, onPressItem, onRequ
 const BibleStudyApp = () => {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState([]);
   const [bibleReadings, setBibleReadings] = useState([]);
   const [books, setBooks] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [progressMap, setProgressMap] = useState({});
@@ -346,7 +331,6 @@ const BibleStudyApp = () => {
   const [studyPlan, setStudyPlan] = useState(null);
   const [planDays, setPlanDays] = useState(365);
   const [startDate, setStartDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [planStats, setPlanStats] = useState({
     percent: 0,
     elapsedDays: 0,
@@ -365,36 +349,19 @@ const BibleStudyApp = () => {
 
   // Unlock modal state
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
-  const [unlockTarget, setUnlockTarget] = useState(null);
 
   // Filter modal states
-  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [typeFilterModalVisible, setTypeFilterModalVisible] = useState(false);
   const [selectedType, setSelectedType] = useState('historical'); // 'historical' (shows all), 'pickupbook'
-  
-  // Plan confirmation modal state
-  const [planConfirmationModalVisible, setPlanConfirmationModalVisible] = useState(false);
-  const [planConfirmationData, setPlanConfirmationData] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
         
-        // Load categories and bible readings
-        const [fetchedCategories, fetchedBibleReadings] = await Promise.all([
-          fetchCategories(),
-          fetchBibleReadings()
-        ]);
-
+        // Load bible readings
+        const fetchedBibleReadings = await fetchBibleReadings();
         setBibleReadings(fetchedBibleReadings || []);
-
-        const themes = Array.from(new Set(
-          (fetchedBibleReadings || [])
-            .map(r => r.theme)
-            .filter(Boolean)
-        ));
-        const themeCategories = themes.map(t => ({ id: t, name: t }));
-        setCategories(themeCategories.length ? themeCategories : fetchedCategories);
 
         // Load books separately - don't fail if this fails
         try {
@@ -463,11 +430,6 @@ const BibleStudyApp = () => {
 
 
   const filteredReadings = bibleReadings.filter(item => {
-    // Category filter (theme-based)
-    const matchesCategory = selectedCategory === 'all' || 
-      (item.theme && item.theme === selectedCategory) ||
-      (item.category && item.category.id === selectedCategory);
-    
     // Type filter: historical shows ALL readings, other types filter by type
     let matchesType = true;
     if (selectedType === 'historical') {
@@ -488,7 +450,7 @@ const BibleStudyApp = () => {
       (item.title && item.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (item.main_verse && item.main_verse.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    return matchesCategory && matchesType && matchesSearch;
+    return matchesType && matchesSearch;
   });
 
   // Determine which items to display based on selected type
@@ -513,14 +475,9 @@ const BibleStudyApp = () => {
     navigation.goBack();
   };
 
-  const handleCategoryFilter = (categoryId) => {
-    setSelectedCategory(categoryId);
-    setShowReadingTypeDropdown(false);
-  };
-
   const handleTypeFilter = (type) => {
     setSelectedType(type);
-    setCategoryModalVisible(false);
+    setTypeFilterModalVisible(false);
   };
 
   const handleNavigateToStudy = (study, progress) => {
@@ -592,7 +549,7 @@ const BibleStudyApp = () => {
     return schedule;
   };
 
-  const savePlan = async (days) => {
+  const savePlan = async (days, chosenStartDate) => {
     if (!bibleReadings || bibleReadings.length === 0) return;
     
     // Check if plan days changed - if so, reset all progress
@@ -624,7 +581,8 @@ const BibleStudyApp = () => {
     }
     
     const schedule = buildSchedule(bibleReadings, days);
-    const chosenStart = startDate ? startDate : new Date();
+    const chosenStart = chosenStartDate || startDate || new Date();
+    setStartDate(chosenStart); // Update startDate state
     const plan = {
       days,
       startDate: chosenStart.toISOString(),
@@ -634,7 +592,6 @@ const BibleStudyApp = () => {
     await AsyncStorage.setItem('studyPlan', JSON.stringify(plan));
     setStudyPlan(plan);
     setPlanModalVisible(false);
-    setShowDaysDropdown(false);
     
     // Show challenge start message if plan changed or is new
     if (planChanged || !previousPlan) {
@@ -678,6 +635,29 @@ const BibleStudyApp = () => {
       setPlanDays(studyPlan.days);
     }
   }, [planModalVisible, studyPlan]);
+
+  // Check if consistency notification was already shown today
+  const checkConsistencyNotificationShown = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const shownKey = `consistencyNotificationShown_${today}`;
+      const shown = await AsyncStorage.getItem(shownKey);
+      return shown === 'true';
+    } catch (error) {
+      return false;
+    }
+  };
+
+  // Mark consistency notification as shown for today
+  const markConsistencyNotificationShown = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const shownKey = `consistencyNotificationShown_${today}`;
+      await AsyncStorage.setItem(shownKey, 'true');
+    } catch (error) {
+      console.error('Error marking consistency notification as shown:', error);
+    }
+  };
 
   // Calculate reading statistics and encouragement
   const calculateReadingStats = async () => {
@@ -749,58 +729,67 @@ const BibleStudyApp = () => {
     
     setReadingStats({ lessonsAhead, consistency, streak });
     
-    // Generate encouragement message - prioritize ahead message, then don't show consistency if plan just changed
+    // Generate encouragement message with priority system
     let message = null;
     
-    // Don't show consistency messages if plan just changed (challenge message is showing)
-    if (!planJustChanged) {
-      // Priority 1: If ahead of schedule, show celebration banner (not modal)
-      if (lessonsAhead >= 1) {
-        message = {
-          type: 'happy',
-          emoji: '🎉',
-          text: `Amazing! You're ${lessonsAhead} lesson${lessonsAhead > 1 ? 's' : ''} ahead of schedule! Keep it up!`,
-        };
-      } 
-      // Priority 2: Streak message
-      else if (streak >= 7) {
-        message = {
-          type: 'happy',
-          emoji: '🔥',
-          text: `Incredible ${streak}-day streak! You're on fire!`,
-        };
-      }
-      // Priority 3: Consistency messages
-      else if (consistency < 30) {
-        message = {
-          type: 'sad',
-          emoji: '😔',
-          text: `You've been a bit inconsistent. Read more today to achieve your goal!`,
-        };
-      } else if (consistency < 60) {
-        message = {
-          type: 'neutral',
-          emoji: '📖',
-          text: `Keep going! You're making progress.`,
-        };
-      } else if (consistency >= 80) {
-        message = {
-          type: 'happy',
-          emoji: '✨',
-          text: `Great consistency! You're doing amazing!`,
-        };
+    // Priority 1: Challenge start message (if plan just changed)
+    if (planJustChanged) {
+      // This will be handled in savePlan, so we skip here
+      return;
+    }
+    
+    // Priority 2: If ahead of schedule, show celebration banner
+    if (lessonsAhead >= 1) {
+      message = {
+        type: 'happy',
+        emoji: '🎉',
+        text: `Amazing! You're ${lessonsAhead} lesson${lessonsAhead > 1 ? 's' : ''} ahead of schedule! Keep it up!`,
+      };
+    } 
+    // Priority 3: Streak message
+    else if (streak >= 7) {
+      message = {
+        type: 'happy',
+        emoji: '🔥',
+        text: `Incredible ${streak}-day streak! You're on fire!`,
+      };
+    }
+    // Priority 4: Consistency messages (only once per day)
+    else {
+      const consistencyShownToday = await checkConsistencyNotificationShown();
+      if (!consistencyShownToday) {
+        if (consistency < 30) {
+          message = {
+            type: 'sad',
+            emoji: '😔',
+            text: `You've been a bit inconsistent. Read more today to achieve your goal!`,
+          };
+          await markConsistencyNotificationShown();
+        } else if (consistency < 60) {
+          message = {
+            type: 'neutral',
+            emoji: '📖',
+            text: `Keep going! You're making progress.`,
+          };
+          await markConsistencyNotificationShown();
+        } else if (consistency >= 80) {
+          message = {
+            type: 'happy',
+            emoji: '✨',
+            text: `Great consistency! You're doing amazing!`,
+          };
+          await markConsistencyNotificationShown();
+        }
       }
     }
     
     // Set message and auto-dismiss after 5 seconds
-    // Only update if we have a new message and plan didn't just change
-    if (message && !planJustChanged) {
+    if (message) {
       setEncouragementMessage(message);
       setTimeout(() => {
         setEncouragementMessage(null);
       }, 5000);
     }
-    // Don't clear message if plan just changed (to preserve challenge message)
   };
 
   useEffect(() => {
@@ -899,7 +888,9 @@ const BibleStudyApp = () => {
         setTodaysReadingIds(new Set());
       }
       
-      // Calculate reading stats and encouragement (only if plan didn't just change)
+      // Calculate reading stats and encouragement
+      // Priority 1: Challenge start message (handled in savePlan)
+      // Other notifications will be shown only if plan didn't just change
       if (!planJustChanged) {
         calculateReadingStats();
       }
@@ -917,14 +908,8 @@ const BibleStudyApp = () => {
     );
   }
 
-  const formatDate = (d) => {
-    if (!d) return '-';
-    const date = (typeof d === 'string') ? new Date(d) : d;
-    return date.toLocaleDateString();
-  };
 
   const handleRequestUnlock = (item, index, previousItem) => {
-    setUnlockTarget({ item, index, previousItem });
     setUnlockModalVisible(true);
   };
 
@@ -1017,7 +1002,7 @@ const BibleStudyApp = () => {
         {/* Types Filter Button */}
         <TouchableOpacity 
           style={styles.filterButton}
-          onPress={() => setCategoryModalVisible(true)}
+          onPress={() => setTypeFilterModalVisible(true)}
         >
           <Ionicons name="book-outline" size={14} color={COLORS.text.light} />
           <Text style={styles.filterButtonText} numberOfLines={1}>
@@ -1103,231 +1088,28 @@ const BibleStudyApp = () => {
       </View>
 
       {/* Study Plan Modal */}
-      <Modal
+      <StudyPlanModal
         visible={planModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setPlanModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons name="calendar" size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
-            <Text style={styles.modalTitle}>Choose Your Journey</Text>
-            <Text style={styles.modalSubtitle}>Select a reading plan duration</Text>
-            
-            <View style={{ marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
-              <Text style={[styles.modalLabel, { fontSize: 12, marginBottom: 0 }]}>Start Date</Text>
-              <TouchableOpacity
-                onPress={() => setShowDatePicker(true)}
-                style={[styles.dateButton, { paddingVertical: 6, paddingHorizontal: 10, minWidth: 120 }]}
-              >
-                <Ionicons name="calendar-outline" size={14} color={COLORS.text.secondary} />
-                <Text style={[styles.dateButtonText, { fontSize: 12 }]}>{formatDate(startDate)}</Text>
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={startDate || new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, selected) => {
-                    setShowDatePicker(false);
-                    if (selected) setStartDate(selected);
-                  }}
-                />
-              )}
-            </View>
-            
-            {[365, 180, 120, 90, 60, 30].map(d => (
-              <TouchableOpacity
-                key={d}
-                onPress={() => {
-                  setPlanDays(d);
-                  savePlan(d);
-                }}
-                style={[styles.planOption, planDays===d && styles.planOptionActive]}
-              >
-                <View style={styles.planOptionContent}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <Text style={[styles.planOptionText, planDays===d && styles.planOptionTextActive]}>
-                      {d} Days
-                    </Text>
-                    <Text style={[styles.planOptionSubtext, planDays===d && styles.planOptionSubtextActive, { marginLeft: 8, marginTop: 0 }]}>
-                      • {Math.ceil((bibleReadings?.length || 365)/d)} per day
-                    </Text>
-                  </View>
-                  <Ionicons 
-                    name="checkmark-circle" 
-                    size={20} 
-                    color={planDays===d ? '#FFF' : COLORS.border.medium} 
-                  />
-                </View>
-              </TouchableOpacity>
-            ))}
-            
-            <TouchableOpacity 
-              onPress={() => setPlanModalVisible(false)} 
-              style={styles.modalCloseButton}
-            >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setPlanModalVisible(false)}
+        planDays={planDays}
+        startDate={startDate}
+        onSavePlan={savePlan}
+        bibleReadingsCount={bibleReadings?.length || 365}
+      />
 
       {/* Types Filter Modal */}
-      <Modal
-        visible={categoryModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setCategoryModalVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setCategoryModalVisible(false)}
-        >
-          <View 
-            style={[styles.modalContent, { 
-              padding: 18,
-              maxWidth: screenWidth * 0.9,
-              maxHeight: screenHeight * 0.6,
-            }]}
-            onStartShouldSetResponder={() => true}
-          >
-            <ScrollView 
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 8 }}
-            >
-              <View style={styles.filterModalHeader}>
-                <Ionicons name="sparkles" size={28} color={COLORS.primary} />
-                <Text style={[styles.modalTitle, { fontSize: 20, marginTop: 8, marginBottom: 4 }]}>
-                  Filter by Type
-                </Text>
-                <Text style={styles.filterExplanation}>
-                  Choose your vibe. Pick how you want to dive into the Word.
-                </Text>
-              </View>
-              
-              <View style={styles.filterCardsContainer}>
-              {[
-                { 
-                  type: 'historical', 
-                  title: 'Historical Studies', 
-                  description: 'Journey through biblical events chronologically',
-                  icon: 'hourglass',
-                  iconActive: 'hourglass-outline',
-                  imagePosition: 'right-behind'
-                },
-                { 
-                  type: 'pickupbook', 
-                  title: 'Pick a Book', 
-                  description: 'Read any book of the Bible at your pace',
-                  icon: 'library',
-                  iconActive: 'library-outline',
-                  imagePosition: 'left-behind'
-                }
-              ].map((item, index) => (
-                <View key={item.type} style={styles.filterCardWrapper}>
-                  {/* Icon behind card on left for pickupbook */}
-                  {item.imagePosition === 'left-behind' && (
-                    <View style={[
-                      styles.filterCardImageBehind,
-                      selectedType === item.type && styles.filterCardImageBehindActive,
-                    ]}>
-                      <Ionicons 
-                        name={selectedType === item.type ? item.icon : item.iconActive} 
-                        size={40} 
-                        color={selectedType === item.type ? COLORS.accent : '#6B8E6F'} 
-                      />
-                    </View>
-                  )}
-                  
-                  {/* Icon behind card on right for historical */}
-                  {item.imagePosition === 'right-behind' && (
-                    <View style={[
-                      styles.filterCardImageBehindRight,
-                      selectedType === item.type && styles.filterCardImageBehindRightActive,
-                    ]}>
-                      <Ionicons 
-                        name={selectedType === item.type ? item.icon : item.iconActive} 
-                        size={40} 
-                        color={selectedType === item.type ? '#D4A574' : '#B8956A'} 
-                      />
-                    </View>
-                  )}
-                  
-                  <TouchableOpacity
-                    onPress={() => handleTypeFilter(item.type)}
-                    style={[
-                      styles.filterCard,
-                      item.imagePosition === 'left-behind' && styles.filterCardPickupBook,
-                      item.imagePosition === 'right-behind' && styles.filterCardHistorical,
-                      selectedType === item.type && styles.filterCardActive
-                    ]}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.filterCardContent}>
-                      <View style={styles.filterCardHeader}>
-                        <Text style={[
-                          styles.filterCardTitle,
-                          selectedType === item.type && styles.filterCardTitleActive
-                        ]}>
-                          {item.title}
-                        </Text>
-                        <Ionicons 
-                          name={selectedType === item.type ? "checkmark-circle" : "ellipse-outline"} 
-                          size={24} 
-                          color={selectedType === item.type ? '#FFFFFF' : COLORS.border.medium} 
-                        />
-                      </View>
-                      <Text style={[
-                        styles.filterCardDescription,
-                        selectedType === item.type && styles.filterCardDescriptionActive
-                      ]}>
-                        {item.description}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              </View>
-              
-              <TouchableOpacity 
-                onPress={() => setCategoryModalVisible(false)} 
-                style={[styles.modalCloseButton, { marginTop: 8 }]}
-              >
-                <Text style={styles.modalCloseText}>Close</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      <TypeFilterModal
+        visible={typeFilterModalVisible}
+        onClose={() => setTypeFilterModalVisible(false)}
+        selectedType={selectedType}
+        onSelectType={handleTypeFilter}
+      />
 
       {/* Unlock Modal */}
-      <Modal
+      <UnlockModal
         visible={unlockModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setUnlockModalVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setUnlockModalVisible(false)}
-        >
-          <TouchableOpacity 
-            style={styles.unlockModalContent}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
-            <Ionicons name="lock-closed" size={28} color={COLORS.semantic.warning} style={{ marginBottom: 8 }} />
-            <Text style={styles.unlockModalTitle}>Lesson Locked</Text>
-            <Text style={styles.unlockModalSubtitle}>
-              Complete previous lessons to unlock
-            </Text>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        onClose={() => setUnlockModalVisible(false)}
+      />
       
       {/* Bottom Navigation Bar */}
       <BottomNavBar />

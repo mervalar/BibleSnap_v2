@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image, Modal, ScrollView, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, Modal, ScrollView, Animated } from 'react-native';
+import styles from '../styles/HomePage.styles';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Video } from 'expo-av'; 
@@ -7,7 +8,6 @@ import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
 import AuthModal from '../components/AuthModal';
 import { fetchRandomStudy } from '../api/bibleReadingService'; 
 import SharedPreferences from 'react-native-shared-preferences'; 
@@ -45,7 +45,6 @@ const HomePage = () => {
   const [verse, setVerse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [userToken, setUserToken] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
@@ -72,12 +71,9 @@ const HomePage = () => {
 
     // Load today's challenge (random bible study)
     loadTodaysChallenge();
-
-    // Check authentication on component mount
     checkUserAuth();
   }, []);
 
-    // Re-check authentication and reload challenge progress when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       checkUserAuth();
@@ -87,10 +83,7 @@ const HomePage = () => {
         try {
           // Force a fresh load to ensure sync with BibleStudyPage
           await loadTodaysChallenge();
-          
-          console.log('HomePage - Challenge reloaded on focus');
         } catch (error) {
-          console.error('Error reloading challenge on focus:', error);
         }
       };
       
@@ -144,43 +137,7 @@ const calculateOverallProgress = async () => {
     
     return percent;
   } catch (error) {
-    console.error('Error calculating overall progress:', error);
     return 0;
-  }
-};
-
-const loadChallengeProgress = async () => {
-  try {
-    const today = new Date().toDateString();
-    const progress = await AsyncStorage.getItem('challengeProgress');
-    const progressDate = await AsyncStorage.getItem('challengeProgressDate');
-    
-    // Always recalculate overall progress to ensure it's up-to-date
-    const overallProgressPercent = await calculateOverallProgress();
-    
-    // Check if we have progress for today
-    if (progress && progressDate === today) {
-      const progressData = JSON.parse(progress);
-      
-      // Update with overall progress (which accumulates all completed lessons)
-      progressData.percent = overallProgressPercent;
-      progressData.isOverallProgress = true;
-      progressData.lastUpdated = Date.now();
-      
-      await AsyncStorage.setItem('challengeProgress', JSON.stringify(progressData));
-      
-      return progressData;
-    }
-    
-    // If no progress for today, return overall progress
-    return {
-      percent: overallProgressPercent,
-      isOverallProgress: true,
-      lastUpdated: Date.now()
-    };
-  } catch (error) {
-    console.error('Error loading challenge progress:', error);
-    return null;
   }
 };
 
@@ -212,15 +169,6 @@ const loadChallengeProgress = async () => {
       const dayIndex = Math.max(0, Math.min(studyPlan.days - 1, diff));
       const todayReadingIds = studyPlan.schedule[dayIndex] || [];
       
-      console.log('HomePage - Study Plan Info:', {
-        startDate: studyPlan.startDate,
-        currentDate: now.toISOString(),
-        daysElapsed: diff,
-        dayIndex: dayIndex,
-        todayReadingIds: todayReadingIds,
-        totalPlanDays: studyPlan.days
-      });
-      
       // Get all readings from AsyncStorage
       const readingsStr = await AsyncStorage.getItem('bibleReadings');
       const allReadings = readingsStr ? JSON.parse(readingsStr) : [];
@@ -229,32 +177,19 @@ const loadChallengeProgress = async () => {
       if (todayReadingIds.length > 0) {
         const firstDayId = todayReadingIds[0];
         todayReading = allReadings.find(r => r.day === firstDayId);
-        
-        console.log('HomePage - Found today\'s reading:', {
-          firstDayId,
-          readingTitle: todayReading?.title,
-          readingId: todayReading?.id
-        });
-      } else {
-        console.log('HomePage - No readings scheduled for today');
       }
-    } else {
-      console.log('HomePage - No study plan found or invalid plan');
     }
     
     // If no study plan or no reading found, fall back to cached or random
     if (!todayReading) {
-      console.log('HomePage - Falling back to cached/random challenge');
       const cachedChallenge = await AsyncStorage.getItem('todaysChallenge');
       const cachedDate = await AsyncStorage.getItem('challengeDate');
       
       if (cachedChallenge && cachedDate === today) {
         todayReading = JSON.parse(cachedChallenge);
-        console.log('HomePage - Using cached challenge:', todayReading?.title);
       } else {
         // Fetch new random study as fallback
         todayReading = await fetchRandomStudy();
-        console.log('HomePage - Using random study:', todayReading?.title);
       }
     }
     
@@ -313,14 +248,6 @@ const loadChallengeProgress = async () => {
       };
     }
     
-    console.log('HomePage - Final challenge state:', {
-      readingTitle: todayReading?.title,
-      readingId: todayReading?.id,
-      todayProgress: studyProgress || 0,
-      overallProgress: overallProgressPercent,
-      isCompleted: isCompleted
-    });
-    
     setTodaysChallenge({
       ...todayReading,
       progress: finalProgress,
@@ -341,7 +268,6 @@ const loadChallengeProgress = async () => {
       await AsyncStorage.removeItem('challengeProgressDate');
     }
   } catch (error) {
-    console.error('Error loading today\'s challenge:', error);
     setTodaysChallenge({
       title: "Share God's love with someone today",
       category: { name: 'Daily Challenge' },
@@ -359,24 +285,17 @@ const loadChallengeProgress = async () => {
       // Check if user is authenticated
       const isAuthenticated = await AsyncStorage.getItem('isAuthenticated');
       const userData = await AsyncStorage.getItem('user');
-      const token = await AsyncStorage.getItem('token'); // Add token storage
       
       if (isAuthenticated === 'true' && userData) {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
-        setUserToken(token);
         setIsConnected(true);
-        console.log('User authenticated:', parsedUser);
-        console.log('User token:', token);
       } else {
         setUser(null);
-        setUserToken(null);
         setIsConnected(false);
       }
     } catch (error) {
-      console.error('Error checking authentication:', error);
       setUser(null);
-      setUserToken(null);
       setIsConnected(false);
     } finally {
       setAuthLoading(false);
@@ -384,10 +303,6 @@ const loadChallengeProgress = async () => {
   };
 
   const handleLogin = () => {
-    setShowAuthModal(true);
-  };
-
-  const handleRegister = () => {
     setShowAuthModal(true);
   };
 
@@ -412,36 +327,6 @@ const loadChallengeProgress = async () => {
     });
   };
 
-  // Safe function for updating today's challenge progress
-  const updateChallengeProgress = async (percent, studyId) => {
-    // Recalculate overall progress when a lesson is completed
-    const overallProgressPercent = await calculateOverallProgress();
-    
-    setTimeout(() => {
-      setTodaysChallenge(prev => ({
-        ...prev,
-        progress: {
-          ...prev.progress,
-          percent: overallProgressPercent, // Use overall progress instead of individual lesson progress
-          studyId,
-          lastUpdated: Date.now(),
-          isOverallProgress: true
-        }
-      }));
-      
-      // Also save to AsyncStorage
-      const today = new Date().toDateString();
-      const progressData = {
-        studyId: studyId,
-        percent: overallProgressPercent,
-        lastUpdated: Date.now(),
-        isOverallProgress: true
-      };
-      AsyncStorage.setItem('challengeProgress', JSON.stringify(progressData));
-      AsyncStorage.setItem('challengeProgressDate', today);
-    }, 0);
-  };
-  
   const handleChallengePress = () => {
     handleAuthenticatedAction(() => {
       // Navigate to BibleStudyPage
@@ -503,13 +388,6 @@ const loadChallengeProgress = async () => {
         )}
       </View>
 
-      {/* User Info Debug (Remove in production) */}
-      {isConnected && userToken && (
-        <View style={styles.debugInfo}>
-          <Text style={styles.debugText}>Token: {userToken?.substring(0, 20)}...</Text>
-        </View>
-      )}
-
       {/* Main Content */}
       <View style={styles.mainContent}>
         {/* Verse of the Day Card with Video Background */}
@@ -556,9 +434,6 @@ const loadChallengeProgress = async () => {
                 </Text>
                 <View style={styles.verseRefContainer}>
                   <Text style={styles.verseRef}>{verse.reference}</Text>
-                  <View style={styles.verseDecorator}>
-                    <Text style={styles.verseDecoratorText}></Text>
-                  </View>
                 </View>
                 {/* Icons row just under the verse */}
                 {!isSharing && (
@@ -578,13 +453,6 @@ const loadChallengeProgress = async () => {
                 <Text style={styles.verseErrorSubtext}>Please check your connection</Text>
               </View>
             )}
-            
-            <View style={styles.verseActions}>
-              {/* <TouchableOpacity style={styles.actionButton}>
-                <Text style={styles.actionIcon}>📖</Text>
-                <Text style={styles.actionText}>Read Chapter</Text>
-              </TouchableOpacity> */}
-            </View>
           </View>
   </ViewShot>
 
@@ -613,38 +481,7 @@ const loadChallengeProgress = async () => {
           </TouchableOpacity>
         </View>
 
-        {/* Spiritual Growth Chart - COMMENTED OUT */}
-        {/*
-        <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Your Spiritual Growth</Text>
-          <View style={styles.chartContainer}>
-            <View style={styles.chartArea}>
-              <View style={styles.chartLine}>
-                <View style={[styles.chartPoint, {left: '10%', bottom: '30%'}]} />
-                <View style={[styles.chartPoint, {left: '25%', bottom: '45%'}]} />
-                <View style={[styles.chartPoint, {left: '40%', bottom: '35%'}]} />
-                <View style={[styles.chartPoint, {left: '55%', bottom: '50%'}]} />
-                <View style={[styles.chartPoint, {left: '70%', bottom: '45%'}]} />
-                <View style={[styles.chartPoint, {left: '85%', bottom: '60%'}]} />
-              </View>
-              <View style={styles.chartLabels}>
-                <Text style={styles.chartLabel}>Mon</Text>
-                <Text style={styles.chartLabel}>Tue</Text>
-                <Text style={styles.chartLabel}>Wed</Text>
-                <Text style={styles.chartLabel}>Thu</Text>
-                <Text style={styles.chartLabel}>Fri</Text>
-                <Text style={styles.chartLabel}>Sat</Text>
-                <Text style={styles.chartLabel}>Sun</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-        */}
-
-        {/* Spacer to push challenge card to bottom */}
-        <View style={styles.spacer} />
-
-        {/* Today's Challenge - Reduced size and moved to bottom */}
+        {/* Today's Challenge */}
         <TouchableOpacity 
           style={[
             styles.challengeCard,
@@ -886,634 +723,5 @@ const loadChallengeProgress = async () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#EEDED2',
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 20,
-  },
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    color: '#A07553',
-    fontSize: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 4,
-  },
-  profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileCircle: {
-    backgroundColor: '#A07553',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  profileInitial: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  greeting: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  email: {
-    color: '#666',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  connectedActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  bellIcon: {
-    padding: 6,
-  },
-  bellText: {
-    fontSize: 18,
-  },
-  logoutButton: {
-    backgroundColor: '#ff4444',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  logoutText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  authButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  loginButton: {
-    backgroundColor: '#A07553',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  loginText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  debugInfo: {
-    backgroundColor: '#f0f0f0',
-    padding: 8,
-    marginBottom: 10,
-    borderRadius: 8,
-  },
-  debugText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  mainContent: {
-    flex: 1,
-  },
-  verseCard: {
-    borderRadius: 20,
-    marginBottom: 20,
-     minHeight: 420,
-    overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  backgroundVideo: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
-  videoOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Semi-transparent overlay for text readability
-  },
-  verseContent: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'space-between',
-    zIndex: 2,
-  },
-  verseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  verseIconRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 18,
-  },
-  iconButtonRow: {
-    backgroundColor: 'rgba(160,117,83,0.85)',
-    borderRadius: 22,
-    padding: 10,
-    marginHorizontal: 6,
-    elevation: 2,
-  },
-  verseLabel: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 12,
-    letterSpacing: 1.2,
-  },
-  verseDate: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  verseLoadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  verseLoadingText: {
-    marginTop: 12,
-    color: '#fff',
-    fontSize: 14,
-  },
-  verseTextContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  verseText: {
-    color: '#fff',
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginBottom: 20,
-    fontStyle: 'italic',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: {width: 1, height: 1},
-    textShadowRadius: 2,
-  },
-  verseRefContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  verseRef: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: {width: 1, height: 1},
-    textShadowRadius: 2,
-  },
-  verseDecorator: {
-    marginLeft: 8,
-  },
-  verseDecoratorText: {
-    fontSize: 16,
-    color: '#fff',
-  },
-  verseErrorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  verseErrorText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: {width: 1, height: 1},
-    textShadowRadius: 2,
-  },
-  verseErrorSubtext: {
-    color: '#fff',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 4,
-    opacity: 0.8,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: {width: 1, height: 1},
-    textShadowRadius: 2,
-  },
-  verseActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  actionIcon: {
-    marginRight: 4,
-    fontSize: 12,
-  },
-  actionText: {
-    color: '#9E795D',
-    fontWeight: '600',
-    fontSize: 11,
-  },
-  quickActionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 20,
-  },
-  quickActionCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 80,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  prayerCard: {
-    backgroundColor: '#9E795D',
-  },
-  studyCard: {
-    backgroundColor: '#A07553',
-  },
-  assistantCard: {
-    backgroundColor: '#9E795D',
-  },
-  quickActionIcon: {
-    fontSize: 24,
-    marginBottom: 8,
-  },
-  quickActionTitle: {
-    color: '#EEDED2',
-    fontWeight: 'bold',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  spacer: {
-    flex: 1,
-  },
-  /* Commented out Spiritual Growth Chart styles
-  chartCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    flex: 0.25,
-  },
-  chartTitle: {
-    color: '#333',
-    fontWeight: 'bold',
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  chartContainer: {
-    flex: 1,
-  },
-  chartArea: {
-    flex: 1,
-    position: 'relative',
-  },
-  chartLine: {
-    flex: 1,
-    position: 'relative',
-  },
-  chartPoint: {
-    position: 'absolute',
-    width: 6,
-    height: 6,
-    backgroundColor: '#A07553',
-    borderRadius: 3,
-    borderWidth: 1,
-    borderColor: '#fff',
-  },
-  chartLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    paddingHorizontal: 4,
-  },
-  chartLabel: {
-    color: '#9E795D',
-    fontSize: 10,
-  },
-  */
-  challengeCard: {
-    backgroundColor: '#DDBBA1',
-    borderRadius: 16,
-    padding: 16, // Reduced from 20
-    minHeight: 100, // Reduced from 140
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  challengeCardCompleted: {
-    backgroundColor: '#E8F5E9',
-    borderWidth: 2,
-    borderColor: '#4A7742',
-  },
-  waveContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    overflow: 'hidden',
-  },
-  wave: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: '#A07553',
-    top: -100,
-  },
-  challengeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8, // Reduced from 12
-  },
-  challengeTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  challengeTitle: {
-    color: '#333',
-    fontWeight: 'bold',
-    fontSize: 14, // Reduced from 16
-  },
-  completedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(74, 119, 66, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  completedBadgeText: {
-    color: '#4A7742',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  challengeBadge: {
-    backgroundColor: '#A07553',
-    paddingHorizontal: 8, // Reduced from 10
-    paddingVertical: 3, // Reduced from 4
-    borderRadius: 10, // Reduced from 12
-  },
-  challengeBadgeText: {
-    color: '#fff',
-    fontSize: 10, // Reduced from 11
-    fontWeight: '600',
-  },
-  challengeLoadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-  },
-  challengeLoadingText: {
-    marginLeft: 8,
-    color: '#9E795D',
-    fontSize: 11, // Reduced from 12
-  },
-  challengeDesc: {
-    color: '#9E795D',
-    fontSize: 13, // Reduced from 14
-    marginBottom: 8, // Reduced from 12
-    lineHeight: 18, // Reduced from 20
-  },
-  challengeDescCompleted: {
-    color: '#4A7742',
-    fontWeight: '600',
-  },
-  challengeVerse: {
-    color: '#9E795D',
-    fontSize: 10, // Reduced from 11
-    fontStyle: 'italic',
-    marginBottom: 12, // Reduced from 16
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10, // Reduced from 12
-    marginTop: 'auto',
-  },
-  progressBar: {
-    flex: 1,
-    height: 6, // Reduced from 8
-    backgroundColor: '#EEDED2',
-    borderRadius: 3, 
-    overflow: 'hidden',
-  },
-  progressBarCompleted: {
-    borderColor: '#4A7742',
-  },
-  progressFill: {
-    height: '100%',
-    width: '0%',
-    backgroundColor: '#A07553',
-    borderRadius: 3, 
-  },
-  progressTextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  progressText: {
-    color: '#9E795D',
-    fontWeight: 'bold',
-    fontSize: 11, // Reduced from 12
-  },
-  progressTextCompleted: {
-    color: '#4A7742',
-    fontWeight: '700',
-  },
-  progressModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  progressModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: '85%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  progressModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEDED2',
-  },
-  progressModalTitle: {
-    flex: 1,
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#2D2417',
-    marginLeft: 12,
-  },
-  progressModalCloseButton: {
-    padding: 4,
-  },
-  progressModalBody: {
-    padding: 20,
-  },
-  progressModalSection: {
-    marginBottom: 24,
-  },
-  progressModalSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#A07553',
-    marginBottom: 12,
-  },
-  progressModalChallengeTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#2D2417',
-    marginBottom: 8,
-    lineHeight: 26,
-  },
-  progressModalCategory: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#EEDED2',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  progressModalCategoryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#A07553',
-  },
-  progressModalStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 8,
-  },
-  progressModalStatItem: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  progressModalStatValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2D2417',
-  },
-  progressModalProgressContainer: {
-    marginTop: 12,
-  },
-  progressModalProgressBar: {
-    height: 12,
-    backgroundColor: '#EEDED2',
-    borderRadius: 6,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  progressModalProgressFill: {
-    height: '100%',
-    borderRadius: 6,
-  },
-  progressModalProgressText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#9E795D',
-    textAlign: 'center',
-  },
-  progressModalVerseContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F6F2',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-  },
-  progressModalVerseText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#5A4A33',
-    fontStyle: 'italic',
-  },
-  progressModalActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#A07553',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-    marginTop: 8,
-  },
-  progressModalActionButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-});
 
 export default HomePage;

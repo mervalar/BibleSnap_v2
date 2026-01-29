@@ -5,13 +5,14 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   SafeAreaView,
   StatusBar,
-  Platform,
-  Alert,
   Animated,
   Modal,
+  Dimensions,
+  Alert,
+  Image,
+  ImageBackground,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,55 +20,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
 import BookContent from './BookContentPage';
 import BottomNavBar from '../components/BottomNavBar';
+import { createStyles, COLORS, getResponsiveDimensions } from '../styles/bIbleStudyContent.styles';
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-const getResponsiveDimensions = () => {
-  const isTablet = screenWidth >= 768;
-  
-  return {
-    fontSize: {
-      title: isTablet ? 24 : 20,
-      subtitle: isTablet ? 18 : 16,
-      body: isTablet ? 16 : 14,
-      caption: isTablet ? 14 : 12,
-    },
-    spacing: {
-      xs: 4,
-      sm: 8,
-      md: 16,
-      lg: 24,
-      xl: 32,
-    },
-    iconSize: {
-      small: isTablet ? 20 : 16,
-      medium: isTablet ? 24 : 20,
-      large: isTablet ? 32 : 24,
-    }
-  };
-};
-
+const styles = createStyles();
 const dimensions = getResponsiveDimensions();
-
-const COLORS = {
-  primary: '#8B5D33',
-  accent: '#4A6741',
-  background: '#FFFFFF',
-  surface: '#FAFAFA',
-  overlay: 'rgba(45, 36, 23, 0.75)',
-  text: {
-    primary: '#2D2417',
-    secondary: '#5A4A33',
-    light: '#F7F0E3',
-  },
-  border: {
-    light: '#E7DBC8',
-    medium: '#CCBDA6',
-  },
-  semantic: {
-    success: '#4A7742',
-  },
-};
 
 const VideoBackground = () => {
   return (
@@ -272,6 +231,9 @@ const BibleStudyContent = () => {
   const [showBookModal, setShowBookModal] = useState(false);
   const [bibleId, setBibleId] = useState('65eec8e0b60e656b-01');
   const [language, setLanguage] = useState('english');
+  const [isSharing, setIsSharing] = useState(false);
+  const [totalDays, setTotalDays] = useState(365);
+  const shareCardRef = useRef(null);
   const scrollViewRef = useRef(null);
   const contentHeightRef = useRef(0);
   const scrollYRef = useRef(0);
@@ -283,7 +245,7 @@ const BibleStudyContent = () => {
   const [apiBooks, setApiBooks] = useState([]);
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
 
-  // Load Bible preferences
+  // Load Bible preferences and study plan
   useEffect(() => {
     const loadBiblePreferences = async () => {
       try {
@@ -292,6 +254,13 @@ const BibleStudyContent = () => {
         
         if (savedLanguage) setLanguage(savedLanguage);
         if (savedBibleId) setBibleId(savedBibleId);
+
+        // Load study plan to get total days
+        const planData = await AsyncStorage.getItem('studyPlan');
+        if (planData) {
+          const plan = JSON.parse(planData);
+          setTotalDays(plan.days || 365);
+        }
       } catch (error) {
         console.error('Error loading Bible preferences:', error);
       }
@@ -840,6 +809,66 @@ const BibleStudyContent = () => {
     });
   };
 
+  // Share functionality
+  const handleShare = async () => {
+    try {
+      setIsSharing(true);
+      // Wait for UI to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const uri = await shareCardRef.current.capture();
+      setIsSharing(false);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri);
+      } else {
+        Alert.alert('Sharing not available', 'Cannot share image on this device.');
+      }
+    } catch (error) {
+      setIsSharing(false);
+      Alert.alert('Error', 'Could not share image.');
+    }
+  };
+
+  // Format date as DD/MM/YYYY
+  const formatDate = () => {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // Get verse reference (e.g., "MARK 10:27 NLT")
+  const getVerseReference = () => {
+    if (reading?.main_verse) {
+      const parts = reading.main_verse.split(' ');
+      if (parts.length >= 2) {
+        const book = parts[0];
+        const chapterVerse = parts.slice(1).join(' ');
+        const translation = language === 'french' ? 'LSG' : language === 'swahili' ? 'SWA' : 'NLT';
+        return `${book.toUpperCase()} ${chapterVerse} ${translation}`;
+      }
+      return reading.main_verse;
+    }
+    return '';
+  };
+
+  // Get verse text - format with verse number
+  const getVerseText = () => {
+    const verseText = reading?.verse_text || reading?.explanation || '';
+    if (reading?.main_verse && verseText) {
+      // Extract verse number from reference (e.g., "10:27" -> "27")
+      const verseMatch = reading.main_verse.match(/:(\d+)/);
+      if (verseMatch) {
+        const verseNum = verseMatch[1];
+        // Check if verse number is already in text
+        if (!verseText.startsWith(verseNum)) {
+          return `${verseNum} ${verseText}`;
+        }
+      }
+    }
+    return verseText;
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -848,6 +877,13 @@ const BibleStudyContent = () => {
       <CelebrationOverlay visible={showCelebration} />
       
       <View style={styles.headerButtons}>
+        <TouchableOpacity 
+          style={styles.shareButton} 
+          onPress={handleShare}
+          disabled={isSharing}
+        >
+          <Ionicons name="share-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={dimensions.iconSize.large} color={COLORS.primary} />
         </TouchableOpacity>
@@ -964,6 +1000,58 @@ const BibleStudyContent = () => {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Shareable Card - Hidden, used for image generation */}
+      <View style={{ position: 'absolute', left: -9999, top: -9999, width: 1080, height: 1080, opacity: 0 }}>
+        <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 1.0 }}>
+          <ImageBackground 
+            source={require('../assets/biblestudy.png')}
+            style={styles.shareableCard}
+            resizeMode="cover"
+          >
+            {/* Top section - Black background with verse */}
+            <View style={styles.shareableTopSection}>
+              {/* Date and Day header */}
+              <View style={styles.shareableHeader}>
+                <Text style={styles.shareableDate}>{formatDate()}</Text>
+                <Text style={styles.shareableDay}>Day {reading?.day || '1'}/{totalDays}</Text>
+              </View>
+              
+              {/* Content wrapper to push down */}
+              <View style={styles.shareableContentWrapper}>
+                {/* Books to read today */}
+                {reading?.books && (
+                  <Text style={styles.shareableBooksToRead}>{formatBooks(reading.books)}</Text>
+                )}
+                
+                {/* Verse text - elegant, italic */}
+                <Text style={styles.shareableVerseText}>{getVerseText()}</Text>
+                
+                {/* Decorative line with dots */}
+                <View style={styles.shareableDecorativeLine}>
+                  <View style={styles.shareableLine} />
+                  <View style={styles.shareableDots}>
+                    <View style={styles.shareableDot} />
+                    <View style={styles.shareableDot} />
+                    <View style={styles.shareableDot} />
+                  </View>
+                </View>
+                
+                {/* Verse reference - centered, bold */}
+                {getVerseReference() && (
+                  <Text style={styles.shareableReference}>{getVerseReference()}</Text>
+                )}
+              </View>
+            </View>
+            
+            {/* Bottom section - Bible image area */}
+            <View style={styles.shareableBottomSection}>
+              {/* BibleSnap footer */}
+              <Text style={styles.shareableFooterText}>BibleSnap</Text>
+            </View>
+          </ImageBackground>
+        </ViewShot>
+      </View>
+
   <Modal
   visible={showBookModal}
   animationType="slide"
@@ -1021,262 +1109,5 @@ const BibleStudyContent = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-  },
-  videoBackground: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: -1,
-  },
-  videoOverlay: {
-    ...StyleSheet.absoluteFillObject, 
-    backgroundColor: COLORS.overlay,
-    zIndex: 0,
-  },
-  headerButtons: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
-    right: 16,
-    zIndex: 100,
-  },
-  closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: dimensions.spacing.lg,
-    paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: dimensions.spacing.xl * 2,
-  },
-  titleSection: {
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.xl,
-  },
-  mainTitle: {
-    fontSize: dimensions.fontSize.title * 1.4,
-    fontWeight: '800',
-    color: COLORS.text.light,
-    marginBottom: dimensions.spacing.sm,
-    letterSpacing: 1,
-  },
-  dayLabel: {
-    fontSize: dimensions.fontSize.body,
-    fontWeight: '600',
-    color: COLORS.text.light,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.xs,
-    borderRadius: 20,
-  },
-  descriptionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: dimensions.spacing.lg,
-    marginBottom: dimensions.spacing.lg,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
-  },
-  cardHeaderText: {
-    fontSize: dimensions.fontSize.subtitle,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginLeft: dimensions.spacing.sm,
-  },
-  descriptionText: {
-    fontSize: dimensions.fontSize.body,
-    color: COLORS.text.secondary,
-    lineHeight: 24,
-  },
-  readingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: dimensions.spacing.lg,
-    marginBottom: dimensions.spacing.xl,
-  },
-  readingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
-    paddingBottom: dimensions.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
-  },
-  readingTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  readingTitle: {
-    fontSize: dimensions.fontSize.subtitle,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginLeft: dimensions.spacing.sm,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: COLORS.border.medium,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: COLORS.semantic.success,
-    borderColor: COLORS.semantic.success,
-  },
-  bookToRead: {
-    marginBottom: dimensions.spacing.lg,
-  },
-  bookItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    padding: dimensions.spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border.light,
-  },
-  bookInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: dimensions.spacing.sm,
-  },
-  bookText: {
-    fontSize: dimensions.fontSize.body,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    flex: 1,
-  },
-  upcomingSection: {
-    marginTop: dimensions.spacing.sm,
-  },
-  upcomingSectionTitle: {
-    fontSize: dimensions.fontSize.subtitle,
-    fontWeight: '700',
-    color: COLORS.text.light,
-    marginBottom: dimensions.spacing.md,
-  },
-  upcomingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  upcomingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: dimensions.spacing.md,
-  },
-  upcomingIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: dimensions.spacing.md,
-  },
-  upcomingInfo: {
-    flex: 1,
-  },
-  upcomingDay: {
-    fontSize: dimensions.fontSize.caption,
-    fontWeight: '600',
-    color: COLORS.text.light,
-    marginBottom: dimensions.spacing.xs,
-  },
-  upcomingTitle: {
-    fontSize: dimensions.fontSize.body,
-    fontWeight: '600',
-    color: COLORS.text.light,
-  },
-  noteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.accent,
-    paddingVertical: dimensions.spacing.md,
-    paddingHorizontal: dimensions.spacing.lg,
-    borderRadius: 12,
-    marginTop: dimensions.spacing.lg,
-    gap: dimensions.spacing.sm,
-  },
-  noteButtonText: {
-    fontSize: dimensions.fontSize.body,
-    fontWeight: '700',
-    color: COLORS.background,
-  },
-  celebrationOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 9999,
-  },
-  confettiBubble: {
-    position: 'absolute',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  celebrationMessage: {
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    paddingHorizontal: 40,
-    paddingVertical: 24,
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  celebrationIconCircle: {
-    marginBottom: 12,
-  },
-  celebrationText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-    textAlign: 'center',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  modalCloseButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
-    right: 16,
-    zIndex: 9999,
-  },
-  modalCloseButtonInner: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(139, 93, 51, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-});
 
 export default BibleStudyContent;
