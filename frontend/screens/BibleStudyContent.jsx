@@ -472,10 +472,11 @@ const BibleStudyContent = () => {
           route.params.onProgressUpdate(Math.max(currentProgressRef.current, 100));
         }
         
-        setShowCelebration(true);
-        setTimeout(() => {
-          setShowCelebration(false);
-        }, 3000);
+        // Celebration removed - will show on BibleStudyPage instead
+        // setShowCelebration(true);
+        // setTimeout(() => {
+        //   setShowCelebration(false);
+        // }, 3000);
       } else {
         await AsyncStorage.removeItem(`lesson_${reading.id}_completed_date`);
         await AsyncStorage.removeItem(`lesson_${reading.id}_completed`);
@@ -651,16 +652,6 @@ const BibleStudyContent = () => {
     // Try to find book ID from API books list first
     let bookId = null;
     if (apiBooks.length > 0) {
-      // Debug: log first few books to see structure
-      if (apiBooks.length > 0 && apiBooks[0]) {
-        console.log('🔍 Sample API book structure:', {
-          id: apiBooks[0].id,
-          name: apiBooks[0].name,
-          abbreviation: apiBooks[0].abbreviation,
-          lookingFor: bookName
-        });
-      }
-      
       // Try exact match first
       let foundBook = apiBooks.find(b => 
         b.name?.toLowerCase() === bookName.toLowerCase() ||
@@ -697,9 +688,6 @@ const BibleStudyContent = () => {
       
       if (foundBook) {
         bookId = foundBook.id;
-        console.log('✅ Found book in API:', { name: foundBook.name, id: foundBook.id, abbreviation: foundBook.abbreviation });
-      } else {
-        console.log('❌ Book not found in API by name, trying abbreviation lookup...');
       }
     }
     
@@ -737,9 +725,6 @@ const BibleStudyContent = () => {
         );
         if (foundByAbbrev) {
           bookId = foundByAbbrev.id;
-          console.log('✅ Found book by abbreviation lookup:', { abbrev, foundId: foundByAbbrev.id, name: foundByAbbrev.name });
-        } else {
-          console.log('❌ Book not found by abbreviation:', abbrev, 'Available books:', apiBooks.slice(0, 5).map(b => ({ id: b.id, name: b.name, abbrev: b.abbreviation })));
         }
       }
     }
@@ -747,7 +732,6 @@ const BibleStudyContent = () => {
     // Final fallback: if still no ID and API books are loaded, try to find Genesis
     let finalBookId = bookId;
     if (!finalBookId && apiBooks.length > 0) {
-      console.log('⚠️ No book ID found yet, trying Genesis fallback...');
       const genesisBook = apiBooks.find(b => 
         b.name?.toLowerCase().includes('genesis') ||
         b.abbreviation?.toLowerCase().includes('gen') ||
@@ -755,26 +739,10 @@ const BibleStudyContent = () => {
       );
       if (genesisBook) {
         finalBookId = genesisBook.id;
-        console.log('✅ Using Genesis fallback:', { id: genesisBook.id, name: genesisBook.name });
       } else if (apiBooks.length > 0) {
         // Last resort: use first book
         finalBookId = apiBooks[0]?.id || null;
-        console.log('⚠️ Using first book as last resort:', { id: apiBooks[0]?.id, name: apiBooks[0]?.name });
       }
-    }
-    
-    console.log('📖 Book parsing result:', {
-      original: reading?.books,
-      extractedBookName: bookName,
-      extractedChapter: chapterNumber,
-      finalBookId: finalBookId,
-      apiBooksLoaded: apiBooks.length > 0,
-      apiBooksCount: apiBooks.length,
-      bookIdBeforeFallback: bookId
-    });
-    
-    if (!finalBookId) {
-      console.warn('⚠️ Could not determine book ID for:', bookName, 'API books available:', apiBooks.length);
     }
     
     const finalBookName = bookName || 'Genesis';
@@ -791,14 +759,12 @@ const BibleStudyContent = () => {
 
   const handleNext = () => {
     if (!allReadings || allReadings.length === 0) {
-      console.log('No next reading available');
       return;
     }
 
     const currentIndex = allReadings.findIndex(r => r.id === reading.id);
     
     if (currentIndex === -1 || currentIndex >= allReadings.length - 1) {
-      console.log('Last reading reached');
       return;
     }
 
@@ -875,7 +841,7 @@ const BibleStudyContent = () => {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
       <VideoBackground />
-      <CelebrationOverlay visible={showCelebration} />
+      {/* CelebrationOverlay removed - celebration now shows on BibleStudyPage only */}
       
       <View style={styles.headerButtons}>
         <TouchableOpacity 
@@ -1067,17 +1033,8 @@ const BibleStudyContent = () => {
 
     {(() => {
       // Use bookInfo directly from useMemo - it will update when apiBooks loads
-      console.log('🚀 Modal render - bookInfo:', {
-        bookId: bookInfo.book.id,
-        bookName: bookInfo.book.name,
-        chapter: bookInfo.chapter.number,
-        bibleId: bibleId,
-        apiBooksLoaded: apiBooks.length > 0
-      });
-      
       // Show loading state if apiBooks not loaded yet OR book ID not found
       if (apiBooks.length === 0 || !bookInfo.book.id) {
-        console.warn('⚠️ Waiting for book data - apiBooks:', apiBooks.length, 'bookId:', bookInfo.book.id);
         return (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
             <ActivityIndicator size="large" color={COLORS.primary} />

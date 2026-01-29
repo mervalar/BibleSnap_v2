@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
 import { fetchBibleReadings } from '../api/bibleReadingService';
 import { fetchBooks } from '../api/bookService';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SplashScreen from '../components/SplashScreen';
 import { createStyles, COLORS } from '../styles/bIbleStudyContent.styles';
@@ -366,7 +366,6 @@ const BibleStudyApp = () => {
         // Load books separately - don't fail if this fails
         try {
           const fetchedBooks = await fetchBooks();
-          console.log('Books fetched successfully:', fetchedBooks?.length || 0, 'books');
           setBooks(fetchedBooks || []);
         } catch (bookError) {
           console.error('Error fetching books (non-critical):', bookError);
@@ -395,24 +394,26 @@ const BibleStudyApp = () => {
     });
   }, []);
 
+  // Reload completedStudies when page comes into focus (e.g., returning from BibleStudyContent)
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem('completedStudies').then(data => {
+        if (data) {
+          const completedIds = JSON.parse(data);
+          setCompletedStudies(new Set(completedIds));
+        }
+      });
+    }, [])
+  );
+
   useEffect(() => {
     AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
     
-    const newCompleted = new Set(completedStudies);
-    let hasChanges = false;
-    
-    Object.entries(progressMap).forEach(([id, progress]) => {
-      if (progress === 100 && !completedStudies.has(Number(id))) {
-        newCompleted.add(Number(id));
-        hasChanges = true;
-      }
-    });
-    
-    if (hasChanges) {
-      setCompletedStudies(newCompleted);
-      AsyncStorage.setItem('completedStudies', JSON.stringify([...newCompleted]));
-    }
-  }, [progressMap, completedStudies]);
+    // REMOVED: Auto-completion based on progress
+    // Nodes should only be marked complete when checkbox is checked in BibleStudyContent
+    // This prevents auto-completion when just opening a node
+    // The completion is now handled only in BibleStudyContent.handleCheckToggle
+  }, [progressMap]);
 
   // Transform books to match node format
   const transformedBooks = (books || []).map(book => ({
@@ -456,20 +457,6 @@ const BibleStudyApp = () => {
   // Determine which items to display based on selected type
   const displayItems = selectedType === 'pickupbook' ? filteredBooks : filteredReadings;
 
-  // Debug logging for pickupbook filter
-  useEffect(() => {
-    if (selectedType === 'pickupbook') {
-      console.log('=== Pickupbook Filter Active ===');
-      console.log('Books loaded:', books.length);
-      console.log('Filtered books:', filteredBooks.length);
-      console.log('Display items:', displayItems.length);
-      if (displayItems.length > 0) {
-        console.log('Sample book:', displayItems[0]);
-      } else {
-        console.warn('No books to display!');
-      }
-    }
-  }, [selectedType, books.length, filteredBooks.length, displayItems.length]);
 
   const handleGoBack = () => {
     navigation.goBack();
@@ -888,16 +875,28 @@ const BibleStudyApp = () => {
         setTodaysReadingIds(new Set());
       }
       
-      // Calculate reading stats and encouragement
-      // Priority 1: Challenge start message (handled in savePlan)
-      // Other notifications will be shown only if plan didn't just change
-      if (!planJustChanged) {
-        calculateReadingStats();
-      }
+      // Calculate reading stats and encouragement - REMOVED from here
+      // Will be called only when page is focused (landed on), not on every update
     };
     
     updatePlanStats();
   }, [studyPlan, bibleReadings, progressMap, completedStudies, planJustChanged]);
+
+  // Only calculate and show encouragement message when page is focused (landed on)
+  useFocusEffect(
+    useCallback(() => {
+      if (!studyPlan || !bibleReadings || bibleReadings.length === 0) return;
+      
+      // Small delay to ensure page is fully loaded
+      const timer = setTimeout(() => {
+        if (!planJustChanged) {
+          calculateReadingStats();
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }, [studyPlan, bibleReadings, planJustChanged])
+  );
 
   if (loading && bibleReadings.length === 0) {
     return (

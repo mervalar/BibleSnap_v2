@@ -46,18 +46,6 @@ const BookContent = (props) => {
   const routeBibleId = params.bibleId || '65eec8e0b60e656b-01';
   const routeLanguage = params.language || 'english';
   
-  // Debug log to verify params are received
-  useEffect(() => {
-    console.log('📚 BookContent received params:', {
-      bookId: book?.id,
-      bookName: book?.name,
-      chapter: initialChapter?.number,
-      bibleId: routeBibleId,
-      hasRoute: !!route,
-      hasProps: !!props.route
-    });
-  }, [book?.id, initialChapter?.number, routeBibleId]);
-  
   // State variables
   const [videoRef, setVideoRef] = useState(null);
   const [verses, setVerses] = useState([]);
