@@ -13,6 +13,7 @@ import {
   Alert,
   Image,
   ImageBackground,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1001,7 +1002,7 @@ const BibleStudyContent = () => {
       </ScrollView>
 
       {/* Shareable Card - Hidden, used for image generation */}
-      <View style={{ position: 'absolute', left: -9999, top: -9999, width: 1080, height: 1080, opacity: 0 }}>
+      <View style={{ position: 'absolute', left: -9999, opacity: 0 }}>
         <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 1.0 }}>
           <ImageBackground 
             source={require('../assets/biblestudy.png')}
@@ -1015,32 +1016,28 @@ const BibleStudyContent = () => {
                 <Text style={styles.shareableDate}>{formatDate()}</Text>
                 <Text style={styles.shareableDay}>Day {reading?.day || '1'}/{totalDays}</Text>
               </View>
+              {/* Books to read today */}
+              {reading?.books && (
+                <Text style={styles.shareableBooksToRead}>{formatBooks(reading.books)}</Text>
+              )}
               
-              {/* Content wrapper to push down */}
-              <View style={styles.shareableContentWrapper}>
-                {/* Books to read today */}
-                {reading?.books && (
-                  <Text style={styles.shareableBooksToRead}>{formatBooks(reading.books)}</Text>
-                )}
-                
-                {/* Verse text - elegant, italic */}
-                <Text style={styles.shareableVerseText}>{getVerseText()}</Text>
-                
-                {/* Decorative line with dots */}
-                <View style={styles.shareableDecorativeLine}>
-                  <View style={styles.shareableLine} />
-                  <View style={styles.shareableDots}>
-                    <View style={styles.shareableDot} />
-                    <View style={styles.shareableDot} />
-                    <View style={styles.shareableDot} />
-                  </View>
+              {/* Verse text - elegant, italic */}
+              <Text style={styles.shareableVerseText}>{getVerseText()}</Text>
+              
+              {/* Decorative line with dots */}
+              <View style={styles.shareableDecorativeLine}>
+                <View style={styles.shareableLine} />
+                <View style={styles.shareableDots}>
+                  <View style={styles.shareableDot} />
+                  <View style={styles.shareableDot} />
+                  <View style={styles.shareableDot} />
                 </View>
-                
-                {/* Verse reference - centered, bold */}
-                {getVerseReference() && (
-                  <Text style={styles.shareableReference}>{getVerseReference()}</Text>
-                )}
               </View>
+              
+              {/* Verse reference - centered, bold */}
+              {getVerseReference() && (
+                <Text style={styles.shareableReference}>{getVerseReference()}</Text>
+              )}
             </View>
             
             {/* Bottom section - Bible image area */}
@@ -1069,24 +1066,29 @@ const BibleStudyContent = () => {
     </TouchableOpacity>
 
     {(() => {
-      const bookInfo = getBookInfo();
-      console.log('🚀 About to render BookContent with:', {
+      // Use bookInfo directly from useMemo - it will update when apiBooks loads
+      console.log('🚀 Modal render - bookInfo:', {
         bookId: bookInfo.book.id,
         bookName: bookInfo.book.name,
         chapter: bookInfo.chapter.number,
-        bibleId: bibleId
+        bibleId: bibleId,
+        apiBooksLoaded: apiBooks.length > 0
       });
-      // Only render BookContent if we have a valid book ID
-      if (!bookInfo.book.id) {
-        console.warn('⚠️ No book ID, showing loading message');
+      
+      // Show loading state if apiBooks not loaded yet OR book ID not found
+      if (apiBooks.length === 0 || !bookInfo.book.id) {
+        console.warn('⚠️ Waiting for book data - apiBooks:', apiBooks.length, 'bookId:', bookInfo.book.id);
         return (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <Text style={{ fontSize: 16, color: '#666', textAlign: 'center' }}>
-              Loading Bible content...
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={{ fontSize: 16, color: COLORS.text.light, textAlign: 'center', marginTop: 16 }}>
+              {apiBooks.length === 0 ? 'Loading Bible books...' : 'Preparing Bible content...'}
             </Text>
           </View>
         );
       }
+      
+      // Render BookContent when we have valid book ID
       return (
         <BookContent
           route={{

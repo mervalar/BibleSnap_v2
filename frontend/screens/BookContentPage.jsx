@@ -32,16 +32,31 @@ const stripHtml = (html) => {
   return html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 };
 
-const BookContent = () => {
+const BookContent = (props) => {
+  // Support both props (for modal usage) and route params (for navigation)
   const route = useRoute();
-  const navigation = useNavigation();
+  const navigation = props.navigation || useNavigation();
   
   // FIXED: Better handling of params from different sources
-  const params = route.params || {};
+  // Check props first (for modal), then route params (for navigation)
+  const routeParams = props.route?.params || route?.params || {};
+  const params = routeParams;
   const book = params.book || { id: '', name: '' };
   const initialChapter = params.chapter || { number: '1' };
   const routeBibleId = params.bibleId || '65eec8e0b60e656b-01';
   const routeLanguage = params.language || 'english';
+  
+  // Debug log to verify params are received
+  useEffect(() => {
+    console.log('📚 BookContent received params:', {
+      bookId: book?.id,
+      bookName: book?.name,
+      chapter: initialChapter?.number,
+      bibleId: routeBibleId,
+      hasRoute: !!route,
+      hasProps: !!props.route
+    });
+  }, [book?.id, initialChapter?.number, routeBibleId]);
   
   // State variables
   const [videoRef, setVideoRef] = useState(null);
@@ -61,15 +76,17 @@ const BookContent = () => {
   // Constants
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
 
-  // Initialize and fetch data
+  // Initialize and fetch data - re-run when book or bibleId changes
   useEffect(() => {
-    fetchChapters();
-    loadHighlights(); 
+    if (book && book.id) {
+      fetchChapters();
+      loadHighlights(); 
+    }
     
     return () => {
       saveHighlights(); 
     };
-  }, []);
+  }, [book?.id, bibleId]);
 
   // This effect runs when chapters are loaded or when currentChapter changes
   useEffect(() => {
@@ -88,13 +105,6 @@ const BookContent = () => {
       }
     }
   }, [initialChapter, chapters]);
-  
-  // Re-fetch chapters when bibleId changes
-  useEffect(() => {
-    if (book && book.id) {
-      fetchChapters();
-    }
-  }, [bibleId, book]);
 
   // Store book info for later reference
   useEffect(() => {
@@ -130,10 +140,10 @@ const BookContent = () => {
     loadFontPreference();
   }, []);
 
-  // FIXED: Initialize from route params immediately
+  // FIXED: Initialize from route params or props immediately
   useEffect(() => {
-    setLanguage(routeLanguage);
-    setBibleId(routeBibleId);
+    if (routeLanguage) setLanguage(routeLanguage);
+    if (routeBibleId) setBibleId(routeBibleId);
   }, [routeBibleId, routeLanguage]);
 
   const saveHighlights = async () => {
