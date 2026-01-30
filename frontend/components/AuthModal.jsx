@@ -6,34 +6,41 @@ import {
   Alert, 
   Modal, 
   StyleSheet,
-  Dimensions,
-  Animated,
   TouchableWithoutFeedback,
   TextInput,
   ActivityIndicator
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
-
+import { createStyles, COLORS } from '../styles/bIbleStudyContent.styles';
+import TypeFilterModal from './TypeFilterModal';
+import StudyPlanModal from './StudyPlanModal';
+import { fetchBibleReadings } from '../api/bibleReadingService';
 
 WebBrowser.maybeCompleteAuthSession();
-
-const { height: screenHeight } = Dimensions.get('window');
 
 // Configure your API base URL
 const API_BASE_URL = 'https://biblesnap.bellatis.com/api';
 
 export default function AuthModal({ visible, onClose, navigation }) {
-  const slideAnimation = React.useRef(new Animated.Value(screenHeight)).current;
-  const [currentView, setCurrentView] = useState('main');
+  const modalStyles = createStyles();
+  const [currentView, setCurrentView] = useState('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // New user onboarding modals
+  const [showTypeFilterModal, setShowTypeFilterModal] = useState(false);
+  const [showStudyPlanModal, setShowStudyPlanModal] = useState(false);
+  const [selectedType, setSelectedType] = useState('historical');
+  const [planDays, setPlanDays] = useState(365);
+  const [startDate, setStartDate] = useState(new Date());
+  const [bibleReadingsCount, setBibleReadingsCount] = useState(365);
 
   // Create redirect URI for Google OAuth
   const redirectUri = AuthSession.makeRedirectUri({
@@ -60,24 +67,6 @@ export default function AuthModal({ visible, onClose, navigation }) {
     }
   );
 
-  // Animation effects
-  React.useEffect(() => {
-    if (visible) {
-      Animated.spring(slideAnimation, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 8,
-      }).start();
-    } else {
-      Animated.timing(slideAnimation, {
-        toValue: screenHeight,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [visible]);
-
   // Handle Google OAuth response
   useEffect(() => {
     if (response?.type === 'success') {
@@ -97,30 +86,6 @@ export default function AuthModal({ visible, onClose, navigation }) {
     }
   }, [response]);
 
-  // keyboard 
-
-  useEffect(() => {
-  const keyboardDidShow = Keyboard.addListener('keyboardDidShow', () => {
-    Animated.timing(slideAnimation, {
-      toValue: -70, 
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  });
-
-  const keyboardDidHide = Keyboard.addListener('keyboardDidHide', () => {
-    Animated.timing(slideAnimation, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  });
-
-  return () => {
-    keyboardDidShow.remove();
-    keyboardDidHide.remove();
-  };
-}, []);
 
   // API call functions
   const apiCall = async (endpoint, method = 'POST', data = null) => {
@@ -170,7 +135,94 @@ export default function AuthModal({ visible, onClose, navigation }) {
   };
 
   // Enhanced authentication success handler
-  const handleAuthSuccess = async (userData, token = null) => {
+  // Check if user is new (first time signup)
+  const isNewUser = async () => {
+    try {
+      const studyPlan = await AsyncStorage.getItem('studyPlan');
+      return !studyPlan; // New user if no study plan exists
+    } catch (error) {
+      return true; // Assume new user if error
+    }
+  };
+
+  // Build schedule for study plan
+  const buildSchedule = (readings, totalDays) => {
+    const items = readings.slice().sort((a,b)=>a.day - b.day);
+    const n = items.length;
+    const base = Math.floor(n / totalDays);
+    const rem = n % totalDays;
+    const schedule = [];
+    let idx = 0;
+    for (let i = 0; i < totalDays; i++) {
+      const size = base + (i < rem ? 1 : 0);
+      schedule.push(items.slice(idx, idx + size).map(r => r.day));
+      idx += size;
+    }
+    return schedule;
+  };
+
+  // Handle study plan save for new users
+  const handleSavePlan = async (days, chosenStartDate) => {
+    try {
+      // Fetch bible readings to build schedule
+      const readings = await fetchBibleReadings();
+      if (!readings || readings.length === 0) {
+        Alert.alert('Error', 'Unable to load Bible readings. Please try again.');
+        return;
+      }
+
+      const schedule = buildSchedule(readings, days);
+      const chosenStart = chosenStartDate || startDate || new Date();
+      
+      const plan = {
+        days,
+        startDate: chosenStart.toISOString(),
+        schedule,
+        planChangedAt: new Date().toISOString(),
+      };
+      
+      await AsyncStorage.setItem('studyPlan', JSON.stringify(plan));
+      
+      // Reset all progress for new user
+      await AsyncStorage.removeItem('bibleProgress');
+      await AsyncStorage.removeItem('completedStudies');
+      
+      // Clear all lesson completion flags
+      const allKeys = await AsyncStorage.getAllKeys();
+      const lessonKeys = allKeys.filter(key => key.startsWith('lesson_') && key.includes('_completed'));
+      await AsyncStorage.multiRemove(lessonKeys);
+      
+      // Clear daily reading tracking
+      await AsyncStorage.removeItem('dailyReadingHistory');
+      await AsyncStorage.removeItem('readingStreak');
+      await AsyncStorage.removeItem('lastReadingDate');
+      
+      // Close modals and navigate to Home
+      setShowStudyPlanModal(false);
+      setShowTypeFilterModal(false);
+      handleClose();
+      
+      // Navigate to Home
+      if (navigation) {
+        navigation.navigate('Home');
+      }
+    } catch (error) {
+      console.error('Error saving study plan:', error);
+      Alert.alert('Error', 'Failed to save study plan. Please try again.');
+    }
+  };
+
+  // Handle type filter selection
+  const handleTypeFilter = (type) => {
+    setSelectedType(type);
+    setShowTypeFilterModal(false);
+    // After selecting type, show study plan modal
+    setTimeout(() => {
+      setShowStudyPlanModal(true);
+    }, 300);
+  };
+
+  const handleAuthSuccess = async (userData, token = null, isSignup = false) => {
     try {
       // Store user data
       await AsyncStorage.setItem('user', JSON.stringify(userData));
@@ -179,20 +231,34 @@ export default function AuthModal({ visible, onClose, navigation }) {
       // Store token if provided
       if (token) {
         await AsyncStorage.setItem('token', token);
-        console.log('Token stored:', token);
       }
       
-      console.log('User data stored:', userData);
-      
-      // Show success message
-      Alert.alert('Success', 'Authentication successful!', [
-        {
-          text: 'OK',
-          onPress: () => {
-            handleClose();
+      // Check if this is a new user signup
+      if (isSignup) {
+        const userIsNew = await isNewUser();
+        if (userIsNew) {
+          // Load bible readings count
+          try {
+            const readings = await fetchBibleReadings();
+            setBibleReadingsCount(readings?.length || 365);
+          } catch (error) {
+            console.error('Error fetching readings count:', error);
           }
+          
+          // Close auth modal and show type filter modal
+          handleClose();
+          setTimeout(() => {
+            setShowTypeFilterModal(true);
+          }, 300);
+          return;
         }
-      ]);
+      }
+      
+      // For login or existing users, just close and navigate
+      handleClose();
+      if (navigation) {
+        navigation.navigate('Home');
+      }
       
     } catch (error) {
       console.error('Error storing user data:', error);
@@ -241,7 +307,7 @@ export default function AuthModal({ visible, onClose, navigation }) {
     setConfirmPassword('');
     setName('');
     setConfirmationCode('');
-    setCurrentView('main');
+    setCurrentView('signup');
     setLoading(false);
   };
 
@@ -250,9 +316,29 @@ export default function AuthModal({ visible, onClose, navigation }) {
     onClose();
   };
 
+  const formatLoginErrorMessage = (error, message) => {
+    if (message) {
+      const lowerMessage = message.toLowerCase();
+      if (lowerMessage.includes('invalid') && lowerMessage.includes('credentials')) {
+        return 'The email or password you entered is incorrect. Please check your credentials and try again.';
+      }
+      if (lowerMessage.includes('not found') || lowerMessage.includes("doesn't exist")) {
+        return 'No account found with this email address. Please sign up to create an account.';
+      }
+      if (lowerMessage.includes('unauthorized') || lowerMessage.includes('incorrect')) {
+        return 'Incorrect email or password. Please try again or use "Forgot password" if you need help.';
+      }
+      return message;
+    }
+    if (error && typeof error === 'string') {
+      return error;
+    }
+    return 'Unable to log in. Please check your email and password, then try again.';
+  };
+
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert('Missing Information', 'Please enter both your email and password to log in.');
       return;
     }
 
@@ -268,26 +354,90 @@ export default function AuthModal({ visible, onClose, navigation }) {
         // Handle successful login
         await handleAuthSuccess(result.user, result.token);
       } else {
-        Alert.alert('Error', result.message || 'Login failed');
+        const errorMessage = formatLoginErrorMessage(null, result.message);
+        Alert.alert('Login Failed', errorMessage);
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Login failed');
+      const errorMessage = formatLoginErrorMessage(error, error.message);
+      Alert.alert('Login Error', errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  // Helper function to format user-friendly error messages
+  const formatErrorMessage = (error, errors) => {
+    // Check for specific error cases
+    if (errors) {
+      // Email already exists
+      if (errors.email && errors.email.some(msg => 
+        msg.toLowerCase().includes('already') || 
+        msg.toLowerCase().includes('taken') ||
+        msg.toLowerCase().includes('exists')
+      )) {
+        return 'This email address is already registered. Please use a different email or try logging in instead.';
+      }
+      
+      // Invalid email format
+      if (errors.email && errors.email.some(msg => 
+        msg.toLowerCase().includes('invalid') || 
+        msg.toLowerCase().includes('format') ||
+        msg.toLowerCase().includes('valid')
+      )) {
+        return 'Please enter a valid email address (e.g., yourname@example.com).';
+      }
+      
+      // Password errors
+      if (errors.password) {
+        const passwordErrors = errors.password.join(' ');
+        if (passwordErrors.toLowerCase().includes('minimum') || passwordErrors.toLowerCase().includes('characters')) {
+          return 'Password must be at least 6 characters long. Please choose a stronger password.';
+        }
+        return `Password error: ${passwordErrors}`;
+      }
+      
+      // Name errors
+      if (errors.name) {
+        return `Name error: ${errors.name.join(' ')}`;
+      }
+      
+      // General validation errors - format nicely
+      const allErrors = Object.entries(errors)
+        .map(([field, messages]) => {
+          const fieldName = field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ');
+          return `${fieldName}: ${Array.isArray(messages) ? messages.join(', ') : messages}`;
+        })
+        .join('\n');
+      
+      return allErrors;
+    }
+    
+    // Check error message for common patterns
+    if (error && typeof error === 'string') {
+      const lowerError = error.toLowerCase();
+      if (lowerError.includes('already') || lowerError.includes('taken') || lowerError.includes('exists')) {
+        return 'This email address is already registered. Please use a different email or try logging in instead.';
+      }
+      if (lowerError.includes('invalid email') || lowerError.includes('email format')) {
+        return 'Please enter a valid email address (e.g., yourname@example.com).';
+      }
+      return error;
+    }
+    
+    return error || 'Something went wrong. Please check your information and try again.';
+  };
+
   const handleSignUp = async () => {
     if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert('Missing Information', 'Please fill in all fields to create your account.');
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert('Password Mismatch', 'The passwords you entered do not match. Please make sure both password fields are the same.');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      Alert.alert('Password Too Short', 'Your password must be at least 6 characters long. Please choose a longer password for better security.');
       return;
     }
 
@@ -302,19 +452,20 @@ export default function AuthModal({ visible, onClose, navigation }) {
       });
 
       if (result.success) {
-        // Handle successful registration
-        await handleAuthSuccess(result.user, result.token);
+        // Handle successful registration - pass isSignup=true
+        await handleAuthSuccess(result.user, result.token, true);
       } else {
-        // Handle validation errors
-        if (result.errors) {
-          const errorMessages = Object.values(result.errors).flat().join('\n');
-          Alert.alert('Validation Error', errorMessages);
-        } else {
-          Alert.alert('Error', result.message || 'Registration failed');
-        }
+        // Handle validation errors with user-friendly messages
+        const errorMessage = formatErrorMessage(result.message, result.errors);
+        Alert.alert('Registration Error', errorMessage);
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Registration failed');
+      // Handle network or API errors
+      const errorMessage = formatErrorMessage(
+        error.message || error.toString(), 
+        error.response?.data?.errors || null
+      );
+      Alert.alert('Registration Failed', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -445,14 +596,22 @@ export default function AuthModal({ visible, onClose, navigation }) {
   );
 
   const renderLoginView = () => (
-    <View style={styles.content}>
-      <Text style={styles.title}>Welcome back</Text>
-      <Text style={styles.subtitle}>Log in to your account</Text>
+    <View style={[modalStyles.modalContent, authInputStyles.widerModal]}>
+      <TouchableOpacity 
+        style={authInputStyles.closeIconButton} 
+        onPress={handleClose}
+        disabled={loading}
+      >
+        <Ionicons name="close" size={24} color={COLORS.text.primary} />
+      </TouchableOpacity>
+      
+      <Text style={modalStyles.modalTitle}>Welcome back</Text>
+      <Text style={modalStyles.modalSubtitle}>Log in to your account</Text>
       
       <TextInput
-        style={styles.input}
+        style={authInputStyles.input}
         placeholder="Email"
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={COLORS.text.tertiary}
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
@@ -461,30 +620,19 @@ export default function AuthModal({ visible, onClose, navigation }) {
       />
       
       <TextInput
-        style={styles.input}
+        style={authInputStyles.input}
         placeholder="Password"
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={COLORS.text.tertiary}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
         editable={!loading}
       />
-      
-      <TouchableOpacity
-        style={styles.forgotPassword}
-        onPress={handleForgotPassword}
-        disabled={loading}
-      >
-        <Text style={[styles.forgotPasswordText, loading && styles.disabledText]}>
-          Forgot password?
-        </Text>
-      </TouchableOpacity>
 
       <TouchableOpacity
         style={[
-          styles.authButton, 
-          styles.primaryButton,
-          loading && styles.disabledButton
+          authInputStyles.primaryButton,
+          loading && authInputStyles.disabledButton
         ]}
         onPress={handleLogin}
         disabled={loading}
@@ -492,31 +640,39 @@ export default function AuthModal({ visible, onClose, navigation }) {
         {loading ? (
           <ActivityIndicator size="small" color="#FFFFFF" />
         ) : (
-          <Text style={styles.primaryButtonText}>Log in</Text>
+          <Text style={authInputStyles.primaryButtonText}>Log in</Text>
         )}
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => setCurrentView('main')}
+        style={authInputStyles.loginLink}
+        onPress={() => setCurrentView('signup')}
         disabled={loading}
       >
-        <Text style={[styles.backButtonText, loading && styles.disabledText]}>
-          ← Back
+        <Text style={[authInputStyles.loginLinkText, loading && authInputStyles.disabledText]}>
+          Don't have an account? Sign up
         </Text>
       </TouchableOpacity>
     </View>
   );
 
   const renderSignUpView = () => (
-    <View style={styles.content}>
-      <Text style={styles.title}>Create account</Text>
-      <Text style={styles.subtitle}>Log in to your account</Text>
+    <View style={[modalStyles.modalContent, authInputStyles.widerModal]}>
+      <TouchableOpacity 
+        style={authInputStyles.closeIconButton} 
+        onPress={handleClose}
+        disabled={loading}
+      >
+        <Ionicons name="close" size={24} color={COLORS.text.primary} />
+      </TouchableOpacity>
+      
+      <Text style={modalStyles.modalTitle}>Create account</Text>
+      <Text style={modalStyles.modalSubtitle}>Sign up to get started</Text>
       
       <TextInput
-        style={styles.input}
+        style={authInputStyles.input}
         placeholder="Full Name"
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={COLORS.text.tertiary}
         value={name}
         onChangeText={setName}
         autoCapitalize="words"
@@ -524,9 +680,9 @@ export default function AuthModal({ visible, onClose, navigation }) {
       />
       
       <TextInput
-        style={styles.input}
+        style={authInputStyles.input}
         placeholder="Email"
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={COLORS.text.tertiary}
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
@@ -535,9 +691,9 @@ export default function AuthModal({ visible, onClose, navigation }) {
       />
       
       <TextInput
-        style={styles.input}
+        style={authInputStyles.input}
         placeholder="Password (min 6 characters)"
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={COLORS.text.tertiary}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -545,9 +701,9 @@ export default function AuthModal({ visible, onClose, navigation }) {
       />
       
       <TextInput
-        style={styles.input}
+        style={authInputStyles.input}
         placeholder="Confirm Password"
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={COLORS.text.tertiary}
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         secureTextEntry
@@ -556,9 +712,8 @@ export default function AuthModal({ visible, onClose, navigation }) {
 
       <TouchableOpacity
         style={[
-          styles.authButton, 
-          styles.primaryButton,
-          loading && styles.disabledButton
+          authInputStyles.primaryButton,
+          loading && authInputStyles.disabledButton
         ]}
         onPress={handleSignUp}
         disabled={loading}
@@ -566,17 +721,17 @@ export default function AuthModal({ visible, onClose, navigation }) {
         {loading ? (
           <ActivityIndicator size="small" color="#FFFFFF" />
         ) : (
-          <Text style={styles.primaryButtonText}>Create account</Text>
+          <Text style={authInputStyles.primaryButtonText}>Create account</Text>
         )}
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => setCurrentView('main')}
+        style={authInputStyles.loginLink}
+        onPress={() => setCurrentView('login')}
         disabled={loading}
       >
-        <Text style={[styles.backButtonText, loading && styles.disabledText]}>
-          ← Back
+        <Text style={[authInputStyles.loginLinkText, loading && authInputStyles.disabledText]}>
+          Already have an account? Log in
         </Text>
       </TouchableOpacity>
     </View>
@@ -589,227 +744,96 @@ export default function AuthModal({ visible, onClose, navigation }) {
       case 'signup':
         return renderSignUpView();
       default:
-        return renderMainView();
+        return renderSignUpView();
     }
   };
 
   return (
-    <Modal
-    transparent
-     animationType="none"
-    visible={visible}
-    onRequestClose={handleClose}
-  >
-      <TouchableWithoutFeedback onPress={!loading ? handleClose : null}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <Animated.View 
-              style={[
-                styles.modalContainer,
-                {
-                  transform: [{ translateY: slideAnimation }],
-                }
-              ]}
-            >
-              <View style={styles.handleBar} />
-              
-              <TouchableOpacity 
-                style={styles.closeButton} 
-                onPress={handleClose}
-                disabled={loading}
-              >
-                <Text style={[styles.closeButtonText, loading && styles.disabledText]}>
-                  ×
-                </Text>
-              </TouchableOpacity>
-
-              {getCurrentView()}
-            </Animated.View>
+    <>
+      <Modal
+        transparent
+        animationType="slide"
+        visible={visible}
+        onRequestClose={handleClose}
+      >
+        <View style={modalStyles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={!loading ? handleClose : null}>
+            <View>
+              <TouchableWithoutFeedback>
+                <View>
+                  {getCurrentView()}
+                  
+                  <TouchableOpacity 
+                    style={modalStyles.modalCloseButton} 
+                    onPress={handleClose}
+                    disabled={loading}
+                  >
+ 
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
           </TouchableWithoutFeedback>
         </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      </Modal>
+
+      {/* Type Filter Modal for new users */}
+      <TypeFilterModal
+        visible={showTypeFilterModal}
+        onClose={() => setShowTypeFilterModal(false)}
+        selectedType={selectedType}
+        onSelectType={handleTypeFilter}
+      />
+
+      {/* Study Plan Modal for new users */}
+      <StudyPlanModal
+        visible={showStudyPlanModal}
+        onClose={() => setShowStudyPlanModal(false)}
+        planDays={planDays}
+        startDate={startDate}
+        onSavePlan={handleSavePlan}
+        bibleReadingsCount={bibleReadingsCount}
+      />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
+// Styles for auth inputs and buttons (separate from modal styles)
+const authInputStyles = StyleSheet.create({
+  widerModal: {
+    width: '100%',
+    maxWidth: 500,
   },
-  modalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 34,
-    minHeight: 500,
-    shadowColor: '#000',
-    flex: 1,
-    backgroundColor: 'hsla(0, 0.70%, 27.30%, 0.80)', 
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 10,
-
-  },
-    modalContent: {
-    width: '90%',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    elevation: 10,
-    marginHorizontal: 20,
-     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-  },
-  handleBar: {
-    width: 36,
-    height: 4,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  closeButton: {
+  closeIconButton: {
     position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  closeButtonText: {
-    color: '#6B7280',
-    fontSize: 22,
-    fontWeight: '300',
-    lineHeight: 22,
-  },
-  content: {
-    padding: 32,
-    paddingTop: 60,
-  },
-  title: {
-    color: 'white',
-    fontSize: 32,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 12,
-    lineHeight: 38,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    color: 'white',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 24,
-    fontWeight: '400',
-  },
-  emailInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 16,
-    fontSize: 16,
-    color: '#111827',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    fontWeight: '400',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+    padding: 8,
   },
   input: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 16,
     marginBottom: 16,
     fontSize: 16,
-    color: '#111827',
+    color: COLORS.text.primary,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border.light,
     fontWeight: '400',
+    width: '100%',
   },
-  authButton: {
+  primaryButton: {
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 12,
-    marginBottom: 16,
-    flexDirection: 'row',
-  },
-  googleButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  googleIcon: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#4285F4',
-    marginRight: 12,
-    backgroundColor: '#FFFFFF',
-    width: 24,
-    height: 24,
-    textAlign: 'center',
-    lineHeight: 24,
-    borderRadius: 2,
-  },
-  googleButtonText: {
-    color: '#374151',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  orContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  orText: {
-    color: '#white',
-    fontSize: 14,
-    fontWeight: '500',
-    paddingHorizontal: 16,
-  },
-  continueButton: {
-    backgroundColor: '#A07553',
-  },
-  continueButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  primaryButton: {
-    backgroundColor: '#A07553',
     marginTop: 8,
+    marginBottom: 16,
+    width: '100%',
   },
   primaryButtonText: {
     color: '#FFFFFF',
@@ -818,40 +842,11 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     alignSelf: 'center',
-    marginBottom: 24,
+    marginTop: 8,
+    marginBottom: 16,
   },
   loginLinkText: {
-    color: '#6B7280',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  privacyText: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-    fontWeight: '400',
-  },
-  privacyLink: {
-    color: '#111827',
-    textDecorationLine: 'underline',
-    fontWeight: '500',
-  },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
-  },
-  forgotPasswordText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    marginTop: 16,
-  },
-  backButtonText: {
-    color: '#6B7280',
+    color: COLORS.primary,
     fontSize: 14,
     fontWeight: '500',
   },

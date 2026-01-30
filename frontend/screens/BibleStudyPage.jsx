@@ -24,6 +24,7 @@ import BottomNavBar from '../components/BottomNavBar';
 import StudyPlanModal from '../components/StudyPlanModal';
 import TypeFilterModal from '../components/TypeFilterModal';
 import UnlockModal from '../components/UnlockModal';
+import AuthModal from '../components/AuthModal';
 const styles = createStyles();
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -353,9 +354,41 @@ const BibleStudyApp = () => {
   // Filter modal states
   const [typeFilterModalVisible, setTypeFilterModalVisible] = useState(false);
   const [selectedType, setSelectedType] = useState('historical'); // 'historical' (shows all), 'pickupbook'
+  
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const isAuth = await AsyncStorage.getItem('isAuthenticated');
+        const userData = await AsyncStorage.getItem('user');
+        
+        if (isAuth === 'true' && userData) {
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+          setShowAuthModal(true);
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error);
+        setIsAuthenticated(false);
+        setShowAuthModal(true);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    checkAuth();
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
+      // Only load data if authenticated
+      if (!isAuthenticated) return;
+      
       try {
         setLoading(true);
         
@@ -379,7 +412,7 @@ const BibleStudyApp = () => {
       }
     };
     loadData();
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     AsyncStorage.getItem('bibleProgress').then(data => {
@@ -882,10 +915,32 @@ const BibleStudyApp = () => {
     updatePlanStats();
   }, [studyPlan, bibleReadings, progressMap, completedStudies, planJustChanged]);
 
+  // Re-check authentication when page comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const checkAuth = async () => {
+        try {
+          const isAuth = await AsyncStorage.getItem('isAuthenticated');
+          const userData = await AsyncStorage.getItem('user');
+          
+          if (isAuth === 'true' && userData) {
+            setIsAuthenticated(true);
+          } else {
+            setIsAuthenticated(false);
+            setShowAuthModal(true);
+          }
+        } catch (error) {
+          console.error('Error checking auth:', error);
+        }
+      };
+      checkAuth();
+    }, [])
+  );
+
   // Only calculate and show encouragement message when page is focused (landed on)
   useFocusEffect(
     useCallback(() => {
-      if (!studyPlan || !bibleReadings || bibleReadings.length === 0) return;
+      if (!isAuthenticated || !studyPlan || !bibleReadings || bibleReadings.length === 0) return;
       
       // Small delay to ensure page is fully loaded
       const timer = setTimeout(() => {
@@ -895,8 +950,52 @@ const BibleStudyApp = () => {
       }, 500);
       
       return () => clearTimeout(timer);
-    }, [studyPlan, bibleReadings, planJustChanged])
+    }, [isAuthenticated, studyPlan, bibleReadings, planJustChanged])
   );
+
+  // Show auth modal if not authenticated
+  if (authLoading) {
+    return (
+      <SplashScreen 
+        onFinish={() => {}}
+        duration={1000} 
+      />
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+          <VideoBackground />
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContent}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.loadingOverlayText}>
+                Please sign up or log in to access Bible Studies
+              </Text>
+            </View>
+          </View>
+        </SafeAreaView>
+        <AuthModal
+          visible={showAuthModal}
+          onClose={() => {
+            setShowAuthModal(false);
+            // Check auth again after modal closes
+            AsyncStorage.getItem('isAuthenticated').then(isAuth => {
+              if (isAuth === 'true') {
+                setIsAuthenticated(true);
+              } else {
+                navigation.goBack();
+              }
+            });
+          }}
+          navigation={navigation}
+        />
+      </>
+    );
+  }
 
   if (loading && bibleReadings.length === 0) {
     return (
@@ -1108,6 +1207,23 @@ const BibleStudyApp = () => {
       <UnlockModal
         visible={unlockModalVisible}
         onClose={() => setUnlockModalVisible(false)}
+      />
+
+      {/* Auth Modal */}
+      <AuthModal
+        visible={showAuthModal}
+        onClose={() => {
+          setShowAuthModal(false);
+          // Check auth again after modal closes
+          AsyncStorage.getItem('isAuthenticated').then(isAuth => {
+            if (isAuth === 'true') {
+              setIsAuthenticated(true);
+            } else {
+              navigation.goBack();
+            }
+          });
+        }}
+        navigation={navigation}
       />
       
       {/* Bottom Navigation Bar */}
