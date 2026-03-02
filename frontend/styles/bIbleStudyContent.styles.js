@@ -1,13 +1,20 @@
 // filepath: /home/merveille/projetPerso/BibleSnap_v2/frontend/styles/bIbleStudyContent.styles.js
 import { StyleSheet, Platform, Dimensions } from 'react-native';
+import { COLORS } from './theme';
+
+// Re-export COLORS so existing imports like
+// `import { createStyles, COLORS } from '../styles/bIbleStudyContent.styles';`
+// continue to work.
+export { COLORS };
 
 const { width: screenWidth } = Dimensions.get('window');
 
 // Responsive dimensions helper
 export const getResponsiveDimensions = () => {
   const isTablet = screenWidth >= 768;
-  
   return {
+    headerHeight: isTablet ? 80 : 60,
+    cardPadding: isTablet ? 24 : 16,
     fontSize: {
       title: isTablet ? 24 : 20,
       subtitle: isTablet ? 18 : 16,
@@ -28,35 +35,6 @@ export const getResponsiveDimensions = () => {
     }
   };
 };
-
-// Import your color constants (you can also move this to a separate file)
-const COLORS = {
-  primary: '#8B5D33',
-  primaryLight: '#A67C52',
-  primaryDark: '#6A4424',
-  accent: '#4A6741',
-  background: '#FFFFFF',
-  surface: '#FAFAFA',
-  text: {
-    primary: '#2D2417',
-    secondary: '#5A4A33',
-    tertiary: '#8B7355',
-    light: '#F7F0E3',
-  },
-  border: {
-    light: '#E7DBC8',
-    medium: '#CCBDA6',
-  },
-  semantic: {
-    success: '#4A7742',
-    warning: '#FF9800',
-    error: '#F44336',
-  },
-  overlay: 'rgba(45, 36, 23, 0.75)',
-  locked: '#D0D0D0',
-};
-
-export { COLORS };
 
 export const createStyles = () => StyleSheet.create({
   container: {

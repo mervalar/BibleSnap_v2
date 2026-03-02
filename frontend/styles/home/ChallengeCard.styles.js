@@ -1,0 +1,142 @@
+import { StyleSheet } from 'react-native';
+
+export default StyleSheet.create({
+  challengeCard: {
+    backgroundColor: '#DDBBA1',
+    borderRadius: 16,
+    padding: 16,
+    minHeight: 100,
+    marginTop: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  challengeCardCompleted: {
+    backgroundColor: '#E8F5E9',
+    borderWidth: 2,
+    borderColor: '#4A7742',
+  },
+  waveContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
+  wave: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: '#A07553',
+    top: -100,
+  },
+  challengeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  challengeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  challengeTitle: {
+    color: '#333',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(74, 119, 66, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  completedBadgeText: {
+    color: '#4A7742',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  challengeBadge: {
+    backgroundColor: '#A07553',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  challengeBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  challengeLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  challengeLoadingText: {
+    marginLeft: 8,
+    color: '#9E795D',
+    fontSize: 11,
+  },
+  challengeDesc: {
+    color: '#9E795D',
+    fontSize: 13,
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  challengeDescCompleted: {
+    color: '#4A7742',
+    fontWeight: '600',
+  },
+  challengeVerse: {
+    color: '#9E795D',
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginBottom: 12,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 'auto',
+  },
+  progressBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#EEDED2',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarCompleted: {
+    borderColor: '#4A7742',
+  },
+  progressFill: {
+    height: '100%',
+    width: '0%',
+    backgroundColor: '#A07553',
+    borderRadius: 3,
+  },
+  progressTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  progressText: {
+    color: '#9E795D',
+    fontWeight: 'bold',
+    fontSize: 11,
+  },
+  progressTextCompleted: {
+    color: '#4A7742',
+    fontWeight: '700',
+  },
+});

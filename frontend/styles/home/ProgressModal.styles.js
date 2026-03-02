@@ -1,0 +1,135 @@
+import { StyleSheet } from 'react-native';
+
+export default StyleSheet.create({
+  progressModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  progressModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  progressModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEDED2',
+  },
+  progressModalTitle: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#2D2417',
+    marginLeft: 12,
+  },
+  progressModalCloseButton: {
+    padding: 4,
+  },
+  progressModalBody: {
+    padding: 20,
+  },
+  progressModalSection: {
+    marginBottom: 24,
+  },
+  progressModalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#A07553',
+    marginBottom: 12,
+  },
+  progressModalChallengeTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2D2417',
+    marginBottom: 8,
+    lineHeight: 26,
+  },
+  progressModalCategory: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EEDED2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  progressModalCategoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#A07553',
+  },
+  progressModalStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 8,
+  },
+  progressModalStatItem: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  progressModalStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D2417',
+  },
+  progressModalProgressContainer: {
+    marginTop: 12,
+  },
+  progressModalProgressBar: {
+    height: 12,
+    backgroundColor: '#EEDED2',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  progressModalProgressFill: {
+    height: '100%',
+    borderRadius: 6,
+  },
+  progressModalProgressText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9E795D',
+    textAlign: 'center',
+  },
+  progressModalVerseContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F6F2',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  progressModalVerseText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#5A4A33',
+    fontStyle: 'italic',
+  },
+  progressModalActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#A07553',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+    marginTop: 8,
+  },
+  progressModalActionButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+});
