@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   TextInput,
   ActivityIndicator,
   SafeAreaView,
@@ -30,7 +29,7 @@ import BibleStudyEmptyState from '../components/bible/BibleStudyEmptyState';
 import useBibleStudyAuth from '../hooks/useBibleStudyAuth';
 import useBibleStudyData from '../hooks/useBibleStudyData';
 import useBibleStudyPlan from '../hooks/useBibleStudyPlan';
-import { getBookIdFromName } from '../utils/bibleStudyUtils';
+// import { getBookIdFromName } from '../utils/bibleStudyUtils'; // TEMP: Pick a book disabled
 
 const styles = createStyles();
 
@@ -54,10 +53,11 @@ export default function BibleStudyPage() {
     }, [data.refreshCompleted, auth.checkAuth])
   );
 
-  const transformedBooks = (data.books || []).map((book) => ({ ...book, title: book.name, id: `book_${book.id}` }));
-  const filteredBooks = transformedBooks.filter(
-    (book) => !searchQuery || (book.name && book.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // TEMP: Pick a book disabled
+  // const transformedBooks = (data.books || []).map((book) => ({ ...book, title: book.name, id: `book_${book.id}` }));
+  // const filteredBooks = transformedBooks.filter(
+  //   (book) => !searchQuery || (book.name && book.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  // );
   const filteredReadings = (data.bibleReadings || []).filter((item) => {
     const matchType =
       selectedType === 'historical' ||
@@ -70,7 +70,7 @@ export default function BibleStudyPage() {
       (item.main_verse && item.main_verse.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchType && matchSearch;
   });
-  const displayItems = selectedType === 'pickupbook' ? filteredBooks : filteredReadings;
+  const displayItems = filteredReadings;
 
   const handleNavigateToStudy = (study, progress) => {
     navigation.navigate('BibleStudyContent', {
@@ -81,22 +81,23 @@ export default function BibleStudyPage() {
     });
   };
 
-  const handleNavigateToBook = async (book) => {
-    try {
-      const savedLanguage = (await AsyncStorage.getItem('selectedLanguage')) || 'english';
-      const savedBibleId = (await AsyncStorage.getItem('selectedBibleId')) || '65eec8e0b60e656b-01';
-      navigation.navigate('BookContent', {
-        book: { id: getBookIdFromName(book.name), name: book.name },
-        chapter: { number: '1' },
-        bibleId: savedBibleId,
-        language: savedLanguage,
-      });
-    } catch (error) {
-      console.error('Error navigating to book:', error);
-    }
-  };
+  // TEMP: Pick a book disabled
+  // const handleNavigateToBook = async (book) => {
+  //   try {
+  //     const savedLanguage = (await AsyncStorage.getItem('selectedLanguage')) || 'english';
+  //     const savedBibleId = (await AsyncStorage.getItem('selectedBibleId')) || '65eec8e0b60e656b-01';
+  //     navigation.navigate('BookContent', {
+  //       book: { id: getBookIdFromName(book.name), name: book.name },
+  //       chapter: { number: '1' },
+  //       bibleId: savedBibleId,
+  //       language: savedLanguage,
+  //     });
+  //   } catch (error) {
+  //     console.error('Error navigating to book:', error);
+  //   }
+  // };
 
-  const onPressItem = selectedType === 'pickupbook' ? handleNavigateToBook : handleNavigateToStudy;
+  const onPressItem = handleNavigateToStudy;
   const handleAuthClose = () => {
     auth.setShowAuthModal(false);
     AsyncStorage.getItem('isAuthenticated').then((isAuth) => {
@@ -156,38 +157,38 @@ export default function BibleStudyPage() {
       <BibleStudySearchBar visible={showSearch} searchQuery={searchQuery} onChangeQuery={setSearchQuery} dimensions={dimensions} />
       <BibleStudyFilterBar selectedType={selectedType} onTypePress={() => setTypeFilterModalVisible(true)} studyPlan={data.studyPlan} onPlanPress={() => plan.setPlanModalVisible(true)} />
       <View style={styles.mainContent}>
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {displayItems.length === 0 ? (
-            <BibleStudyEmptyState selectedType={selectedType} dimensions={dimensions} />
-          ) : (
-            <>
-              {data.studyPlan && data.studyPlan.days !== 365 && selectedType !== 'pickupbook' && (
-                <View style={styles.lessonsPerDaySeparator}>
-                  <View style={styles.separatorLine} />
-                  <View style={styles.lessonsPerDayContainer}>
-                    <Ionicons name="calendar" size={16} color={COLORS.accent} />
-                    <Text style={styles.lessonsPerDayText}>
-                      {Math.ceil((data.bibleReadings?.length || 0) / data.studyPlan.days)} lessons per day
-                    </Text>
-                  </View>
-                  <View style={styles.separatorLine} />
+        {displayItems.length === 0 ? (
+          <BibleStudyEmptyState selectedType={selectedType} dimensions={dimensions} />
+        ) : (
+          <>
+            {data.studyPlan && data.studyPlan.days !== 365 && selectedType !== 'pickupbook' && (
+              <View style={styles.lessonsPerDaySeparator}>
+                <View style={styles.separatorLine} />
+                <View style={styles.lessonsPerDayContainer}>
+                  <Ionicons name="calendar" size={16} color={COLORS.accent} />
+                  <Text style={styles.lessonsPerDayText}>
+                    {Math.ceil((data.bibleReadings?.length || 0) / data.studyPlan.days)} lessons per day
+                  </Text>
                 </View>
-              )}
-              <VerticalGameMap
-                items={displayItems}
-                progressMap={data.progressMap}
-                completedSet={data.completedStudies}
-                onPressItem={onPressItem}
-                onRequestUnlock={() => setUnlockModalVisible(true)}
-                todaysReadingIds={plan.todaysReadingIds}
-              />
-            </>
-          )}
-        </ScrollView>
-        {data.studyPlan && (
-          <JourneySummaryCard hasPlan daysRemaining={plan.planStats.daysRemaining} percent={plan.planStats.percent} />
+                <View style={styles.separatorLine} />
+              </View>
+            )}
+            <VerticalGameMap
+              items={displayItems}
+              progressMap={data.progressMap}
+              completedSet={data.completedStudies}
+              onPressItem={onPressItem}
+              onRequestUnlock={() => setUnlockModalVisible(true)}
+              todaysReadingIds={plan.todaysReadingIds}
+            />
+          </>
         )}
       </View>
+      {data.studyPlan && (
+        <View style={styles.bottomSummaryContainer}>
+          <JourneySummaryCard hasPlan daysRemaining={plan.planStats.daysRemaining} percent={plan.planStats.percent} />
+        </View>
+      )}
       <StudyPlanModal visible={plan.planModalVisible} onClose={() => plan.setPlanModalVisible(false)} planDays={plan.planDays} startDate={data.startDate} onSavePlan={plan.savePlan} bibleReadingsCount={data.bibleReadings?.length || 365} />
       <TypeFilterModal visible={typeFilterModalVisible} onClose={() => setTypeFilterModalVisible(false)} selectedType={selectedType} onSelectType={(t) => { setSelectedType(t); setTypeFilterModalVisible(false); }} />
       <UnlockModal visible={unlockModalVisible} onClose={() => setUnlockModalVisible(false)} />

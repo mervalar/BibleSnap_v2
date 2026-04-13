@@ -39,8 +39,10 @@ export const CATEGORY_COLORS = [
 
 export const createStyles = () => {
   const d = getResponsiveDimensions();
+  const isTablet = screenWidth >= 768;
+  const horizontalPadding = isTablet ? 24 : 16;
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.background },
+    container: { flex: 1, backgroundColor: COLORS.background, paddingBottom: 80 },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background },
     loadingText: { marginTop: d.spacing.md, color: COLORS.text.secondary, fontWeight: '500' },
     loadingOverlay: {
@@ -53,7 +55,7 @@ export const createStyles = () => {
     },
     loadingOverlayText: { marginTop: d.spacing.md, color: COLORS.text.primary, fontWeight: '500' },
     header: {
-      backgroundColor: COLORS.surfaceElevated, paddingHorizontal: d.spacing.md, paddingVertical: d.spacing.md,
+      backgroundColor: COLORS.surfaceElevated, paddingHorizontal: horizontalPadding, paddingVertical: isTablet ? d.spacing.lg : d.spacing.md,
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
       borderBottomWidth: 1, borderBottomColor: COLORS.border.light,
     },
@@ -63,13 +65,13 @@ export const createStyles = () => {
     headerActionButton: { width: 44, height: 44, backgroundColor: COLORS.surface, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border.light },
     headerActionButtonActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
     addButton: { width: 44, height: 44, backgroundColor: COLORS.primary, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
-    searchContainer: { backgroundColor: COLORS.surfaceElevated, paddingHorizontal: d.spacing.md, paddingVertical: d.spacing.md, borderBottomWidth: 1, borderBottomColor: COLORS.border.light },
+    searchContainer: { backgroundColor: COLORS.surfaceElevated, paddingHorizontal: horizontalPadding, paddingVertical: d.spacing.md, borderBottomWidth: 1, borderBottomColor: COLORS.border.light },
     searchInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: 12, paddingHorizontal: d.spacing.md, paddingVertical: d.spacing.sm, borderWidth: 1, borderColor: COLORS.border.light, minHeight: 48 },
     searchInput: { flex: 1, marginLeft: d.spacing.sm, color: COLORS.text.primary, fontWeight: '400' },
-    clearSearchButton: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.border.light, borderRadius: 12, marginLeft: d.spacing.sm },
-    content: { flex: 1, backgroundColor: COLORS.surface },
+    clearSearchButton: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.border.light, borderRadius: 12, marginLeft: d.spacing.sm, marginRight: d.spacing.xs },
+    content: { flex: 1, backgroundColor: COLORS.surface, paddingBottom: 20 },
     filterContainer: { backgroundColor: COLORS.surfaceElevated, borderBottomWidth: 1, borderBottomColor: COLORS.border.light },
-    filterContentContainer: { paddingHorizontal: d.spacing.md, paddingVertical: d.spacing.md, alignItems: 'center' },
+    filterContentContainer: { paddingHorizontal: horizontalPadding, paddingVertical: isTablet ? d.spacing.lg : d.spacing.md, alignItems: 'center' },
     filterButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: d.spacing.md, paddingVertical: d.spacing.sm, borderRadius: 20, marginRight: d.spacing.sm, borderWidth: 1, minHeight: 36 },
     activeFilter: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
     inactiveFilter: { backgroundColor: COLORS.surface, borderColor: COLORS.border.medium },
@@ -77,9 +79,9 @@ export const createStyles = () => {
     activeFilterText: { color: COLORS.background },
     inactiveFilterText: { color: COLORS.text.secondary },
     categoryDot: { width: 8, height: 8, borderRadius: 4, marginRight: d.spacing.xs },
-    resultsInfo: { paddingHorizontal: d.spacing.md, paddingVertical: d.spacing.sm, backgroundColor: COLORS.surfaceElevated },
+    resultsInfo: { paddingHorizontal: horizontalPadding, paddingVertical: d.spacing.sm, backgroundColor: COLORS.surfaceElevated },
     resultsText: { color: COLORS.text.secondary, fontWeight: '500' },
-    entriesContainer: { padding: d.spacing.md },
+    entriesContainer: { padding: horizontalPadding, paddingTop: d.spacing.md },
     emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: d.spacing.xl * 2, paddingHorizontal: d.spacing.lg },
     emptyIconContainer: { width: 120, height: 120, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: 60, marginBottom: d.spacing.lg, borderWidth: 2, borderColor: COLORS.border.light },
     emptyTitle: { fontWeight: '600', color: COLORS.text.primary, marginBottom: d.spacing.sm, textAlign: 'center' },

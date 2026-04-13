@@ -3,7 +3,6 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import LandingPage from './screens/LandingPage';
 import HomePage from './screens/HomePage';
-import Auth from './screens/AuthPage';
 import BookContent from './screens/BookContentPage';
 import Profile from './screens/ProfilePage';
 import Journal from './screens/JournalPage';

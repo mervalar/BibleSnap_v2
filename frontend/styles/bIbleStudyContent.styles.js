@@ -1,4 +1,3 @@
-// filepath: /home/merveille/projetPerso/BibleSnap_v2/frontend/styles/bIbleStudyContent.styles.js
 import { StyleSheet, Platform, Dimensions } from 'react-native';
 import { COLORS } from './theme';
 
@@ -8,6 +7,9 @@ import { COLORS } from './theme';
 export { COLORS };
 
 const { width: screenWidth } = Dimensions.get('window');
+const isTablet = screenWidth >= 768;
+const horizontalPadding = isTablet ? 24 : 16;
+const contentMaxWidth = isTablet ? 960 : '100%';
 
 // Responsive dimensions helper
 export const getResponsiveDimensions = () => {
@@ -62,8 +64,7 @@ export const createStyles = () => StyleSheet.create({
     zIndex: 1000,
   },
   loadingContent: {
-    backgroundColor: COLORS.background,
-    padding: 32,
+    padding: isTablet ? 40 : 32,
     borderRadius: 16,
     alignItems: 'center',
     shadowColor: '#000',
@@ -78,7 +79,7 @@ export const createStyles = () => StyleSheet.create({
     fontWeight: '600',
   },
   header: {
-    paddingHorizontal: 16,
+    paddingHorizontal: horizontalPadding,
     paddingTop: Platform.OS === 'ios' ? 10 : 30,
     paddingBottom: 12,
     flexDirection: 'row',
@@ -120,7 +121,7 @@ export const createStyles = () => StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   searchContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: horizontalPadding,
     paddingVertical: 12,
   },
   searchInputContainer: {
@@ -142,11 +143,13 @@ export const createStyles = () => StyleSheet.create({
     padding: 4,
   },
   filterBar: {
+    paddingHorizontal: horizontalPadding,
+    paddingVertical: 2,
+    gap: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 10,
-    justifyContent: 'space-between',
+    height: 36,
   },
   
   // Filter Button Styles (for modal buttons)
@@ -154,21 +157,24 @@ export const createStyles = () => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    flex: 1,
-    minWidth: 0,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    height: 32,
+    minWidth: 100,
+    maxWidth: 140,
   },
   filterButtonText: {
     color: COLORS.text.light,
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
-    marginLeft: 6,
+    marginLeft: 4,
     flexShrink: 1,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 
   // Dropdown styles (keep for backwards compatibility if needed)
@@ -297,19 +303,36 @@ export const createStyles = () => StyleSheet.create({
   },
 
   mainContent: {
+    width: '100%',
+    maxWidth: contentMaxWidth,
+    alignSelf: 'center',
     flex: 1,
   },
+  bottomSummaryContainer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 0,
+    right: 0,
+    paddingHorizontal: horizontalPadding,
+    paddingVertical: 6,
+    zIndex: 10,
+    alignItems: 'center',
+  },
   content: {
+    width: '100%',
     flex: 1,
   },
   planSummaryBottom: {
-    marginHorizontal: 16,
+    marginHorizontal: horizontalPadding,
     marginBottom: 50, // Increased to position higher above navbar
     padding: 12, // Reduced from 16 to make it shorter
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 14, // Slightly reduced
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: contentMaxWidth,
   },
   planSummaryContent: {
     flexDirection: 'row',
@@ -356,6 +379,7 @@ export const createStyles = () => StyleSheet.create({
     borderRadius: 6, // Reduced from 8 to match progress bar
   },
   gameMapWrap: {
+    width: '100%',
     flex: 1,
   },
   journeyContainer: {
@@ -886,13 +910,12 @@ export const createStyles = () => StyleSheet.create({
     right: 16,
     zIndex: 100,
     flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: 12,
   },
   closeButton: {
     width: 44,
-    height: 44,
     borderRadius: 22,
+    maxWidth: isTablet ? 260 : '100%',
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',

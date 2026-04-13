@@ -7,17 +7,12 @@ use App\Http\Controllers\Api\BibleReadingController;
 use App\Http\Controllers\Api\NotecategoryController;
 use App\Http\Controllers\Api\UserNoteController;
 use App\Http\Controllers\Api\BookController;
-use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\SavedVerseController;
 
 // Authentication routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/auth', [AuthController::class, 'googleLogin']);
 Route::post('/logout', [AuthController::class, 'logout']);
-
-// Google authentication routes
-Route::get('/auth/google', [GoogleController::class, 'redirectToGoogle']);
-Route::get('/auth/google/callback', [GoogleController::class, 'handleGoogleCallback']);
 
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {
@@ -56,4 +51,12 @@ Route::prefix('user-notes')->group(function () {
     Route::get('/progress/today', [ProgressController::class, 'getTodayProgress']);
     Route::get('/progress/history', [ProgressController::class, 'getScoreHistory']);
 });
+// saved notes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/saved-verses', [SavedVerseController::class, 'index']);
+    Route::post('/saved-verses', [SavedVerseController::class, 'store']);
+    Route::put('/saved-verses/{id}', [SavedVerseController::class, 'update']);
+    Route::delete('/saved-verses/{id}', [SavedVerseController::class, 'destroy']);
+});
+
 });

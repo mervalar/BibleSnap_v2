@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Video } from 'expo-av';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import ViewShot from 'react-native-view-shot';
 import CustomPicker from '../CustomPicker';
@@ -45,7 +44,7 @@ const BookContent = (props) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <Video source={require('../../assets/view.mp4')} style={styles.backgroundVideo} shouldPlay isLooping isMuted resizeMode="cover" />
+      {/* <Video source={require('../../assets/view.mp4')} style={styles.backgroundVideo} shouldPlay isLooping isMuted resizeMode="cover" /> */}
       <SafeAreaView style={styles.contentOverlay}>
         <View style={styles.navBar}>
           <TouchableOpacity style={styles.navButton} onPress={() => navigation.goBack()}>

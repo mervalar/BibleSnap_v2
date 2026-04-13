@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,13 @@ import {
   StatusBar,
   ScrollView,
   Alert,
+  AppState,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { Video } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { useIsFocused } from '@react-navigation/native';
 import { createStyles, COLORS } from '../../styles/SavedVersesPage.styles';
 
 const styles = createStyles();
@@ -45,10 +47,27 @@ const EmptyList = () => (
 
 const SavedVersesScreen = () => {
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const [savedVerses, setSavedVerses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [groupByBook, setGroupByBook] = useState(true);
   const [colorFilter, setColorFilter] = useState(null);
+  const [appState, setAppState] = useState(AppState.currentState);
+  const shouldPlayVideo = isFocused && appState === 'active';
+  const player = useVideoPlayer(require('../../assets/view.mp4'), (instance) => {
+    instance.loop = true;
+    instance.muted = true;
+  });
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (shouldPlayVideo) player.play();
+    else player.pause();
+  }, [shouldPlayVideo, player]);
 
   const loadSavedVerses = useCallback(async () => {
     try {
@@ -143,7 +162,14 @@ const SavedVersesScreen = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <Video source={require('../../assets/view.mp4')} style={styles.backgroundVideo} shouldPlay isLooping isMuted resizeMode="cover" />
+      <VideoView
+        player={player}
+        style={styles.backgroundVideo}
+        contentFit="cover"
+        allowsFullscreen={false}
+        allowsPictureInPicture={false}
+        nativeControls={false}
+      />
       <SafeAreaView style={styles.contentOverlay}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>

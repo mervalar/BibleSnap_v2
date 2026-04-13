@@ -7,7 +7,6 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -35,10 +34,13 @@ class AuthController extends Controller
                 'password' => Hash::make($request->password),
             ]);
 
+            $token = $user->createToken('BibleSnapApp')->plainTextToken;
+
             return response()->json([
                 'success' => true,
                 'message' => 'User registered successfully',
-                'user' => $user
+                'user' => $user,
+                'token' => $token,
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -53,15 +55,18 @@ class AuthController extends Controller
     {
         $request->validate([
             'email' => 'required|email',
+            'password' => 'required|string',
         ]);
 
-        // Find user or create if not exists
-        $user = User::firstOrCreate(
-            ['email' => $request->email],
-            ['name' => $request->email] // You can set a default name if needed
-        );
+        $user = User::where('email', $request->email)->first();
 
-        // Generate token (using Laravel Sanctum)
+        if (! $user || ! Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid email or password.',
+            ], 401);
+        }
+
         $token = $user->createToken('BibleSnapApp')->plainTextToken;
 
         return response()->json([
@@ -69,94 +74,6 @@ class AuthController extends Controller
             'user' => $user,
             'token' => $token,
         ]);
-    }
-
-    public function googleLogin(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'name' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        try {
-            $user = User::firstOrCreate(
-                ['email' => $request->email],
-                [
-                    'name' => $request->name,
-                    'password' => Hash::make(Str::random(16))
-                ]
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Google login successful',
-                'user' => $user
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Google login failed',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    public function handleGoogleCallback(Request $request)
-    {
-        try {
-            $client = new \Google_Client(['client_id' => env('GOOGLE_CLIENT_ID')]);
-            $payload = $client->verifyIdToken($request->token);
-            
-            if (!$payload) {
-                // Try with access token if ID token verification fails
-                $client->setAccessToken($request->token);
-                $payload = $client->verifyIdToken();
-                
-                if (!$payload) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Invalid token'
-                    ], 401);
-                }
-            }
-            
-            // Extract user information from payload
-            $googleUser = [
-                'email' => $payload['email'],
-                'name' => $payload['name'],
-                'google_id' => $payload['sub']
-            ];
-
-            $user = User::firstOrCreate(
-                ['email' => $googleUser['email']],
-                [
-                    'name' => $googleUser['name'],
-                    'password' => Hash::make(Str::random(16)),
-                    'google_id' => $googleUser['google_id']
-                ]
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Google authentication successful',
-                'user' => $user
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Google authentication failed',
-                'error' => $e->getMessage()
-            ], 500);
-        }
     }
 
     public function updateProfile(Request $request)

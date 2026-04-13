@@ -1,11 +1,10 @@
 import { StyleSheet, Dimensions } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
+const isTablet = screenWidth >= 768;
 
 // Responsive dimensions
 const getResponsiveDimensions = () => {
-  const isTablet = screenWidth >= 768;
-  
   return {
     headerHeight: isTablet ? 80 : 60,
     cardPadding: isTablet ? 16 : 12,
@@ -53,6 +52,9 @@ const dimensions = getResponsiveDimensions();
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: '100%',
+    alignSelf: 'center',
+    maxWidth: isTablet ? 1100 : '100%',
     backgroundColor: COLORS.background,
   },
   loadingOverlay: {
@@ -84,8 +86,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: COLORS.surfaceElevated,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: isTablet ? dimensions.spacing.lg : dimensions.spacing.md,
+    paddingVertical: isTablet ? dimensions.spacing.lg : dimensions.spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -222,12 +224,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   booksContainer: {
-    padding: dimensions.spacing.md,
+    padding: isTablet ? dimensions.spacing.lg : dimensions.spacing.md,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: dimensions.spacing.xl * 2,
+    paddingVertical: isTablet ? dimensions.spacing.xl * 2 : dimensions.spacing.xl * 1.5,
     paddingHorizontal: dimensions.spacing.lg,
   },
   emptyIconContainer: {

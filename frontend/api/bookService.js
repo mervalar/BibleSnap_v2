@@ -1,18 +1,10 @@
 import { Platform } from 'react-native';
 
-// Use localhost for books since endpoint is not yet on production server
-const getBooksApiUrl = () => {
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api'; // Android emulator
-  }
-  return 'http://127.0.0.1:8000/api'; // iOS simulator or web
-};
-
-const BASE_URL = getBooksApiUrl();
+const BASE_URL = "https://biblesnap.bellatis.com/api";
 
 export const fetchBooks = async () => {
   try {
-    console.log('Fetching books from:', `${BASE_URL}/books`);
+    // console.log(' books from:', `${BASE_URL}/books`);
     
     const response = await fetch(`${BASE_URL}/books`, {
       method: 'GET',
@@ -27,7 +19,7 @@ export const fetchBooks = async () => {
     }
 
     const data = await response.json();
-    console.log('Books fetched successfully:', data);
+    // console.log('Books fetched successfully:', data);
     
     if (data.success) {
       return data.data;

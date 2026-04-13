@@ -1,6 +1,6 @@
 import React, { forwardRef, useRef, useImperativeHandle } from 'react';
 import { View, Text, ActivityIndicator, Image } from 'react-native';
-import { Video } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import ViewShot from 'react-native-view-shot';
 import styles from '../../styles/home/VerseOfTheDayCard.styles';
@@ -9,6 +9,15 @@ import { TouchableOpacity } from 'react-native-gesture-handler';
 const VerseOfTheDayCard = forwardRef(
   ({ verse, loading, isSharing, onCopyVerse, onShareVerse }, ref) => {
     const internalRef = useRef(null);
+    const player = useVideoPlayer(require('../../assets/view.mp4'), (instance) => {
+      instance.loop = true;
+      instance.muted = true;
+    });
+
+    React.useEffect(() => {
+      if (!isSharing) player.play();
+      else player.pause();
+    }, [isSharing, player]);
 
     useImperativeHandle(ref, () => ({
       capture: () => internalRef.current?.capture(),
@@ -21,13 +30,13 @@ const VerseOfTheDayCard = forwardRef(
         style={styles.verseCard}
       >
         {!isSharing ? (
-          <Video
-            source={require('../../assets/view.mp4')}
+          <VideoView
+            player={player}
             style={styles.backgroundVideo}
-            shouldPlay
-            isLooping
-            isMuted
-            resizeMode="cover"
+            contentFit="cover"
+            allowsFullscreen={false}
+            allowsPictureInPicture={false}
+            nativeControls={false}
           />
         ) : (
           <Image

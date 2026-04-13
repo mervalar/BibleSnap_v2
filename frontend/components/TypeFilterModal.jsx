@@ -28,14 +28,15 @@ const TypeFilterModal = ({
       iconActive: 'hourglass-outline',
       imagePosition: 'right-behind'
     },
-    { 
-      type: 'pickupbook', 
-      title: 'Pick a Book', 
-      description: 'Read any book of the Bible at your pace',
-      icon: 'library',
-      iconActive: 'library-outline',
-      imagePosition: 'left-behind'
-    }
+    // TEMP: Pick a Book disabled
+    // { 
+    //   type: 'pickupbook', 
+    //   title: 'Pick a Book', 
+    //   description: 'Read any book of the Bible at your pace',
+    //   icon: 'library',
+    //   iconActive: 'library-outline',
+    //   imagePosition: 'left-behind'
+    // }
   ];
 
   const handleTypeSelect = (type) => {
@@ -65,6 +66,24 @@ const TypeFilterModal = ({
           }]}
           onStartShouldSetResponder={() => true}
         >
+          <TouchableOpacity
+            onPress={onClose}
+            style={{
+              position: 'absolute',
+              top: -14,
+              right: -14,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: COLORS.primary,
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10,
+              elevation: 6,
+            }}
+          >
+            <Ionicons name="close" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
           <ScrollView 
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 8 }}
@@ -146,12 +165,6 @@ const TypeFilterModal = ({
               ))}
             </View>
             
-            <TouchableOpacity 
-              onPress={onClose} 
-              style={[styles.modalCloseButton, { marginTop: 8 }]}
-            >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </TouchableOpacity>
           </ScrollView>
         </View>
       </TouchableOpacity>

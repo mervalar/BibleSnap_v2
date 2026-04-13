@@ -1,10 +1,13 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Dimensions } from 'react-native';
+
+const { width: screenWidth } = Dimensions.get('window');
+const isTablet = screenWidth >= 768;
 
 export default StyleSheet.create({
   verseCard: {
     borderRadius: 20,
     marginBottom: 20,
-    minHeight: 420,
+    minHeight: isTablet ? 520 : Math.max(360, screenWidth * 0.9),
     overflow: 'hidden',
     position: 'relative',
     shadowColor: '#000',
@@ -32,7 +35,7 @@ export default StyleSheet.create({
   },
   verseContent: {
     flex: 1,
-    padding: 24,
+    padding: isTablet ? 32 : 24,
     justifyContent: 'space-between',
     zIndex: 2,
   },
@@ -83,8 +86,8 @@ export default StyleSheet.create({
   },
   verseText: {
     color: '#fff',
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: isTablet ? 18 : 16,
+    lineHeight: isTablet ? 28 : 24,
     fontWeight: '500',
     textAlign: 'center',
     marginBottom: 20,
@@ -101,7 +104,7 @@ export default StyleSheet.create({
   verseRef: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },

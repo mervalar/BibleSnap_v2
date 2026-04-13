@@ -38,14 +38,18 @@ export default function HomePage() {
           onJournalPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Journal'))}
           onBibleStudyPress={() => navigation.navigate('BibleStudy')}
         />
-        <JourneySummaryCard
-          hasPlan={api.journeyStats.hasPlan}
-          daysRemaining={api.journeyStats.daysRemaining}
-          percent={api.journeyStats.percent}
-          estimatedDate={api.journeyStats.estimatedDate}
-          startMessageIfNoPlan
-          onPress={() => api.handleAuthenticatedAction(() => navigation.navigate('BibleStudy'))}
-        />
+        {api.isConnected && (
+          <JourneySummaryCard
+            variant="home"
+            title="Today's challenge"
+            hasPlan={api.journeyStats.hasPlan}
+            daysRemaining={api.journeyStats.daysRemaining}
+            percent={api.journeyStats.percent}
+            estimatedDate={api.journeyStats.estimatedDate}
+            startMessageIfNoPlan
+            onPress={() => navigation.navigate('BibleStudy')}
+          />
+        )}
       </View>
       <AuthModal
         visible={api.showAuthModal}

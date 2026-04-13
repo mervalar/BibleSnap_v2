@@ -15,11 +15,11 @@ export const COLORS = {
 
 export const createStyles = () =>
   StyleSheet.create({
-    container: { flex: 1, height: screenHeight, width: screenWidth },
+    container: { flex: 1, width: '100%', backgroundColor: COLORS.overlay },
     backgroundVideo: {
-      position: 'absolute', top: 0, left: 0, width: screenWidth, height: screenHeight, zIndex: 1,
+      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1,
     },
-    contentOverlay: { flex: 1, backgroundColor: COLORS.overlay, zIndex: 2, height: screenHeight },
+    contentOverlay: { flex: 1, backgroundColor: COLORS.overlay, zIndex: 2 },
     header: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingHorizontal: 16,
@@ -32,7 +32,7 @@ export const createStyles = () =>
     backButton: { padding: 8 },
     headerTitle: { fontSize: 18, fontWeight: '600', color: COLORS.text },
     groupButton: { padding: 8 },
-    listContainer: { padding: 16, paddingBottom: 100 },
+    listContainer: { padding: 16, paddingBottom: Platform.OS === 'android' ? 140 : 100 },
     bookSection: { marginBottom: 24 },
     bookHeader: {
       fontSize: 18, fontWeight: 'bold', color: COLORS.primary, marginBottom: 12,

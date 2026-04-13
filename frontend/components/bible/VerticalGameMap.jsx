@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createStyles, COLORS, getResponsiveDimensions } from '../../styles/bIbleStudyContent.styles';
 
@@ -54,107 +54,121 @@ export default function VerticalGameMap({
   const popAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.08, duration: 1000, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    pulseLoop.start();
+    return () => pulseLoop.stop();
   }, [pulseAnim]);
 
   useEffect(() => {
-    Animated.loop(
+    const popLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(popAnim, { toValue: 1.2, duration: 1500, useNativeDriver: true }),
         Animated.timing(popAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    popLoop.start();
+    return () => popLoop.stop();
   }, [popAnim]);
+
+  const renderNode = ({ item, index }) => {
+    const status = getStatus(item, index, items, progressMap, completedSet);
+    const locked = status === 'locked';
+    const isCurrent = status === 'current';
+    const isCompleted = status === 'completed';
+    const isTodaysReading = todaysReadingIds.has(item.id);
+    const label = item.day ? `Day ${item.day}` : (item.title || item.name || `#${item.id}`);
+    const previousItem = items[index - 1];
+    const positionStyle = getNodePosition(index);
+    const rotation = getNodeRotation(index);
+    const extraMargin = index % 3 === 2 ? 20 : 8;
+
+    const handlePress = () => {
+      if (locked) {
+        if (typeof onRequestUnlock === 'function') onRequestUnlock(item, index, previousItem);
+        return;
+      }
+      if (typeof onPressItem === 'function') onPressItem(item, progressMap[item.id] || 0);
+    };
+
+    let nodeColor = COLORS.locked;
+    let iconName = 'lock-closed';
+    let iconColor = '#FFFFFF';
+    if (isCompleted) {
+      nodeColor = COLORS.semantic.success;
+      iconName = 'checkmark';
+    } else if (isTodaysReading || isCurrent) {
+      nodeColor = COLORS.primary;
+      iconName = 'book';
+    }
+
+    return (
+      <View style={[styles.nodeWrapper, positionStyle, { marginVertical: extraMargin }]}>
+        <TouchableOpacity activeOpacity={locked ? 0.9 : 0.7} onPress={handlePress} style={styles.nodeTouchable}>
+          {(isCurrent || isTodaysReading) && (
+            <Animated.View
+              style={[
+                styles.currentNodeRing,
+                {
+                  transform: [{ scale: popAnim }],
+                  borderColor: nodeColor,
+                  borderWidth: isTodaysReading ? 3 : 2,
+                },
+              ]}
+            />
+          )}
+          <View style={[styles.nodeExternalShadow, { backgroundColor: nodeColor }]} />
+          <Animated.View
+            style={[
+              styles.nodeCircle,
+              {
+                backgroundColor: nodeColor,
+                transform: [
+                  { rotate: rotation },
+                  { scale: isCurrent || isTodaysReading ? pulseAnim : 1 },
+                  { perspective: 1000 },
+                  { rotateX: '15deg' },
+                ],
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: isTodaysReading ? 0.5 : 0.3,
+                shadowRadius: isTodaysReading ? 16 : 12,
+                elevation: isTodaysReading ? 20 : 15,
+              },
+            ]}
+          >
+            <View style={styles.nodeInnerShadow} />
+            <Ionicons name={iconName} size={dimensions.iconSize.large} color={iconColor} style={{ zIndex: 2 }} />
+          </Animated.View>
+          <View style={styles.nodeLabelContainer}>
+            <Text style={[styles.nodeLabel, { color: locked ? COLORS.text.tertiary : COLORS.text.light }]}>{label}</Text>
+            <Text numberOfLines={2} style={[styles.nodeSubtitle, { color: locked ? COLORS.text.tertiary : 'rgba(247, 240, 227, 0.8)' }]}>
+              {item.title || item.name || (item.theme ? item.theme : '')}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.gameMapWrap}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.journeyContainer}>
-        {items.map((item, index) => {
-          const status = getStatus(item, index, items, progressMap, completedSet);
-          const locked = status === 'locked';
-          const isCurrent = status === 'current';
-          const isCompleted = status === 'completed';
-          const isTodaysReading = todaysReadingIds.has(item.id);
-          const label = item.day ? `Day ${item.day}` : (item.title || item.name || `#${item.id}`);
-          const previousItem = items[index - 1];
-          const positionStyle = getNodePosition(index);
-          const rotation = getNodeRotation(index);
-          const extraMargin = index % 3 === 2 ? 20 : 8;
-
-          const handlePress = () => {
-            if (locked) {
-              if (typeof onRequestUnlock === 'function') onRequestUnlock(item, index, previousItem);
-              return;
-            }
-            if (typeof onPressItem === 'function') onPressItem(item, progressMap[item.id] || 0);
-          };
-
-          let nodeColor = COLORS.locked;
-          let iconName = 'lock-closed';
-          let iconColor = '#FFFFFF';
-          if (isCompleted) {
-            nodeColor = COLORS.semantic.success;
-            iconName = 'checkmark';
-          } else if (isTodaysReading || isCurrent) {
-            nodeColor = COLORS.primary;
-            iconName = 'book';
-          }
-
-          return (
-            <View key={item.id} style={[styles.nodeWrapper, positionStyle, { marginVertical: extraMargin }]}>
-              <TouchableOpacity activeOpacity={locked ? 0.9 : 0.7} onPress={handlePress} style={styles.nodeTouchable}>
-                {(isCurrent || isTodaysReading) && (
-                  <Animated.View
-                    style={[
-                      styles.currentNodeRing,
-                      {
-                        transform: [{ scale: popAnim }],
-                        borderColor: nodeColor,
-                        borderWidth: isTodaysReading ? 3 : 2,
-                      },
-                    ]}
-                  />
-                )}
-                <View style={[styles.nodeExternalShadow, { backgroundColor: nodeColor }]} />
-                <Animated.View
-                  style={[
-                    styles.nodeCircle,
-                    {
-                      backgroundColor: nodeColor,
-                      transform: [
-                        { rotate: rotation },
-                        { scale: isCurrent || isTodaysReading ? pulseAnim : 1 },
-                        { perspective: 1000 },
-                        { rotateX: '15deg' },
-                      ],
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 8 },
-                      shadowOpacity: isTodaysReading ? 0.5 : 0.3,
-                      shadowRadius: isTodaysReading ? 16 : 12,
-                      elevation: isTodaysReading ? 20 : 15,
-                    },
-                  ]}
-                >
-                  <View style={styles.nodeInnerShadow} />
-                  <Ionicons name={iconName} size={dimensions.iconSize.large} color={iconColor} style={{ zIndex: 2 }} />
-                </Animated.View>
-                <View style={styles.nodeLabelContainer}>
-                  <Text style={[styles.nodeLabel, { color: locked ? COLORS.text.tertiary : COLORS.text.light }]}>{label}</Text>
-                  <Text numberOfLines={2} style={[styles.nodeSubtitle, { color: locked ? COLORS.text.tertiary : 'rgba(247, 240, 227, 0.8)' }]}>
-                    {item.title || item.name || (item.theme ? item.theme : '')}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      <FlatList
+        data={items}
+        renderItem={renderNode}
+        keyExtractor={(item, index) => item.id?.toString() || `index_${index}`}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.journeyContainer}
+        initialNumToRender={18}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        removeClippedSubviews
+        ListFooterComponent={<View style={{ height: 40 }} />}
+      />
     </View>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Text, 
   View, 
@@ -11,15 +11,11 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createStyles, COLORS } from '../styles/bIbleStudyContent.styles';
 import TypeFilterModal from './TypeFilterModal';
 import StudyPlanModal from './StudyPlanModal';
 import { fetchBibleReadings } from '../api/bibleReadingService';
-
-WebBrowser.maybeCompleteAuthSession();
 
 // Configure your API base URL
 const API_BASE_URL = 'https://biblesnap.bellatis.com/api';
@@ -41,51 +37,6 @@ export default function AuthModal({ visible, onClose, navigation }) {
   const [planDays, setPlanDays] = useState(365);
   const [startDate, setStartDate] = useState(new Date());
   const [bibleReadingsCount, setBibleReadingsCount] = useState(365);
-
-  // Create redirect URI for Google OAuth
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: 'com.mer.bibleapp',
-    useProxy: true,
-  });
-
-  console.log('Redirect URI being used:', redirectUri);
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: '379163976655-1n874fq7bm965lkovca6d283g3oa40ip.apps.googleusercontent.com',
-      scopes: ['openid', 'profile', 'email'],
-      redirectUri: redirectUri,
-      responseType: AuthSession.ResponseType.IdToken,
-      additionalParameters: {},
-      extraParams: {
-        access_type: 'offline',
-      },
-    },
-    {
-      authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-      tokenEndpoint: 'https://oauth2.googleapis.com/token',
-    }
-  );
-
-  // Handle Google OAuth response
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token, access_token } = response.params;
-      console.log('Authentication successful! Token:', id_token);
-      handleGoogleCallback(id_token || access_token);
-    } else if (response?.type === 'error') {
-      console.error('Auth error:', response.error);
-      Alert.alert(
-        'Authentication Error', 
-        response.error?.error_description || 'Authentication failed'
-      );
-      setLoading(false);
-    } else if (response?.type === 'cancel') {
-      console.log('Authentication cancelled by user');
-      setLoading(false);
-    }
-  }, [response]);
-
 
   // API call functions
   const apiCall = async (endpoint, method = 'POST', data = null) => {
@@ -126,9 +77,9 @@ export default function AuthModal({ visible, onClose, navigation }) {
         },
       });
       
-      console.log('Connection test response:', response.status);
+      // console.log('Connection test response:', response.status);
       const data = await response.json();
-      console.log('Connection test data:', data);
+      // console.log('Connection test data:', data);
     } catch (error) {
       console.error('Connection test failed:', error);
     }
@@ -263,41 +214,6 @@ export default function AuthModal({ visible, onClose, navigation }) {
     } catch (error) {
       console.error('Error storing user data:', error);
       Alert.alert('Error', 'Failed to save user data');
-    }
-  };
-
-  const handleGoogleCallback = async (token) => {
-    try {
-      setLoading(true);
-      
-      // Decode the JWT token to get user info
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      const payload = JSON.parse(jsonPayload);
-      
-      // Call your Laravel endpoint that matches your route
-      const result = await apiCall('/auth', 'POST', {
-        email: payload.email,
-        name: payload.name
-      });
-
-      if (result.success) {
-        // Handle successful authentication
-        await handleAuthSuccess(result.user, result.token || token);
-      } else {
-        Alert.alert('Error', result.message || 'Authentication failed');
-      }
-    } catch (error) {
-      console.error('Google callback error:', error);
-      Alert.alert('Error', error.message || 'Google authentication failed');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -495,105 +411,6 @@ export default function AuthModal({ visible, onClose, navigation }) {
       setLoading(false);
     }
   };
-
-  const handleGoogleAuth = async () => {
-    if (!request) {
-      Alert.alert('Error', 'Google authentication not ready');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      console.log('Starting Google authentication...');
-      const result = await promptAsync();
-      console.log('Auth result:', result);
-      
-      if (result?.type === 'cancel') {
-        Alert.alert('Cancelled', 'Authentication was cancelled');
-        setLoading(false);
-      }
-      // Success and error cases are handled in the useEffect
-    } catch (error) {
-      console.error('Auth error:', error);
-      Alert.alert('Error', `Authentication failed: ${error.message}`);
-      setLoading(false);
-    }
-  };
-
-  const renderMainView = () => (
-    <View style={styles.content}>
-      <Text style={styles.title}>
-        BibleSnap
-      </Text>
-      <Text style={styles.subtitle}>
-        Grow your faith. Stay inspired.
-      </Text>
-
-      {/* Google Login Button
-      <TouchableOpacity
-        disabled={!request || loading}
-        onPress={handleGoogleAuth}
-        style={[
-          styles.authButton, 
-          styles.googleButton,
-          (!request || loading) && styles.disabledButton
-        ]}
-      >
-        {loading ? (
-          <ActivityIndicator size="small" color="#4285F4" style={{ marginRight: 12 }} />
-        ) : (
-          <Text style={styles.googleIcon}>G</Text>
-        )}
-        <Text style={styles.googleButtonText}>
-          {loading ? 'Authenticating...' : !request ? 'Loading...' : 'Continue with Google'}
-        </Text>
-      </TouchableOpacity> */}
-{/* 
-      <View style={styles.orContainer}>
-        <View style={styles.orLine} />
-        <Text style={styles.orText}>OR</Text>
-        <View style={styles.orLine} />
-      </View> */}
-
-      <TextInput
-        style={styles.emailInput}
-        placeholder="Enter your personal or work email"
-        placeholderTextColor="#9CA3AF"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        editable={!loading}
-      />
-
-      <TouchableOpacity
-        style={[
-          styles.authButton, 
-          styles.continueButton,
-          loading && styles.disabledButton
-        ]}
-        onPress={() => setCurrentView('signup')}
-        disabled={loading}
-      >
-        <Text style={styles.continueButtonText}>Continue with email</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.loginLink}
-        onPress={() => setCurrentView('login')}
-        disabled={loading}
-      >
-        <Text style={[styles.loginLinkText, loading && styles.disabledText]}>
-          Already have an account? Log in
-        </Text>
-      </TouchableOpacity>
-
-      {/* <Text style={styles.privacyText}>
-        By continuing, you acknowledge Anthropic's{' '}
-        <Text style={styles.privacyLink}>Privacy Policy</Text>.
-      </Text> */}
-    </View>
-  );
 
   const renderLoginView = () => (
     <View style={[modalStyles.modalContent, authInputStyles.widerModal]}>

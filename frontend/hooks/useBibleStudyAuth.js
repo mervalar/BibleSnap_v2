@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function useBibleStudyAuth() {
@@ -6,7 +6,7 @@ export default function useBibleStudyAuth() {
   const [authLoading, setAuthLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
       const isAuth = await AsyncStorage.getItem('isAuthenticated');
       const userData = await AsyncStorage.getItem('user');
@@ -19,11 +19,11 @@ export default function useBibleStudyAuth() {
     } finally {
       setAuthLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     checkAuth();
-  }, []);
+  }, [checkAuth]);
 
   return { isAuthenticated, authLoading, showAuthModal, setShowAuthModal, checkAuth };
 }

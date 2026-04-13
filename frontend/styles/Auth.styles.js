@@ -144,20 +144,6 @@ const styles = StyleSheet.create({
     color: '#B5A087',
     marginBottom: 24,
   },
-  googleButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E8DDD4',
-    marginBottom: 32,
-  },
-  googleButtonText: {
-    color: '#5D4E37',
-    fontSize: 16,
-    fontWeight: '500',
-  },
   createAccountContainer: {
     flexDirection: 'row',
     justifyContent: 'center',

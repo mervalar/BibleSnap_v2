@@ -107,7 +107,7 @@ export const updateJournal = async (journalId, journalData) => {
   try {
     const token = await getAuthToken();
     
-    console.log('Updating journal:', journalId, journalData);
+    // console.log('Updating journal:', journalId, journalData);
     
     const response = await fetch(`${API_BASE_URL}/user-notes/${journalId}`, {
       method: 'PUT',
