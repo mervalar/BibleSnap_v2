@@ -129,6 +129,14 @@ export default function useBookContent(props = {}) {
 
   const handleHighlight = async (color) => {
     if (!selectedVerse) return;
+    
+    // If color is null, remove the highlight
+    if (color === null) {
+      await removeHighlight(selectedVerse.id);
+      setShowToolbox(false);
+      return;
+    }
+    
     const verseNumber = selectedVerse.number || parseInt(selectedVerse.id.split('.').pop(), 10) || 1;
     const highlightData = { color, text: stripHtml(selectedVerse.text), reference: `${currentChapter}:${verseNumber}` };
     setHighlights((prev) => ({ ...prev, [selectedVerse.id]: highlightData }));

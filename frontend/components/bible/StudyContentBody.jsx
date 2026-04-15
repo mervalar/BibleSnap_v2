@@ -43,7 +43,7 @@ export default function StudyContentBody({
     >
       <View style={styles.titleSection}>
         <Text style={styles.mainTitle}>Today's Verse</Text>
-        <Text style={styles.dayLabel}>Day {reading?.day || '1'}</Text>
+        <Text style={styles.dayLabel}>Lesson {reading?.day || '1'}</Text>
       </View>
       <View style={styles.descriptionCard}>
         <View style={styles.cardHeader}>
@@ -83,7 +83,7 @@ export default function StudyContentBody({
                 <Ionicons name="calendar-outline" size={dims.iconSize.medium} color={COLORS.accent} />
               </View>
               <View style={styles.upcomingInfo}>
-                <Text style={styles.upcomingDay}>Day {(reading?.day || 0) + 1}</Text>
+                <Text style={styles.upcomingDay}>Lesson {(reading?.day || 0) + 1}</Text>
                 <Text style={styles.upcomingTitle} numberOfLines={2}>{reading.next_title}</Text>
               </View>
               <Ionicons name="chevron-forward" size={dims.iconSize.medium} color={COLORS.text.light} />

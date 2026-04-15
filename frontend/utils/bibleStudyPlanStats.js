@@ -10,7 +10,7 @@ export function computePlanStats(studyPlan, bibleReadings, completedIds) {
       Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) /
       (1000 * 60 * 60 * 24)
   );
-  const elapsedDays = Math.max(0, Math.min(studyPlan.days, diff + 1));
+  const elapsedDays = Math.max(1, Math.min(studyPlan.days, diff + 1));
   const totalLessons = bibleReadings.length;
   const completedLessons = completedIds.length;
   let percent = 0;

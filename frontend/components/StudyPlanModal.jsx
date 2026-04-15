@@ -44,7 +44,8 @@ const StudyPlanModal = ({
   // Sync with parent props when modal opens
   useEffect(() => {
     if (visible) {
-      setLocalStartDate(startDate || new Date());
+      // Always start with today's date when opening the modal for a new plan
+      setLocalStartDate(new Date());
       setLocalPlanDays(planDays || 365);
     }
   }, [visible, startDate, planDays]);

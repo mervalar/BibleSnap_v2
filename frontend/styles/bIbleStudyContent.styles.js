@@ -324,10 +324,10 @@ export const createStyles = () => StyleSheet.create({
   },
   planSummaryBottom: {
     marginHorizontal: horizontalPadding,
-    marginBottom: 50, // Increased to position higher above navbar
-    padding: 12, // Reduced from 16 to make it shorter
+    marginBottom: 50,
+    padding: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 14, // Slightly reduced
+    borderRadius: 14, 
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
     alignSelf: 'center',

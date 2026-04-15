@@ -102,6 +102,14 @@ const BooksListPage = () => {
     });
   };
 
+  const getSearchResultsAcrossTestaments = () => {
+    return books.filter(book => {
+      const matchesSearch = book.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            book.abbreviation.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesSearch;
+    });
+  };
+
   const handleBookPress = (book) => {
     navigation.navigate('BookChapters', { book, bibleId, language });
   };
@@ -128,7 +136,7 @@ const BooksListPage = () => {
     );
   }
 
-  const filteredBooks = getFilteredBooks();
+  const filteredBooks = searchTerm.trim() ? getSearchResultsAcrossTestaments() : getFilteredBooks();
   const testamentBooks = books.filter(book => 
     selectedTestament === 'old'
       ? OLD_TESTAMENT_BOOKS.includes(book.id)

@@ -663,9 +663,10 @@ const authInputStyles = StyleSheet.create({
     marginBottom: 16,
   },
   loginLinkText: {
-    color: COLORS.primary,
+    color: '#0066CC',
     fontSize: 14,
     fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   disabledButton: {
     opacity: 0.6,

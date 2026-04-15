@@ -15,6 +15,12 @@ const HighlightToolbox = ({ visible, onSelectColor, onClose }) => {
   return (
     <View style={styles.toolboxContainer}>
       <View style={styles.toolbox}>
+        <TouchableOpacity
+          style={[styles.colorButton, { backgroundColor: '#f5f5f5', borderWidth: 2, borderColor: '#ccc', justifyContent: 'center', alignItems: 'center' }]}
+          onPress={() => onSelectColor(null)}
+        >
+          <View style={{ width: '70%', height: 2, backgroundColor: '#999', transform: [{ rotate: '-45deg' }] }} />
+        </TouchableOpacity>
         {HIGHLIGHT_COLORS.map((color, index) => (
           <TouchableOpacity
             key={index}

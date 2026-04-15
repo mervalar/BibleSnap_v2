@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Animated, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createStyles, COLORS, getResponsiveDimensions } from '../../styles/bIbleStudyContent.styles';
@@ -81,7 +81,8 @@ export default function VerticalGameMap({
     const isCurrent = status === 'current';
     const isCompleted = status === 'completed';
     const isTodaysReading = todaysReadingIds.has(item.id);
-    const label = item.day ? `Day ${item.day}` : (item.title || item.name || `#${item.id}`);
+    const label = item.day ? `Lesson ${item.day}` : (item.title || item.name || `#${item.id}`);
+    const subtitle = item.title || '';
     const previousItem = items[index - 1];
     const positionStyle = getNodePosition(index);
     const rotation = getNodeRotation(index);
@@ -147,7 +148,7 @@ export default function VerticalGameMap({
           <View style={styles.nodeLabelContainer}>
             <Text style={[styles.nodeLabel, { color: locked ? COLORS.text.tertiary : COLORS.text.light }]}>{label}</Text>
             <Text numberOfLines={2} style={[styles.nodeSubtitle, { color: locked ? COLORS.text.tertiary : 'rgba(247, 240, 227, 0.8)' }]}>
-              {item.title || item.name || (item.theme ? item.theme : '')}
+              {subtitle}
             </Text>
           </View>
         </TouchableOpacity>

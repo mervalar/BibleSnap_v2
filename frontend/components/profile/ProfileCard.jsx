@@ -5,6 +5,11 @@ import styles from '../../styles/profile';
 
 export default function ProfileCard({ user }) {
   const initial = user?.name?.charAt(0)?.toUpperCase() || 'U';
+  
+  const memberSinceText = user?.created_at 
+    ? `Member since ${new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`
+    : 'Unknown';
+
   return (
     <View style={styles.profileCard}>
       <View style={styles.profileImageContainer}>
@@ -17,7 +22,7 @@ export default function ProfileCard({ user }) {
       <Text style={styles.profileEmail}>{user?.email || 'No email'}</Text>
       <View style={styles.joinedContainer}>
         <Ionicons name="calendar-outline" size={16} color="#5A4A33" />
-        <Text style={styles.joinedText}>Member since March 2024</Text>
+        <Text style={styles.joinedText}>{memberSinceText}</Text>
       </View>
     </View>
   );

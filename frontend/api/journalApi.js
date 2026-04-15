@@ -141,9 +141,6 @@ export const updateJournal = async (journalId, journalData) => {
 export const deleteJournal = async (journalId) => {
   try {
     const token = await getAuthToken();
-    
-    console.log('Deleting journal:', journalId);
-    
     const response = await fetch(`${API_BASE_URL}/user-notes/${journalId}`, {
       method: 'DELETE',
       headers: {
