@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, ScrollView, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import UserNoteModal from '../JournalModal';
 import JournalPreview from '../JournalPreview';
 import SplashScreen from '../SplashScreen';
@@ -47,7 +48,7 @@ export default function JournalScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {loading && (
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingContent}>

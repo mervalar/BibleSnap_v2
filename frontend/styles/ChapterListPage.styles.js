@@ -83,7 +83,8 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.surfaceElevated,
     paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.md,
+    paddingTop: dimensions.spacing.md,
+    paddingBottom: dimensions.spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',

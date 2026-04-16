@@ -2,11 +2,11 @@ import React from 'react';
 import {
   View,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
   Text,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import useProfile from '../hooks/useProfile';
 import VideoBackground from '../components/bible/VideoBackground';
@@ -55,7 +55,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <VideoBackground />
         <ProfileLoadingView />
       </SafeAreaView>
@@ -64,7 +64,7 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <VideoBackground />
         <ProfileErrorView onGoBack={() => navigation.goBack()} />
       </SafeAreaView>
@@ -72,7 +72,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <VideoBackground />
 

@@ -5,6 +5,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import ViewShot from 'react-native-view-shot';
 import CustomPicker from '../CustomPicker';
 import SplashScreen from '../SplashScreen';
+import BottomNavBar from '../BottomNavBar';
 import HighlightToolbox from './HighlightToolbox';
 import FontSizeOptions from './FontSizeOptions';
 import { styles, screenWidth } from '../../styles/BookContentPage.styles';
@@ -100,6 +101,7 @@ const BookContent = (props) => {
           </View>
         )}
       </ViewShot>
+      <BottomNavBar />
     </View>
   );
 };

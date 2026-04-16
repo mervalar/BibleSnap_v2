@@ -6,11 +6,12 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import SplashScreen from '../components/SplashScreen';
+import BottomNavBar from '../components/BottomNavBar';
 import { styles, COLORS, dimensions } from '../styles/ChapterListPage.styles';
 
 const ChaptersListPage = () => {
@@ -73,7 +74,7 @@ const ChaptersListPage = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Loading overlay */}
       {loading && chapters.length > 0 && (
         <View style={styles.loadingOverlay}>
@@ -177,6 +178,7 @@ const ChaptersListPage = () => {
           )}
         </View>
       </ScrollView>
+      <BottomNavBar />
     </SafeAreaView>
   );
 };

@@ -17,7 +17,7 @@ export default StyleSheet.create({
   loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   loadingContent: { backgroundColor: COLORS.background, padding: d.spacing.xl, borderRadius: 16, alignItems: 'center' },
   loadingOverlayText: { marginTop: d.spacing.md, color: COLORS.text.primary, fontSize: d.fontSize.body, fontWeight: '500' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: d.spacing.md, paddingTop: d.spacing.lg, paddingBottom: d.spacing.md },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: d.spacing.md, paddingTop: d.spacing.lg, paddingBottom: d.spacing.lg },
   closeButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0, 0, 0, 0.3)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: d.fontSize.title, fontWeight: '700', color: COLORS.text.light, letterSpacing: 0.5 },
   content: { flex: 1 },

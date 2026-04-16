@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import SplashScreen from '../components/SplashScreen';
 import CustomPicker from '../components/CustomPicker';
+import BottomNavBar from '../components/BottomNavBar';
 import biblePreferences from '../api/biblePreferences';
 import { styles, COLORS, dimensions } from '../styles/BooksListPage.styles';
 
@@ -351,6 +352,7 @@ const BooksListPage = () => {
           )}
         </View>
       </ScrollView>
+      <BottomNavBar />
     </SafeAreaView>
   );
 };

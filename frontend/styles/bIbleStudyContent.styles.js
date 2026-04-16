@@ -80,8 +80,8 @@ export const createStyles = () => StyleSheet.create({
   },
   header: {
     paddingHorizontal: horizontalPadding,
-    paddingTop: Platform.OS === 'ios' ? 10 : 30,
-    paddingBottom: 12,
+    paddingTop: Platform.OS === 'ios' ? 10 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -307,11 +307,18 @@ export const createStyles = () => StyleSheet.create({
     maxWidth: contentMaxWidth,
     alignSelf: 'center',
     flex: 1,
-    paddingBottom: 100, // Space for navbar
+    justifyContent: 'space-between',
+    paddingBottom: 50, // Space for bottom navbar + Journey card
+  },
+  journeyCardContainer: {
+    paddingHorizontal: horizontalPadding,
+    paddingVertical: 12,
+    paddingBottom: 0,
+    alignItems: 'center',
   },
   bottomSummaryContainer: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 50,
     left: 0,
     right: 0,
     paddingHorizontal: horizontalPadding,

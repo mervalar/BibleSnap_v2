@@ -55,7 +55,7 @@ export const createStyles = () => {
     },
     loadingOverlayText: { marginTop: d.spacing.md, color: COLORS.text.primary, fontWeight: '500' },
     header: {
-      backgroundColor: COLORS.surfaceElevated, paddingHorizontal: horizontalPadding, paddingVertical: isTablet ? d.spacing.lg : d.spacing.md,
+      backgroundColor: COLORS.surfaceElevated, paddingHorizontal: horizontalPadding, paddingTop: isTablet ? d.spacing.lg : d.spacing.md, paddingBottom: isTablet ? d.spacing.lg : d.spacing.md,
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
       borderBottomWidth: 1, borderBottomColor: COLORS.border.light,
     },

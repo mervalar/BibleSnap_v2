@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SplashScreen from '../components/SplashScreen';
@@ -141,7 +141,7 @@ export default function BibleStudyPage() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <VideoBackground />
       <EncouragementBanner message={plan.encouragementMessage} onDismiss={() => plan.setEncouragementMessage(null)} />
@@ -181,14 +181,14 @@ export default function BibleStudyPage() {
               onRequestUnlock={() => setUnlockModalVisible(true)}
               todaysReadingIds={plan.todaysReadingIds}
             />
+            {data.studyPlan && (
+              <View style={styles.journeyCardContainer}>
+                <JourneySummaryCard hasPlan daysRemaining={plan.planStats.daysRemaining} percent={plan.planStats.percent} />
+              </View>
+            )}
           </>
         )}
       </View>
-      {data.studyPlan && (
-        <View style={styles.bottomSummaryContainer}>
-          <JourneySummaryCard hasPlan daysRemaining={plan.planStats.daysRemaining} percent={plan.planStats.percent} />
-        </View>
-      )}
       <StudyPlanModal visible={plan.planModalVisible} onClose={() => plan.setPlanModalVisible(false)} planDays={plan.planDays} startDate={data.startDate} onSavePlan={plan.savePlan} bibleReadingsCount={data.bibleReadings?.length || 365} />
       <TypeFilterModal visible={typeFilterModalVisible} onClose={() => setTypeFilterModalVisible(false)} selectedType={selectedType} onSelectType={(t) => { setSelectedType(t); setTypeFilterModalVisible(false); }} />
       <UnlockModal visible={unlockModalVisible} onClose={() => setUnlockModalVisible(false)} />
