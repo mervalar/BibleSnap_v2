@@ -307,10 +307,11 @@ export const createStyles = () => StyleSheet.create({
     maxWidth: contentMaxWidth,
     alignSelf: 'center',
     flex: 1,
+    paddingBottom: 100, // Space for navbar
   },
   bottomSummaryContainer: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 100,
     left: 0,
     right: 0,
     paddingHorizontal: horizontalPadding,

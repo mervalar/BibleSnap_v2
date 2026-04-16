@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const COLORS = {
   primary: '#8B5D33',
@@ -21,6 +22,7 @@ const COLORS = {
 const BottomNavBar = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
 
   // Map route names to nav items
   const getCurrentRoute = () => {
@@ -75,7 +77,7 @@ const BottomNavBar = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.navBar}>
+      <View style={[styles.navBar, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         {navItems.map((item) => {
           const isActive = currentRoute === item.id;
           return (
@@ -115,7 +117,7 @@ const BottomNavBar = () => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 8 : 12, // Move it a little bit higher
+    bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: 'transparent',
@@ -126,7 +128,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 0.5,
     borderTopColor: COLORS.border.light,
     paddingTop: 6,
-    paddingBottom: Platform.OS === 'ios' ? 8 : 6,
     paddingHorizontal: 0,
     shadowColor: '#000',
     shadowOffset: {

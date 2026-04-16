@@ -21,5 +21,5 @@ export default StyleSheet.create({
   closeButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0, 0, 0, 0.3)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: d.fontSize.title, fontWeight: '700', color: COLORS.text.light, letterSpacing: 0.5 },
   content: { flex: 1 },
-  contentContainer: { padding: d.spacing.lg, paddingBottom: d.spacing.xl * 2 },
+  contentContainer: { padding: d.spacing.lg, paddingBottom: 120 },
 });

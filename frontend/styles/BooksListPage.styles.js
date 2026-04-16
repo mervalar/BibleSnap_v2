@@ -56,6 +56,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     maxWidth: isTablet ? 1100 : '100%',
     backgroundColor: COLORS.background,
+    paddingBottom: 100, 
   },
   loadingOverlay: {
     position: 'absolute',
