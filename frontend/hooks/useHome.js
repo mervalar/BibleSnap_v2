@@ -41,26 +41,34 @@ export default function useHome() {
         return;
       }
       const studyPlan = JSON.parse(studyPlanStr);
-      const overallPercent = await calculateOverallProgress();
+      const readingsStr = await AsyncStorage.getItem('bibleReadings');
+      const completedData = await AsyncStorage.getItem('completedStudies');
+      
+      if (!readingsStr) {
+        setJourneyStats(defaultJourneyStats);
+        return;
+      }
+      
+      const allReadings = JSON.parse(readingsStr);
+      const completedIds = completedData ? JSON.parse(completedData) : [];
+      const overallPercent = Math.min(100, Math.round((completedIds.length / allReadings.length) * 100));
+      
       let daysRemaining = 0;
       let estimatedDate = null;
       if (studyPlan?.startDate && studyPlan?.days) {
-        const start = new Date(studyPlan.startDate);
-        const now = new Date();
-        const diff = Math.floor(
-          (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) /
-            (1000 * 60 * 60 * 24)
-        );
-        daysRemaining = Math.max(0, studyPlan.days - diff);
-        const end = new Date(start);
-        end.setDate(end.getDate() + studyPlan.days);
-        estimatedDate = end;
+        // Calculate remaining days dynamically based on total lessons and completed lessons
+        const totalLessons = allReadings.length;
+        daysRemaining = Math.max(0, totalLessons - completedIds.length);
+        
+        // Calculate estimated completion date based on remaining days
+        estimatedDate = new Date();
+        estimatedDate.setDate(estimatedDate.getDate() + daysRemaining);
       }
       setJourneyStats({ hasPlan: true, percent: overallPercent, daysRemaining, estimatedDate });
     } catch (e) {
       setJourneyStats(defaultJourneyStats);
     }
-  }, [calculateOverallProgress]);
+  }, []);
 
   const checkUserAuth = useCallback(async () => {
     try {

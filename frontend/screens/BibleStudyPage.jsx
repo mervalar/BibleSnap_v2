@@ -183,7 +183,12 @@ export default function BibleStudyPage() {
             />
             {data.studyPlan && (
               <View style={styles.journeyCardContainer}>
-                <JourneySummaryCard hasPlan daysRemaining={plan.planStats.daysRemaining} percent={plan.planStats.percent} />
+                <JourneySummaryCard 
+                  hasPlan 
+                  daysRemaining={plan.planStats.daysRemaining} 
+                  percent={plan.planStats.percent}
+                  estimatedDate={plan.planStats.estimatedDate}
+                />
               </View>
             )}
           </>

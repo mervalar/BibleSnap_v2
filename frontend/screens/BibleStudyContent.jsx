@@ -111,7 +111,9 @@ export default function BibleStudyContent() {
         </View>
       </Modal>
       {api.allReadings?.length > 0 && (
-        <JourneySummaryCard hasPlan daysRemaining={api.planStats.daysRemaining} percent={api.planStats.percent} estimatedDate={api.planStats.estimatedDate} />
+        <View style={{ paddingBottom: 20, paddingHorizontal: 16 }}>
+          <JourneySummaryCard hasPlan daysRemaining={api.planStats.daysRemaining} percent={api.planStats.percent} estimatedDate={api.planStats.estimatedDate} />
+        </View>
       )}
       <BottomNavBar />
     </SafeAreaView>

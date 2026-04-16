@@ -20,6 +20,8 @@ export default StyleSheet.create({
   },
   mainContent: {
     flex: 1,
+  },
+  mainContentContainer: {
     justifyContent: 'flex-start',
   },
 });

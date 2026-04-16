@@ -936,7 +936,7 @@ export const createStyles = () => StyleSheet.create({
   contentContainer: {
     padding: 24,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 64,
+    paddingBottom:60,
   },
   titleSection: {
     alignItems: 'center',

@@ -128,11 +128,11 @@ export default function useBibleStudyContent() {
         setCurrentProgress(100);
         setShowCelebration(true);
         setTimeout(() => setShowCelebration(false), 3000);
-        updatePlanStats();
       } else {
         currentProgressRef.current = 1;
         setCurrentProgress(1);
       }
+      updatePlanStats();
     } catch (error) {
       console.error('Error saving completion status', error);
     }

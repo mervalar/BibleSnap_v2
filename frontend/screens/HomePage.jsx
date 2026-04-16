@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import styles from '../styles/HomePage.styles';
 import { useNavigation } from '@react-navigation/native';
 import AuthModal from '../components/AuthModal';
@@ -7,6 +7,7 @@ import HomeHeader from '../components/home/HomeHeader';
 import HomeLoadingView from '../components/home/HomeLoadingView';
 import VerseOfTheDayCard from '../components/home/VerseOfTheDayCard';
 import QuickActions from '../components/home/QuickActions';
+import WeeklyProgressChart from '../components/home/WeeklyProgressChart';
 import JourneySummaryCard from '../components/bible/JourneySummaryCard';
 import useHome from '../hooks/useHome';
 
@@ -24,7 +25,11 @@ export default function HomePage() {
         onProfilePress={() => navigation.navigate('Profile')}
         onLoginPress={() => api.setShowAuthModal(true)}
       />
-      <View style={styles.mainContent}>
+      <ScrollView 
+        style={styles.mainContent} 
+        contentContainerStyle={styles.mainContentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         <VerseOfTheDayCard
           ref={api.verseCardRef}
           verse={api.verse}
@@ -38,19 +43,19 @@ export default function HomePage() {
           onJournalPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Journal'))}
           onBibleStudyPress={() => navigation.navigate('BibleStudy')}
         />
-        {api.isConnected && (
+        <WeeklyProgressChart />
+        {api.isConnected && api.journeyStats.hasPlan && (
           <JourneySummaryCard
             variant="home"
-            title="Today's challenge"
+            title="Your Journey"
             hasPlan={api.journeyStats.hasPlan}
             daysRemaining={api.journeyStats.daysRemaining}
             percent={api.journeyStats.percent}
             estimatedDate={api.journeyStats.estimatedDate}
-            startMessageIfNoPlan
             onPress={() => navigation.navigate('BibleStudy')}
           />
         )}
-      </View>
+      </ScrollView>
       <AuthModal
         visible={api.showAuthModal}
         onClose={() => { api.setShowAuthModal(false); api.checkUserAuth(); }}

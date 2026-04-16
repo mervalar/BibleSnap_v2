@@ -1,7 +1,7 @@
 /** Compute plan stats from study plan, readings, and completed IDs. */
 export function computePlanStats(studyPlan, bibleReadings, completedIds) {
   if (!studyPlan || !bibleReadings?.length) {
-    return { percent: 0, elapsedDays: 0, daysRemaining: 0, finishDate: null, startDate: null };
+    return { percent: 0, elapsedDays: 0, daysRemaining: 0, finishDate: null, startDate: null, estimatedDate: null };
   }
   const start = new Date(studyPlan.startDate);
   const now = new Date();
@@ -22,14 +22,20 @@ export function computePlanStats(studyPlan, bibleReadings, completedIds) {
   } else {
     percent = totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
   }
-  const daysRemaining = Math.max(0, studyPlan.days - elapsedDays);
+  const daysRemaining = Math.max(0, totalLessons - completedLessons);
   const finishDate = new Date(start.getTime() + (studyPlan.days - 1) * 24 * 60 * 60 * 1000);
+  
+  // Calculate estimated date based on remaining lessons (dynamic)
+  const estimatedDate = new Date();
+  estimatedDate.setDate(estimatedDate.getDate() + daysRemaining);
+  
   return {
     percent,
     elapsedDays,
     daysRemaining,
     finishDate: finishDate.toISOString(),
     startDate: studyPlan.startDate,
+    estimatedDate: estimatedDate.toISOString(),
   };
 }
 
