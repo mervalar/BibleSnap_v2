@@ -1,111 +1,262 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchNoteCategories } from '../api/noteCategories';
-import { fetchJournals, updateJournal, deleteJournal, createJournal } from '../api/journalApi';
-import { COLORS, CATEGORY_COLORS } from '../styles/JournalPage.styles';
+import * as Notifications from 'expo-notifications';
+import { fetchNoteCategories, createNoteCategory, fetchJournals, createJournal, updateJournal, deleteJournal } from '../api/journalApi';
 
-function matchCategory(cat, identifier) {
-  return cat.id === identifier || cat.name === identifier || cat.id?.toString() === identifier?.toString();
+// ── notification helpers ──────────────────────────────────────────
+async function scheduleAppReminder(noteId, actionText) {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      const { status: s } = await Notifications.requestPermissionsAsync();
+      if (s !== 'granted') return;
+    }
+    const existing = await AsyncStorage.getItem(`appNotif_${noteId}`);
+    if (existing) {
+      await Notifications.cancelScheduledNotificationAsync(existing).catch(() => {});
+    }
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '✅ Daily Check-in',
+        body: `Did you do: "${actionText}"?`,
+        sound: true,
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: 9, minute: 0 },
+    });
+    await AsyncStorage.setItem(`appNotif_${noteId}`, id);
+  } catch (e) {
+    console.error('scheduleAppReminder error', e);
+  }
 }
 
+async function cancelAppReminder(noteId) {
+  try {
+    const id = await AsyncStorage.getItem(`appNotif_${noteId}`);
+    if (id) {
+      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+      await AsyncStorage.removeItem(`appNotif_${noteId}`);
+    }
+  } catch (e) {}
+}
+
+// ─────────────────────────────────────────────────────────────────
+
 export default function useJournal() {
-  const [modalVisible, setModalVisible] = useState(false);
-  const [categories, setCategories] = useState([]);
-  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeSection, setActiveSection] = useState('journey');
+  const [catIds, setCatIds] = useState({ journey: null, application: null, wishlist: null });
   const [journals, setJournals] = useState([]);
-  const [editingJournal, setEditingJournal] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
-  const [previewVisible, setPreviewVisible] = useState(false);
-  const [selectedJournal, setSelectedJournal] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const getCategoryData = (identifier) => categories.find((cat) => matchCategory(cat, identifier));
-  const getCategoryName = (identifier) => {
-    const c = getCategoryData(identifier);
-    return c ? c.name : identifier;
-  };
-  const getCategoryColor = (identifier) => {
-    const i = categories.findIndex((cat) => matchCategory(cat, identifier));
-    return i >= 0 ? CATEGORY_COLORS[i % CATEGORY_COLORS.length] : COLORS.primary;
-  };
+  // modal / form state
+  const [journeyModalVisible, setJourneyModalVisible] = useState(false);
+  const [appModalVisible, setAppModalVisible] = useState(false);
+  const [wishlistModalVisible, setWishlistModalVisible] = useState(false);
+  const [editingNote, setEditingNote] = useState(null);
+  const [previewNote, setPreviewNote] = useState(null);
 
+  // ── init ──────────────────────────────────────────────────────
   useEffect(() => {
-    AsyncStorage.getItem('user').then((userData) => {
-      if (userData) setUserId(JSON.parse(userData).id);
-    }).catch((e) => console.error('Error getting user data:', e));
-  }, []);
-
-  useEffect(() => {
-    fetchNoteCategories().then(setCategories).catch((e) => {
-      console.error('Error loading categories:', e);
-      Alert.alert('Error', 'Failed to load categories');
+    AsyncStorage.getItem('user').then((raw) => {
+      if (raw) setUserId(JSON.parse(raw).id);
     });
   }, []);
 
   useEffect(() => {
-    if (!userId || categories.length === 0) return;
+    const ensureCategories = async () => {
+      try {
+        let cats = await fetchNoteCategories();
+        const required = ['Journey', 'Application', 'Wishlist'];
+        for (const name of required) {
+          if (!cats.find((c) => c.name === name)) {
+            const created = await createNoteCategory(name);
+            if (created) cats = [...cats, created];
+          }
+        }
+        const find = (name) => cats.find((c) => c.name === name)?.id ?? null;
+        setCatIds({ journey: find('Journey'), application: find('Application'), wishlist: find('Wishlist') });
+      } catch (e) {}
+    };
+    ensureCategories();
+  }, []);
+
+  const loadJournals = useCallback(() => {
+    if (!userId) return;
     setLoading(true);
     fetchJournals(userId)
-      .then((data) => setJournals(data.map((j) => ({ ...j, category: getCategoryName(j.category || j.note_categorie_id) }))))
-      .catch((e) => {
-        console.error('Error loading journals:', e);
-        Alert.alert('Error', 'Failed to load journals');
-      })
+      .then(setJournals)
+      .catch(() => Alert.alert('Error', 'Failed to load journal entries'))
       .finally(() => setLoading(false));
-  }, [userId, categories]);
+  }, [userId]);
 
-  const filteredJournals = journals.filter((journal) => {
-    const categoryMatch = activeCategory === 'All' || getCategoryName(journal.category || journal.note_categorie_id) === activeCategory;
-    const q = searchQuery.toLowerCase().trim();
-    const searchMatch =
-      !q ||
-      journal.title?.toLowerCase().includes(q) ||
-      journal.content?.toLowerCase().includes(q) ||
-      journal.verse?.toLowerCase().includes(q) ||
-      getCategoryName(journal.category || journal.note_categorie_id)?.toLowerCase().includes(q);
-    return categoryMatch && searchMatch;
-  });
+  useEffect(() => { loadJournals(); }, [loadJournals]);
 
-  const handleSaveNote = async (noteData) => {
+  // ── derived lists per section ─────────────────────────────────
+  const journeys = journals.filter((j) => j.note_categorie_name === 'Journey');
+  const applications = journals.filter((j) => j.note_categorie_name === 'Application');
+  const wishlists = journals.filter((j) => j.note_categorie_name === 'Wishlist');
+
+  // ── save journey (SOAP) ───────────────────────────────────────
+  const saveJourney = async (data) => {
+    const catId = catIds.journey;
+    if (!catId) { Alert.alert('Error', 'Journey category not found. Run the seeder.'); return; }
+    const payload = {
+      user_id: userId,
+      note_categorie_id: catId,
+      title: data.title || 'Journey Entry',
+      content: '',
+      date: new Date().toISOString().split('T')[0],
+      soap_scripture: data.scripture,
+      soap_observation: data.observation,
+      soap_application: data.application,
+      soap_prayer: data.prayer,
+    };
     try {
       setLoading(true);
-      const apiData = { ...noteData, user_id: userId, note_categorie_id: noteData.note_categorie_id || noteData.category };
-      if (editingJournal) {
-        await updateJournal(editingJournal.id, apiData);
-        setJournals((prev) =>
-          prev.map((j) => (j.id === editingJournal.id ? { ...j, ...apiData, category: getCategoryName(apiData.note_categorie_id || apiData.category) } : j))
-        );
-        setEditingJournal(null);
-        Alert.alert('Success', 'Journal updated successfully');
+      if (editingNote) {
+        await updateJournal(editingNote.id, { ...payload, user_id: undefined });
+        setJournals((prev) => prev.map((j) => j.id === editingNote.id ? { ...j, ...payload, note_categorie_name: 'Journey' } : j));
       } else {
-        const newJournal = await createJournal(apiData);
-        setJournals((prev) => [{ ...newJournal, category: getCategoryName(newJournal.note_categorie_id) }, ...prev]);
-        Alert.alert('Success', 'Journal created successfully');
+        const created = await createJournal(payload);
+        setJournals((prev) => [{ ...created, note_categorie_name: 'Journey' }, ...prev]);
       }
-      setModalVisible(false);
-    } catch (error) {
-      console.error('Error saving journal:', error);
-      Alert.alert('Error', 'Failed to save journal. Please try again.');
+      setJourneyModalVisible(false);
+      setEditingNote(null);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save journey entry.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleViewJournal = (journal) => {
-    setSelectedJournal(journal);
-    setPreviewVisible(true);
+  // ── save application ──────────────────────────────────────────
+  const saveApplication = async (data) => {
+    const catId = catIds.application;
+    if (!catId) { Alert.alert('Error', 'Application category not found.'); return; }
+    const payload = {
+      user_id: userId,
+      note_categorie_id: catId,
+      title: data.title,
+      content: data.notes || '',
+      date: new Date().toISOString().split('T')[0],
+      status: 'not_started',
+    };
+    try {
+      setLoading(true);
+      if (editingNote) {
+        await updateJournal(editingNote.id, { ...payload, user_id: undefined });
+        setJournals((prev) => prev.map((j) => j.id === editingNote.id ? { ...j, ...payload, note_categorie_name: 'Application' } : j));
+        if (['not_started', 'in_progress'].includes(payload.status)) {
+          await scheduleAppReminder(editingNote.id, payload.title);
+        }
+      } else {
+        const created = await createJournal(payload);
+        const entry = { ...created, note_categorie_name: 'Application' };
+        setJournals((prev) => [entry, ...prev]);
+        await scheduleAppReminder(created.id, payload.title);
+      }
+      setAppModalVisible(false);
+      setEditingNote(null);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save application.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditJournal = (journal) => {
-    setEditingJournal(journal);
-    setModalVisible(true);
+  // ── update application status ─────────────────────────────────
+  const updateApplicationStatus = async (note, newStatus) => {
+    try {
+      await updateJournal(note.id, {
+        title: note.title,
+        content: note.content || '',
+        date: note.date,
+        note_categorie_id: catIds.application,
+        status: newStatus,
+      });
+      setJournals((prev) => prev.map((j) => j.id === note.id ? { ...j, status: newStatus } : j));
+      if (newStatus === 'completed') {
+        await cancelAppReminder(note.id);
+      } else {
+        await scheduleAppReminder(note.id, note.title);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to update status.');
+    }
   };
 
-  const handleDeleteJournal = (journalId) => {
-    Alert.alert('Delete Journal', 'Are you sure you want to delete this journal entry?', [
+  // ── save wishlist ─────────────────────────────────────────────
+  const saveWishlist = async (data) => {
+    const catId = catIds.wishlist;
+    if (!catId) { Alert.alert('Error', 'Wishlist category not found.'); return; }
+    const payload = {
+      user_id: userId,
+      note_categorie_id: catId,
+      title: data.title,
+      content: data.content || '',
+      date: new Date().toISOString().split('T')[0],
+      is_answered: false,
+    };
+    try {
+      setLoading(true);
+      if (editingNote) {
+        await updateJournal(editingNote.id, { ...payload, user_id: undefined });
+        setJournals((prev) => prev.map((j) => j.id === editingNote.id ? { ...j, ...payload, note_categorie_name: 'Wishlist' } : j));
+      } else {
+        const created = await createJournal(payload);
+        setJournals((prev) => [{ ...created, note_categorie_name: 'Wishlist' }, ...prev]);
+      }
+      setWishlistModalVisible(false);
+      setEditingNote(null);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save wishlist entry.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── mark wishlist as answered ─────────────────────────────────
+  const markWishlistAnswered = async (note, reason) => {
+    try {
+      await updateJournal(note.id, {
+        title: note.title,
+        content: note.content || '',
+        date: note.date,
+        note_categorie_id: catIds.wishlist,
+        is_answered: true,
+        answer_reason: reason,
+      });
+      setJournals((prev) => prev.map((j) => j.id === note.id ? { ...j, is_answered: true, answer_reason: reason } : j));
+    } catch (e) {
+      Alert.alert('Error', 'Failed to mark as answered.');
+    }
+  };
+
+  // ── save application from wishlist answer ─────────────────────
+  const saveApplicationFromWishlist = async (actionText) => {
+    const catId = catIds.application;
+    if (!catId) return;
+    try {
+      const payload = {
+        user_id: userId,
+        note_categorie_id: catId,
+        title: actionText,
+        content: '',
+        date: new Date().toISOString().split('T')[0],
+        status: 'not_started',
+      };
+      const created = await createJournal(payload);
+      setJournals((prev) => [{ ...created, note_categorie_name: 'Application' }, ...prev]);
+      await scheduleAppReminder(created.id, actionText);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save application.');
+    }
+  };
+
+  // ── delete any note ───────────────────────────────────────────
+  const handleDelete = (noteId) => {
+    Alert.alert('Delete', 'Delete this entry?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -113,12 +264,11 @@ export default function useJournal() {
         onPress: async () => {
           try {
             setLoading(true);
-            await deleteJournal(journalId);
-            setJournals((prev) => prev.filter((j) => j.id !== journalId));
-            Alert.alert('Success', 'Journal deleted successfully');
-          } catch (error) {
-            console.error('Error deleting journal:', error);
-            Alert.alert('Error', 'Failed to delete journal. Please try again.');
+            await deleteJournal(noteId);
+            await cancelAppReminder(noteId);
+            setJournals((prev) => prev.filter((j) => j.id !== noteId));
+          } catch {
+            Alert.alert('Error', 'Failed to delete entry.');
           } finally {
             setLoading(false);
           }
@@ -127,35 +277,39 @@ export default function useJournal() {
     ]);
   };
 
-  const openAddModal = () => {
-    setEditingJournal(null);
-    setModalVisible(true);
+  // ── open modals ───────────────────────────────────────────────
+  const openAdd = () => {
+    setEditingNote(null);
+    if (activeSection === 'journey') setJourneyModalVisible(true);
+    else if (activeSection === 'application') setAppModalVisible(true);
+    else setWishlistModalVisible(true);
+  };
+
+  const openEdit = (note) => {
+    setEditingNote(note);
+    const name = note.note_categorie_name;
+    if (name === 'Journey') setJourneyModalVisible(true);
+    else if (name === 'Application') setAppModalVisible(true);
+    else setWishlistModalVisible(true);
   };
 
   return {
-    modalVisible,
-    setModalVisible,
-    setEditingJournal,
-    categories,
-    activeCategory,
-    setActiveCategory,
-    journals,
+    activeSection, setActiveSection,
+    journeys, applications, wishlists,
     loading,
-    searchQuery,
-    setSearchQuery,
-    showSearch,
-    setShowSearch,
-    previewVisible,
-    setPreviewVisible,
-    selectedJournal,
-    editingJournal,
-    getCategoryName,
-    getCategoryColor,
-    filteredJournals,
-    handleSaveNote,
-    handleViewJournal,
-    handleEditJournal,
-    handleDeleteJournal,
-    openAddModal,
+    journeyModalVisible, setJourneyModalVisible,
+    appModalVisible, setAppModalVisible,
+    wishlistModalVisible, setWishlistModalVisible,
+    editingNote, setEditingNote,
+    previewNote, setPreviewNote,
+    saveJourney,
+    saveApplication,
+    updateApplicationStatus,
+    saveWishlist,
+    markWishlistAnswered,
+    saveApplicationFromWishlist,
+    handleDelete,
+    openAdd,
+    openEdit,
   };
 }

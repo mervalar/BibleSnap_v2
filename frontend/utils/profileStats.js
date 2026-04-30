@@ -26,6 +26,24 @@ export async function loadWeeklyProgressFromStorage() {
     }
   }
 
+  const allKeys = await AsyncStorage.getAllKeys();
+  const chapterDateKeys = allKeys.filter((k) => k.startsWith('bookChapter_') && k.endsWith('_date'));
+  for (const key of chapterDateKeys) {
+    const timestamp = await AsyncStorage.getItem(key);
+    if (timestamp) {
+      const completedDate = new Date(parseInt(timestamp));
+      completedDate.setHours(0, 0, 0, 0);
+      const daysDiff = Math.floor((today - completedDate) / (1000 * 60 * 60 * 24));
+      if (daysDiff >= 0 && daysDiff < 7) {
+        const targetDate = new Date(today);
+        targetDate.setDate(targetDate.getDate() - daysDiff);
+        const targetDayOfWeek = targetDate.getDay();
+        const arrayIndex = targetDayOfWeek === 0 ? 6 : targetDayOfWeek - 1;
+        weekData[arrayIndex]++;
+      }
+    }
+  }
+
   let streak = 0;
   for (let i = 6; i >= 0; i--) {
     if (weekData[i] > 0) streak++;

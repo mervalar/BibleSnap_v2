@@ -1,21 +1,54 @@
-import React from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { createStyles, COLORS } from '../../styles/JournalPage.styles';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-const styles = createStyles();
+const TABS = [
+  { key: 'journey', label: 'Journey', icon: 'map-outline', activeIcon: 'map' },
+  { key: 'application', label: 'Application', icon: 'checkmark-circle-outline', activeIcon: 'checkmark-circle' },
+  { key: 'wishlist', label: 'Wishlist', icon: 'heart-outline', activeIcon: 'heart' },
+];
 
-export default function JournalFilterTabs({ dimensions, categories, activeCategory, setActiveCategory, getCategoryColor }) {
+const BROWN = '#A07553';
+
+export default function JournalFilterTabs({ activeSection, onSelect }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer} contentContainerStyle={styles.filterContentContainer}>
-      <TouchableOpacity style={[styles.filterButton, activeCategory === 'All' ? styles.activeFilter : styles.inactiveFilter]} onPress={() => setActiveCategory('All')}>
-        <Text style={[styles.filterText, { fontSize: dimensions.fontSize.caption }, activeCategory === 'All' ? styles.activeFilterText : styles.inactiveFilterText]}>All</Text>
-      </TouchableOpacity>
-      {categories.map((cat) => (
-        <TouchableOpacity key={cat.id || cat.name} style={[styles.filterButton, activeCategory === cat.name ? styles.activeFilter : styles.inactiveFilter]} onPress={() => setActiveCategory(cat.name)}>
-          <View style={[styles.categoryDot, { backgroundColor: getCategoryColor(cat.id || cat.name) }]} />
-          <Text style={[styles.filterText, { fontSize: dimensions.fontSize.caption }, activeCategory === cat.name ? styles.activeFilterText : styles.inactiveFilterText]}>{cat.name}</Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    <View style={styles.row}>
+      {TABS.map((tab) => {
+        const active = activeSection === tab.key;
+        return (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tab, active && styles.tabActive]}
+            onPress={() => onSelect(tab.key)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name={active ? tab.activeIcon : tab.icon} size={16} color={active ? '#fff' : BROWN} />
+            <Text style={[styles.label, active && styles.labelActive]}>{tab.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: BROWN,
+  },
+  tabActive: { backgroundColor: BROWN },
+  label: { fontSize: 12, fontWeight: '700', color: BROWN },
+  labelActive: { color: '#fff' },
+});

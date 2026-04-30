@@ -37,7 +37,15 @@
     },
     "plugins": [
       "expo-web-browser",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#8B5D33",
+          "defaultChannel": "bible-reminder"
+        }
+      ]
     ],
     "extra": {
       "eas": {

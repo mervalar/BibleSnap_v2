@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import SharedPreferences from 'react-native-shared-preferences';
+import { fetchJournals } from '../api/journalApi';
 
 const defaultJourneyStats = { hasPlan: false, percent: 0, daysRemaining: 0, estimatedDate: null };
 
@@ -18,6 +19,20 @@ export default function useHome() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [journeyStats, setJourneyStats] = useState(defaultJourneyStats);
+  const [todayApplication, setTodayApplication] = useState(null);
+
+  const loadTodayApplication = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem('user');
+      if (!raw) return;
+      const userId = JSON.parse(raw).id;
+      const notes = await fetchJournals(userId);
+      const active = notes.find(
+        (n) => n.note_categorie_name === 'Application' && n.status !== 'completed'
+      );
+      setTodayApplication(active ?? null);
+    } catch (e) {}
+  }, []);
 
   const calculateOverallProgress = useCallback(async () => {
     try {
@@ -101,13 +116,15 @@ export default function useHome() {
       .catch(() => setLoading(false));
     loadJourneyStats();
     checkUserAuth();
+    loadTodayApplication();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       checkUserAuth();
       loadJourneyStats();
-    }, [checkUserAuth, loadJourneyStats])
+      loadTodayApplication();
+    }, [checkUserAuth, loadJourneyStats, loadTodayApplication])
   );
 
   const handleCopyVerse = useCallback(() => {
@@ -150,6 +167,7 @@ export default function useHome() {
     setShowAuthModal,
     authLoading,
     journeyStats,
+    todayApplication,
     handleCopyVerse,
     handleShareVerse,
     checkUserAuth,

@@ -1,193 +1,123 @@
 const API_BASE_URL = 'https://biblesnap.bellatis.com/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Helper function to get token
 const getAuthToken = async () => {
   try {
     const userData = await AsyncStorage.getItem('user');
-    if (userData) {
-      const parsedUser = JSON.parse(userData);
-      return parsedUser?.token;
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting auth token:', error);
+    return userData ? JSON.parse(userData)?.token : null;
+  } catch {
     return null;
   }
 };
 
-// Helper function to get user ID
-const getUserId = async () => {
+const authHeaders = async () => {
+  const token = await getAuthToken();
+  return { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) };
+};
+
+export const fetchNoteCategories = async () => {
   try {
-    const userData = await AsyncStorage.getItem('user');
-    if (userData) {
-      const parsedUser = JSON.parse(userData);
-      return parsedUser?.id;
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting user ID:', error);
+    const res = await fetch(`${API_BASE_URL}/note-categories`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+};
+
+export const createNoteCategory = async (name) => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/note-categories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
     return null;
   }
 };
 
-// Fetch all journals for a user
 export const fetchJournals = async (userId) => {
   try {
-    const token = await getAuthToken();
-    
-    const response = await fetch(`${API_BASE_URL}/user-notes?user_id=${userId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
+    const res = await fetch(`${API_BASE_URL}/user-notes?user_id=${userId}`, {
+      headers: await authHeaders(),
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch journals: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    // Transform the data to match your frontend structure
-    return data.map(journal => ({
-      id: journal.id,
-      title: journal.title,
-      content: journal.content,
-      date: journal.date,
-      category: journal.note_categorie_id,
-      note_categorie_id: journal.note_categorie_id,
-      verse: journal.stark?.name || 'No verse selected',
-      user_id: journal.user_id,
-      stark_id: journal.stark_id,
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    return data.map((j) => ({
+      id: j.id,
+      title: j.title,
+      content: j.content,
+      date: j.date,
+      note_categorie_id: j.note_categorie_id,
+      note_categorie_name: j.note_categorie?.name,
+      stark_id: j.stark_id,
+      soap_scripture: j.soap_scripture,
+      soap_observation: j.soap_observation,
+      soap_application: j.soap_application,
+      soap_prayer: j.soap_prayer,
+      status: j.status,
+      is_answered: j.is_answered,
+      answer_reason: j.answer_reason,
+      created_at: j.created_at,
     }));
-  } catch (error) {
-    console.error('Error fetching journals:', error);
-    throw error;
+  } catch (e) {
+    console.error('Error fetching journals:', e);
+    throw e;
   }
 };
 
-// Create a new journal
-export const createJournal = async (journalData) => {
+export const createJournal = async (data) => {
   try {
-    const token = await getAuthToken();
-    
-    const response = await fetch(`${API_BASE_URL}/user-notes`, {
+    const res = await fetch(`${API_BASE_URL}/user-notes`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
-      body: JSON.stringify({
-        user_id: journalData.user_id,
-        note_categorie_id: journalData.note_categorie_id,
-        title: journalData.title,
-        content: journalData.content,
-        date: journalData.date,
-        stark_id: journalData.stark_id,
-      }),
+      headers: await authHeaders(),
+      body: JSON.stringify(data),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || `Failed to create journal: ${response.status}`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || `${res.status}`);
     }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error creating journal:', error);
-    throw error;
+    return await res.json();
+  } catch (e) {
+    console.error('Error creating journal:', e);
+    throw e;
   }
 };
 
-// Update an existing journal - FIXED VERSION
-export const updateJournal = async (journalId, journalData) => {
+export const updateJournal = async (id, data) => {
   try {
-    const token = await getAuthToken();
-    
-    // console.log('Updating journal:', journalId, journalData);
-    
-    const response = await fetch(`${API_BASE_URL}/user-notes/${journalId}`, {
+    const res = await fetch(`${API_BASE_URL}/user-notes/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
-      body: JSON.stringify({
-        title: journalData.title,
-        content: journalData.content,
-        date: journalData.date,
-        stark_id: journalData.stark_id,
-        note_categorie_id: journalData.note_categorie_id,
-      }),
+      headers: await authHeaders(),
+      body: JSON.stringify(data),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Failed to update journal: ${response.status}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `${res.status}`);
     }
-
-    const updatedJournal = await response.json();
-    return updatedJournal;
-  } catch (error) {
-    console.error('Error updating journal:', error);
-    throw error;
+    return await res.json();
+  } catch (e) {
+    console.error('Error updating journal:', e);
+    throw e;
   }
 };
 
-// Delete a journal - FIXED VERSION
-export const deleteJournal = async (journalId) => {
+export const deleteJournal = async (id) => {
   try {
-    const token = await getAuthToken();
-    const response = await fetch(`${API_BASE_URL}/user-notes/${journalId}`, {
+    const res = await fetch(`${API_BASE_URL}/user-notes/${id}`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
+      headers: await authHeaders(),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Failed to delete journal: ${response.status}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `${res.status}`);
     }
-
-    // Some APIs return empty response on successful delete
-    const responseText = await response.text();
-    if (responseText) {
-      return JSON.parse(responseText);
-    }
-    
-    return { message: 'Journal deleted successfully' };
-  } catch (error) {
-    console.error('Error deleting journal:', error);
-    throw error;
-  }
-};
-
-// Get journal by ID
-export const getJournalById = async (journalId) => {
-  try {
-    const token = await getAuthToken();
-    
-    const response = await fetch(`${API_BASE_URL}/user-notes/${journalId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch journal: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching journal:', error);
-    throw error;
+    return true;
+  } catch (e) {
+    console.error('Error deleting journal:', e);
+    throw e;
   }
 };

@@ -12,6 +12,17 @@ export default function useBibleStudyData(isAuthenticated) {
   const [studyPlan, setStudyPlan] = useState(null);
   const [startDate, setStartDate] = useState(new Date());
   const [planDays, setPlanDays] = useState(365);
+  const [bookPlans, setBookPlans] = useState({});
+
+  useEffect(() => {
+    AsyncStorage.getItem('bookPlans').then((data) => {
+      if (data) setBookPlans(JSON.parse(data));
+    });
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem('bookPlans', JSON.stringify(bookPlans));
+  }, [bookPlans]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -68,6 +79,24 @@ export default function useBibleStudyData(isAuthenticated) {
     AsyncStorage.setItem('bibleProgress', JSON.stringify(progressMap));
   }, [progressMap]);
 
+  const toggleBookChapter = useCallback((bookName, chapter) => {
+    setBookPlans((prev) => {
+      const current = prev[bookName] || { chaptersRead: [], plan: null };
+      const read = new Set(current.chaptersRead);
+      const dateKey = `bookChapter_${bookName}_${chapter}_date`;
+      if (read.has(chapter)) {
+        read.delete(chapter);
+        AsyncStorage.removeItem(dateKey);
+      } else {
+        read.add(chapter);
+        AsyncStorage.setItem(dateKey, String(Date.now()));
+      }
+      const next = { ...prev, [bookName]: { ...current, chaptersRead: Array.from(read).sort((a, b) => a - b) } };
+      AsyncStorage.setItem('bookPlans', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const refreshCompleted = useCallback(() => {
     AsyncStorage.getItem('completedStudies').then((data) => {
       if (data) setCompletedStudies(new Set(JSON.parse(data)));
@@ -89,5 +118,7 @@ export default function useBibleStudyData(isAuthenticated) {
     planDays,
     setPlanDays,
     refreshCompleted,
+    bookPlans,
+    toggleBookChapter,
   };
 }

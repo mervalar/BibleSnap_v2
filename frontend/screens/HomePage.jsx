@@ -9,6 +9,7 @@ import VerseOfTheDayCard from '../components/home/VerseOfTheDayCard';
 import QuickActions from '../components/home/QuickActions';
 import WeeklyProgressChart from '../components/home/WeeklyProgressChart';
 import JourneySummaryCard from '../components/bible/JourneySummaryCard';
+import TodayApplicationCard from '../components/home/TodayApplicationCard';
 import useHome from '../hooks/useHome';
 
 export default function HomePage() {
@@ -42,6 +43,10 @@ export default function HomePage() {
           onReadBible={() => navigation.navigate('BooksList')}
           onJournalPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Journal'))}
           onBibleStudyPress={() => navigation.navigate('BibleStudy')}
+        />
+        <TodayApplicationCard
+          note={api.todayApplication}
+          onPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Journal'))}
         />
         <WeeklyProgressChart />
         {api.isConnected && api.journeyStats.hasPlan && (

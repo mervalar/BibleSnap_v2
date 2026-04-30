@@ -28,15 +28,14 @@ const TypeFilterModal = ({
       iconActive: 'hourglass-outline',
       imagePosition: 'right-behind'
     },
-    // TEMP: Pick a Book disabled
-    // { 
-    //   type: 'pickupbook', 
-    //   title: 'Pick a Book', 
-    //   description: 'Read any book of the Bible at your pace',
-    //   icon: 'library',
-    //   iconActive: 'library-outline',
-    //   imagePosition: 'left-behind'
-    // }
+    {
+      type: 'pickupbook',
+      title: 'Pick a Book',
+      description: 'Choose any book, set a reading plan, and track chapters as you go.',
+      icon: 'library',
+      iconActive: 'library-outline',
+      imagePosition: 'left-behind',
+    }
   ];
 
   const handleTypeSelect = (type) => {

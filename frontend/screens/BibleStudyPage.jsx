@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   View,
@@ -26,10 +26,13 @@ import BibleStudyHeader from '../components/bible/BibleStudyHeader';
 import BibleStudySearchBar from '../components/bible/BibleStudySearchBar';
 import BibleStudyFilterBar from '../components/bible/BibleStudyFilterBar';
 import BibleStudyEmptyState from '../components/bible/BibleStudyEmptyState';
+import BookPickerList from '../components/bible/BookPickerList';
+import BookPlanSheet from '../components/bible/BookPlanSheet';
+import ReminderModal from '../components/ReminderModal';
+import { getSavedReminder } from '../utils/notificationService';
 import useBibleStudyAuth from '../hooks/useBibleStudyAuth';
 import useBibleStudyData from '../hooks/useBibleStudyData';
 import useBibleStudyPlan from '../hooks/useBibleStudyPlan';
-// import { getBookIdFromName } from '../utils/bibleStudyUtils'; // TEMP: Pick a book disabled
 
 const styles = createStyles();
 
@@ -45,6 +48,20 @@ export default function BibleStudyPage() {
   const [typeFilterModalVisible, setTypeFilterModalVisible] = useState(false);
   const [selectedType, setSelectedType] = useState('historical');
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [reminderModalVisible, setReminderModalVisible] = useState(false);
+  const [reminder, setReminder] = useState(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('bibleStudySelectedType').then((t) => {
+      if (t) setSelectedType(t);
+    });
+    getSavedReminder().then((r) => { if (r) setReminder(r); });
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem('bibleStudySelectedType', selectedType);
+  }, [selectedType]);
 
   useFocusEffect(
     useCallback(() => {
@@ -53,11 +70,6 @@ export default function BibleStudyPage() {
     }, [data.refreshCompleted, auth.checkAuth])
   );
 
-  // TEMP: Pick a book disabled
-  // const transformedBooks = (data.books || []).map((book) => ({ ...book, title: book.name, id: `book_${book.id}` }));
-  // const filteredBooks = transformedBooks.filter(
-  //   (book) => !searchQuery || (book.name && book.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  // );
   const filteredReadings = (data.bibleReadings || []).filter((item) => {
     const matchType =
       selectedType === 'historical' ||
@@ -80,22 +92,6 @@ export default function BibleStudyPage() {
       onProgressUpdate: (percent) => data.setProgressMap((prev) => ({ ...prev, [study.id]: percent })),
     });
   };
-
-  // TEMP: Pick a book disabled
-  // const handleNavigateToBook = async (book) => {
-  //   try {
-  //     const savedLanguage = (await AsyncStorage.getItem('selectedLanguage')) || 'english';
-  //     const savedBibleId = (await AsyncStorage.getItem('selectedBibleId')) || '65eec8e0b60e656b-01';
-  //     navigation.navigate('BookContent', {
-  //       book: { id: getBookIdFromName(book.name), name: book.name },
-  //       chapter: { number: '1' },
-  //       bibleId: savedBibleId,
-  //       language: savedLanguage,
-  //     });
-  //   } catch (error) {
-  //     console.error('Error navigating to book:', error);
-  //   }
-  // };
 
   const onPressItem = handleNavigateToStudy;
   const handleAuthClose = () => {
@@ -155,13 +151,28 @@ export default function BibleStudyPage() {
       )}
       <BibleStudyHeader onBack={() => navigation.goBack()} showSearch={showSearch} onToggleSearch={() => setShowSearch(!showSearch)} dimensions={dimensions} />
       <BibleStudySearchBar visible={showSearch} searchQuery={searchQuery} onChangeQuery={setSearchQuery} dimensions={dimensions} />
-      <BibleStudyFilterBar selectedType={selectedType} onTypePress={() => setTypeFilterModalVisible(true)} studyPlan={data.studyPlan} onPlanPress={() => plan.setPlanModalVisible(true)} />
+      <BibleStudyFilterBar
+        selectedType={selectedType}
+        onTypePress={() => setTypeFilterModalVisible(true)}
+        studyPlan={data.studyPlan}
+        onPlanPress={() => plan.setPlanModalVisible(true)}
+        reminder={reminder}
+        onReminderPress={() => setReminderModalVisible(true)}
+      />
       <View style={styles.mainContent}>
-        {displayItems.length === 0 ? (
+        {selectedType === 'pickupbook' ? (
+          <BookPickerList
+            books={data.books}
+            bookPlans={data.bookPlans}
+            onSelectBook={setSelectedBook}
+            searchQuery={searchQuery}
+            studyPlan={data.studyPlan}
+          />
+        ) : displayItems.length === 0 ? (
           <BibleStudyEmptyState selectedType={selectedType} dimensions={dimensions} />
         ) : (
           <>
-            {data.studyPlan && data.studyPlan.days !== 365 && selectedType !== 'pickupbook' && (
+            {data.studyPlan && data.studyPlan.days !== 365 && (
               <View style={styles.lessonsPerDaySeparator}>
                 <View style={styles.separatorLine} />
                 <View style={styles.lessonsPerDayContainer}>
@@ -183,9 +194,9 @@ export default function BibleStudyPage() {
             />
             {data.studyPlan && (
               <View style={styles.journeyCardContainer}>
-                <JourneySummaryCard 
-                  hasPlan 
-                  daysRemaining={plan.planStats.daysRemaining} 
+                <JourneySummaryCard
+                  hasPlan
+                  daysRemaining={plan.planStats.daysRemaining}
                   percent={plan.planStats.percent}
                   estimatedDate={plan.planStats.estimatedDate}
                 />
@@ -197,7 +208,20 @@ export default function BibleStudyPage() {
       <StudyPlanModal visible={plan.planModalVisible} onClose={() => plan.setPlanModalVisible(false)} planDays={plan.planDays} startDate={data.startDate} onSavePlan={plan.savePlan} bibleReadingsCount={data.bibleReadings?.length || 365} />
       <TypeFilterModal visible={typeFilterModalVisible} onClose={() => setTypeFilterModalVisible(false)} selectedType={selectedType} onSelectType={(t) => { setSelectedType(t); setTypeFilterModalVisible(false); }} />
       <UnlockModal visible={unlockModalVisible} onClose={() => setUnlockModalVisible(false)} />
+      <ReminderModal
+        visible={reminderModalVisible}
+        onClose={() => setReminderModalVisible(false)}
+        currentReminder={reminder}
+        onReminderChange={setReminder}
+      />
       <AuthModal visible={auth.showAuthModal} onClose={handleAuthClose} navigation={navigation} />
+      <BookPlanSheet
+        visible={!!selectedBook}
+        book={selectedBook}
+        readingData={data.bookPlans?.[selectedBook?.name]}
+        onClose={() => setSelectedBook(null)}
+        onToggleChapter={data.toggleBookChapter}
+      />
       <BottomNavBar />
     </SafeAreaView>
   );
