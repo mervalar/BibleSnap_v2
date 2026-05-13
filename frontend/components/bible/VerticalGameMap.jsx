@@ -146,8 +146,8 @@ export default function VerticalGameMap({
             <Ionicons name={iconName} size={dimensions.iconSize.large} color={iconColor} style={{ zIndex: 2 }} />
           </Animated.View>
           <View style={styles.nodeLabelContainer}>
-            <Text style={[styles.nodeLabel, { color: locked ? COLORS.text.tertiary : COLORS.text.light }]}>{label}</Text>
-            <Text numberOfLines={2} style={[styles.nodeSubtitle, { color: locked ? COLORS.text.tertiary : 'rgba(247, 240, 227, 0.8)' }]}>
+            <Text style={[styles.nodeLabel, { color: locked ? COLORS.text.tertiary : COLORS.text.primary }]}>{label}</Text>
+            <Text numberOfLines={2} style={[styles.nodeSubtitle, { color: locked ? COLORS.text.tertiary : COLORS.text.secondary }]}>
               {subtitle}
             </Text>
           </View>

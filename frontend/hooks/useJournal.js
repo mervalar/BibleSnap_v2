@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { fetchNoteCategories, createNoteCategory, fetchJournals, createJournal, updateJournal, deleteJournal } from '../api/journalApi';
+import { fetchJournals, createJournal, updateJournal, deleteJournal } from '../api/journalApi';
 
 // ── notification helpers ──────────────────────────────────────────
 async function scheduleAppReminder(noteId, actionText) {
+  if (Platform.OS === 'web') return;
   try {
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') {
@@ -25,12 +26,11 @@ async function scheduleAppReminder(noteId, actionText) {
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: 9, minute: 0 },
     });
     await AsyncStorage.setItem(`appNotif_${noteId}`, id);
-  } catch (e) {
-    console.error('scheduleAppReminder error', e);
-  }
+  } catch (e) {}
 }
 
 async function cancelAppReminder(noteId) {
+  if (Platform.OS === 'web') return;
   try {
     const id = await AsyncStorage.getItem(`appNotif_${noteId}`);
     if (id) {
@@ -44,41 +44,20 @@ async function cancelAppReminder(noteId) {
 
 export default function useJournal() {
   const [activeSection, setActiveSection] = useState('journey');
-  const [catIds, setCatIds] = useState({ journey: null, application: null, wishlist: null });
   const [journals, setJournals] = useState([]);
   const [userId, setUserId] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // modal / form state
   const [journeyModalVisible, setJourneyModalVisible] = useState(false);
   const [appModalVisible, setAppModalVisible] = useState(false);
   const [wishlistModalVisible, setWishlistModalVisible] = useState(false);
   const [editingNote, setEditingNote] = useState(null);
   const [previewNote, setPreviewNote] = useState(null);
 
-  // ── init ──────────────────────────────────────────────────────
   useEffect(() => {
     AsyncStorage.getItem('user').then((raw) => {
       if (raw) setUserId(JSON.parse(raw).id);
     });
-  }, []);
-
-  useEffect(() => {
-    const ensureCategories = async () => {
-      try {
-        let cats = await fetchNoteCategories();
-        const required = ['Journey', 'Application', 'Wishlist'];
-        for (const name of required) {
-          if (!cats.find((c) => c.name === name)) {
-            const created = await createNoteCategory(name);
-            if (created) cats = [...cats, created];
-          }
-        }
-        const find = (name) => cats.find((c) => c.name === name)?.id ?? null;
-        setCatIds({ journey: find('Journey'), application: find('Application'), wishlist: find('Wishlist') });
-      } catch (e) {}
-    };
-    ensureCategories();
   }, []);
 
   const loadJournals = useCallback(() => {
@@ -92,18 +71,15 @@ export default function useJournal() {
 
   useEffect(() => { loadJournals(); }, [loadJournals]);
 
-  // ── derived lists per section ─────────────────────────────────
-  const journeys = journals.filter((j) => j.note_categorie_name === 'Journey');
-  const applications = journals.filter((j) => j.note_categorie_name === 'Application');
-  const wishlists = journals.filter((j) => j.note_categorie_name === 'Wishlist');
+  const journeys      = journals.filter((j) => j.note_categorie_name === 'Journey');
+  const applications  = journals.filter((j) => j.note_categorie_name === 'Application');
+  const wishlists     = journals.filter((j) => j.note_categorie_name === 'Wishlist');
 
   // ── save journey (SOAP) ───────────────────────────────────────
   const saveJourney = async (data) => {
-    const catId = catIds.journey;
-    if (!catId) { Alert.alert('Error', 'Journey category not found. Run the seeder.'); return; }
     const payload = {
       user_id: userId,
-      note_categorie_id: catId,
+      note_categorie_name: 'Journey',
       title: data.title || 'Journey Entry',
       content: '',
       date: new Date().toISOString().split('T')[0],
@@ -132,11 +108,9 @@ export default function useJournal() {
 
   // ── save application ──────────────────────────────────────────
   const saveApplication = async (data) => {
-    const catId = catIds.application;
-    if (!catId) { Alert.alert('Error', 'Application category not found.'); return; }
     const payload = {
       user_id: userId,
-      note_categorie_id: catId,
+      note_categorie_name: 'Application',
       title: data.title,
       content: data.notes || '',
       date: new Date().toISOString().split('T')[0],
@@ -147,13 +121,10 @@ export default function useJournal() {
       if (editingNote) {
         await updateJournal(editingNote.id, { ...payload, user_id: undefined });
         setJournals((prev) => prev.map((j) => j.id === editingNote.id ? { ...j, ...payload, note_categorie_name: 'Application' } : j));
-        if (['not_started', 'in_progress'].includes(payload.status)) {
-          await scheduleAppReminder(editingNote.id, payload.title);
-        }
+        await scheduleAppReminder(editingNote.id, payload.title);
       } else {
         const created = await createJournal(payload);
-        const entry = { ...created, note_categorie_name: 'Application' };
-        setJournals((prev) => [entry, ...prev]);
+        setJournals((prev) => [{ ...created, note_categorie_name: 'Application' }, ...prev]);
         await scheduleAppReminder(created.id, payload.title);
       }
       setAppModalVisible(false);
@@ -172,7 +143,7 @@ export default function useJournal() {
         title: note.title,
         content: note.content || '',
         date: note.date,
-        note_categorie_id: catIds.application,
+        note_categorie_name: 'Application',
         status: newStatus,
       });
       setJournals((prev) => prev.map((j) => j.id === note.id ? { ...j, status: newStatus } : j));
@@ -188,11 +159,9 @@ export default function useJournal() {
 
   // ── save wishlist ─────────────────────────────────────────────
   const saveWishlist = async (data) => {
-    const catId = catIds.wishlist;
-    if (!catId) { Alert.alert('Error', 'Wishlist category not found.'); return; }
     const payload = {
       user_id: userId,
-      note_categorie_id: catId,
+      note_categorie_name: 'Wishlist',
       title: data.title,
       content: data.content || '',
       date: new Date().toISOString().split('T')[0],
@@ -223,7 +192,7 @@ export default function useJournal() {
         title: note.title,
         content: note.content || '',
         date: note.date,
-        note_categorie_id: catIds.wishlist,
+        note_categorie_name: 'Wishlist',
         is_answered: true,
         answer_reason: reason,
       });
@@ -235,12 +204,10 @@ export default function useJournal() {
 
   // ── save application from wishlist answer ─────────────────────
   const saveApplicationFromWishlist = async (actionText) => {
-    const catId = catIds.application;
-    if (!catId) return;
     try {
       const payload = {
         user_id: userId,
-        note_categorie_id: catId,
+        note_categorie_name: 'Application',
         title: actionText,
         content: '',
         date: new Date().toISOString().split('T')[0],

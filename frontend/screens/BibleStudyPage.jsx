@@ -3,10 +3,10 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   View,
   Text,
-  TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   StatusBar,
+  ImageBackground,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -19,7 +19,6 @@ import TypeFilterModal from '../components/TypeFilterModal';
 import UnlockModal from '../components/UnlockModal';
 import AuthModal from '../components/AuthModal';
 import JourneySummaryCard from '../components/bible/JourneySummaryCard';
-import VideoBackground from '../components/bible/VideoBackground';
 import VerticalGameMap from '../components/bible/VerticalGameMap';
 import EncouragementBanner from '../components/bible/EncouragementBanner';
 import BibleStudyHeader from '../components/bible/BibleStudyHeader';
@@ -110,7 +109,7 @@ export default function BibleStudyPage() {
       <>
         <SafeAreaView style={styles.container}>
           <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-          <VideoBackground />
+          <ImageBackground source={require('../assets/bg.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
           <View style={styles.loadingOverlay}>
             <View style={styles.loadingContent}>
               <ActivityIndicator size="large" color={COLORS.primary} />
@@ -139,7 +138,7 @@ export default function BibleStudyPage() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <VideoBackground />
+      <ImageBackground source={require('../assets/bg.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
       <EncouragementBanner message={plan.encouragementMessage} onDismiss={() => plan.setEncouragementMessage(null)} />
       {data.loading && (
         <View style={styles.loadingOverlay}>

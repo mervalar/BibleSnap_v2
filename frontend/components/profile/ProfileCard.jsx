@@ -2,6 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const BROWN = '#8B5D33';
+const CARD_BG = 'rgba(255, 249, 242, 0.96)';
 
 export default function ProfileCard({ user }) {
   const initial = user?.name?.charAt(0)?.toUpperCase() || 'U';
@@ -11,20 +12,15 @@ export default function ProfileCard({ user }) {
 
   return (
     <View style={styles.card}>
-      <View style={styles.band} />
-      <View style={styles.avatarWrap}>
-        <View style={styles.avatarRing}>
-          <View style={styles.avatar}>
-            <Text style={styles.initial}>{initial}</Text>
-          </View>
-        </View>
-        <View style={styles.onlineDot} />
+      <View style={styles.avatarCircle}>
+        <Text style={styles.initial}>{initial}</Text>
       </View>
+      <View style={styles.onlineDot} />
       <Text style={styles.name}>{user?.name || 'Friend'}</Text>
       <Text style={styles.email}>{user?.email || ''}</Text>
       {memberSince && (
         <View style={styles.memberBadge}>
-          <Ionicons name="leaf-outline" size={12} color={BROWN} />
+          <Ionicons name="leaf-outline" size={10} color={BROWN} />
           <Text style={styles.memberText}>Growing since {memberSince}</Text>
         </View>
       )}
@@ -34,91 +30,75 @@ export default function ProfileCard({ user }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    marginBottom: 16,
-    overflow: 'hidden',
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    marginBottom: 12,
     alignItems: 'center',
-    paddingBottom: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(139,93,51,0.12)',
+  },
+  avatarCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: BROWN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    shadowColor: BROWN,
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
-  band: {
-    width: '100%',
-    height: 80,
-    backgroundColor: BROWN,
-  },
-  avatarWrap: {
-    marginTop: -48,
-    marginBottom: 12,
-    position: 'relative',
-  },
-  avatarRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 4,
-    borderColor: '#fff',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: BROWN,
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  avatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: BROWN,
-    alignItems: 'center',
-    justifyContent: 'center',
+  onlineDot: {
+    position: 'absolute',
+    top: 56,
+    right: '37%',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: CARD_BG,
   },
   initial: {
-    fontSize: 36,
+    fontSize: 24,
     fontWeight: '800',
     color: '#fff',
     letterSpacing: 1,
   },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 6,
-    right: 6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#4CAF50',
-    borderWidth: 2.5,
-    borderColor: '#fff',
-  },
   name: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#1A1A1A',
-    marginBottom: 4,
-    letterSpacing: 0.3,
+    color: '#2D2417',
+    marginBottom: 2,
+    letterSpacing: 0.2,
   },
   email: {
-    fontSize: 14,
-    color: '#888',
-    marginBottom: 12,
+    fontSize: 12,
+    color: '#8B7355',
+    marginBottom: 10,
   },
   memberBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(139,93,51,0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    gap: 4,
+    backgroundColor: 'rgba(139,93,51,0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   memberText: {
-    fontSize: 12,
+    fontSize: 10,
     color: BROWN,
     fontWeight: '600',
   },

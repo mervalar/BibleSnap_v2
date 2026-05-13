@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, StyleSheet, ImageBackground } from 'react-native';
+import { useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import BottomNavBar from '../BottomNavBar';
@@ -13,10 +14,15 @@ import WishlistModal from './WishlistModal';
 import useJournal from '../../hooks/useJournal';
 
 const BROWN = '#A07553';
-const BG = '#FAF7F4';
 
-export default function JournalScreen({ navigation }) {
+export default function JournalScreen({ navigation, route }) {
   const j = useJournal();
+
+  useEffect(() => {
+    if (route?.params?.section) {
+      j.setActiveSection(route.params.section);
+    }
+  }, [route?.params?.section]);
 
   const renderContent = () => {
     if (j.activeSection === 'journey') {
@@ -69,6 +75,7 @@ export default function JournalScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ImageBackground source={require('../../assets/bg.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
       {j.loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={BROWN} />
@@ -131,7 +138,7 @@ function EmptyState({ icon, text }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: 'transparent' },
   loadingOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(255,255,255,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 100,
@@ -139,7 +146,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 4 },
   fab: {
-    position: 'absolute', bottom: 80, right: 20,
+    position: 'absolute', bottom: 100, right: 20,
     width: 56, height: 56, borderRadius: 28,
     backgroundColor: BROWN,
     justifyContent: 'center', alignItems: 'center',

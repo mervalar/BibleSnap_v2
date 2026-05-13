@@ -12,4 +12,10 @@ class NotecategoryController extends Controller
         return response()->json(note_categorie::all());
     }
 
+    public function store(Request $request)
+    {
+        $validated = $request->validate(['name' => 'required|string|max:100']);
+        $cat = note_categorie::firstOrCreate(['name' => $validated['name']]);
+        return response()->json($cat, 201);
+    }
 }

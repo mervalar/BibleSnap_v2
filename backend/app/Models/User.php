@@ -15,15 +15,21 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'google_id',
+        'otp_code',
+        'otp_expires_at',
+        'email_verified_at',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
+        'otp_code',
     ];
 
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'otp_expires_at'    => 'datetime',
     ];
 
     public function savedVerses()

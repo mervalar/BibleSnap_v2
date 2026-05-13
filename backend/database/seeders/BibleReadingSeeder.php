@@ -15,7 +15,7 @@ class BibleReadingSeeder extends Seeder
 
         foreach ($data['reading_plan'] as $entry) {
             BibleReading::create([
-                'day' => $entry['day'] ?? null,
+                'day' => $entry['lesson'] ?? null,
                 'title' => $entry['title'] ?? null,
                 'books' => json_encode($entry['books'] ?? []),
                 'explanation' => $entry['explanation'] ?? null,

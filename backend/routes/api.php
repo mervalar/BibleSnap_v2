@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Artisan;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\BibleReadingController;
@@ -10,9 +11,10 @@ use App\Http\Controllers\Api\BookController;
 use App\Http\Controllers\SavedVerseController;
 
 // Authentication routes
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/logout', [AuthController::class, 'logout']);
+Route::post('/auth/send-otp',   [AuthController::class, 'sendOtp']);
+Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp']);
+Route::post('/auth/google',     [AuthController::class, 'googleAuth']);
+Route::post('/logout',          [AuthController::class, 'logout']);
 
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {
@@ -24,6 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/bible-readings', [BibleReadingController::class, 'index']);
 Route::get('/note-categories', [NotecategoryController::class, 'index']);
+Route::post('/note-categories', [NotecategoryController::class, 'store']);
 Route::get('/bible-readings/random', [BibleReadingController::class, 'getRandomStudy']);
 // Books routes
 Route::get('/books', [BookController::class, 'index']);

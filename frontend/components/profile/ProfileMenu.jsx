@@ -24,7 +24,7 @@ function Section({ title, items }) {
                 </View>
               )}
               {!item.danger && (
-                <Ionicons name="chevron-forward" size={14} color="#CCC" />
+                <Ionicons name="chevron-forward" size={14} color="#C4B5A5" />
               )}
             </TouchableOpacity>
             {i < items.length - 1 && <View style={styles.divider} />}
@@ -130,54 +130,56 @@ export default function ProfileMenu({ journalCount, savedVersesCount, onJournal,
 }
 
 const styles = StyleSheet.create({
-  section: { marginBottom: 20 },
+  section: { marginBottom: 16 },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#AAA',
+    color: '#9B8870',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: 6,
     marginLeft: 4,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 249, 242, 0.96)',
+    borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(139,93,51,0.08)',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   iconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   rowContent: { flex: 1 },
   rowLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: '#2D2417',
   },
   rowSub: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: 11,
+    color: '#9B8870',
     marginTop: 1,
   },
   danger: { color: '#F44336' },
   badge: {
-    backgroundColor: 'rgba(139,93,51,0.12)',
+    backgroundColor: 'rgba(139,93,51,0.1)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -190,13 +192,13 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#F5F5F5',
-    marginLeft: 68,
+    backgroundColor: 'rgba(139,93,51,0.08)',
+    marginLeft: 60,
   },
   version: {
     textAlign: 'center',
-    fontSize: 12,
-    color: '#CCC',
+    fontSize: 11,
+    color: '#B0A090',
     marginBottom: 16,
     marginTop: 4,
   },

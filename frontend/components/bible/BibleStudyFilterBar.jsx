@@ -24,12 +24,12 @@ export default function BibleStudyFilterBar({ selectedType, onTypePress, studyPl
   return (
     <View style={styles.filterBar}>
       <TouchableOpacity style={[styles.filterButton, btnStyle]} onPress={onTypePress}>
-        <Ionicons name="book-outline" size={12} color={COLORS.text.light} />
+        <Ionicons name="book-outline" size={12} color="#6A4424" />
         <Text style={styles.filterButtonText} numberOfLines={1}>{typeLabel}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={[styles.filterButton, btnStyle]} onPress={onPlanPress}>
-        <Ionicons name="time-outline" size={12} color={COLORS.text.light} />
+        <Ionicons name="time-outline" size={12} color="#6A4424" />
         <Text style={styles.filterButtonText} numberOfLines={1}>
           {studyPlan ? `${studyPlan.days}d` : 'Plan'}
         </Text>
@@ -39,7 +39,7 @@ export default function BibleStudyFilterBar({ selectedType, onTypePress, studyPl
         style={[styles.filterButton, btnStyle, reminder && { borderColor: COLORS.primary, backgroundColor: 'rgba(139,93,51,0.35)' }]}
         onPress={onReminderPress}
       >
-        <Ionicons name={reminder ? 'notifications' : 'notifications-outline'} size={12} color={COLORS.text.light} />
+        <Ionicons name={reminder ? 'notifications' : 'notifications-outline'} size={12} color="#6A4424" />
         <Text style={styles.filterButtonText} numberOfLines={1}>{reminderLabel}</Text>
       </TouchableOpacity>
     </View>

@@ -5,175 +5,160 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    // ── Email OTP ─────────────────────────────────────────────────
+
+    public function sendOtp(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6|confirmed',
-            'password_confirmation' => 'required|string|min:6',
+        $request->validate(['email' => 'required|email']);
+
+        $email = strtolower(trim($request->email));
+        $code  = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        $user = User::firstOrCreate(
+            ['email' => $email],
+            ['name' => explode('@', $email)[0], 'password' => null]
+        );
+
+        $user->update([
+            'otp_code'       => $code,
+            'otp_expires_at' => Carbon::now()->addMinutes(10),
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
         try {
-            $user = User::create([
-                'name' => $request->name,
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
-            ]);
-
-            $token = $user->createToken('BibleSnapApp')->plainTextToken;
-
-            return response()->json([
-                'success' => true,
-                'message' => 'User registered successfully',
-                'user' => $user,
-                'token' => $token,
-            ], 201);
+            Mail::raw(
+                "Your BibleSnap verification code is: {$code}\n\nThis code expires in 10 minutes.",
+                function ($message) use ($email) {
+                    $message->to($email)->subject('Your BibleSnap login code');
+                }
+            );
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Registration failed',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to send email. Check mail configuration.'], 500);
         }
+
+        return response()->json(['success' => true, 'message' => 'Code sent to ' . $email]);
     }
 
-    public function login(Request $request)
+    public function verifyOtp(Request $request)
     {
         $request->validate([
             'email' => 'required|email',
-            'password' => 'required|string',
+            'code'  => 'required|string|size:6',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $email = strtolower(trim($request->email));
+        $user  = User::where('email', $email)->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid email or password.',
-            ], 401);
+        if (!$user || !$user->otp_code || !$user->otp_expires_at) {
+            return response()->json(['success' => false, 'message' => 'No code sent for this email.'], 400);
         }
+
+        if (Carbon::now()->isAfter($user->otp_expires_at)) {
+            return response()->json(['success' => false, 'message' => 'Code has expired. Please request a new one.'], 400);
+        }
+
+        if ($request->code !== $user->otp_code) {
+            return response()->json(['success' => false, 'message' => 'Invalid code. Please try again.'], 401);
+        }
+
+        $user->update(['otp_code' => null, 'otp_expires_at' => null, 'email_verified_at' => Carbon::now()]);
 
         $token = $user->createToken('BibleSnapApp')->plainTextToken;
 
         return response()->json([
             'success' => true,
-            'user' => $user,
-            'token' => $token,
+            'user'    => $user,
+            'token'   => $token,
+            'is_new'  => $user->wasRecentlyCreated,
         ]);
     }
 
-    public function updateProfile(Request $request)
+    // ── Google OAuth ──────────────────────────────────────────────
+
+    public function googleAuth(Request $request)
     {
+        $request->validate(['id_token' => 'required|string']);
+
         try {
-            // Get the authenticated user
-            $user = Auth::user();
-            
+            $response = file_get_contents(
+                'https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($request->id_token)
+            );
+            $payload = json_decode($response, true);
+
+            if (!$payload || isset($payload['error'])) {
+                return response()->json(['success' => false, 'message' => 'Invalid Google token.'], 401);
+            }
+
+            $googleId = $payload['sub'];
+            $email    = $payload['email'] ?? null;
+            $name     = $payload['name'] ?? ($email ? explode('@', $email)[0] : 'User');
+
+            if (!$email) {
+                return response()->json(['success' => false, 'message' => 'Google account has no email.'], 400);
+            }
+
+            $user = User::where('google_id', $googleId)
+                ->orWhere('email', strtolower($email))
+                ->first();
+
+            $isNew = false;
             if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not authenticated'
-                ], 401);
+                $user  = User::create(['name' => $name, 'email' => strtolower($email), 'google_id' => $googleId, 'password' => null, 'email_verified_at' => now()]);
+                $isNew = true;
+            } else {
+                if (!$user->google_id) $user->update(['google_id' => $googleId]);
             }
 
-            $validator = Validator::make($request->all(), [
-                'name' => 'sometimes|required|string|max:255',
-                'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $user->id,
-                'password' => 'sometimes|nullable|string|min:6|confirmed',
-                'password_confirmation' => 'required_with:password|string|min:6',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            // Update user fields
-            if ($request->has('name')) {
-                $user->name = $request->name;
-            }
-
-            if ($request->has('email')) {
-                $user->email = $request->email;
-            }
-
-            if ($request->has('password') && $request->password) {
-                $user->password = Hash::make($request->password);
-            }
-
-            $user->save();
+            $token = $user->createToken('BibleSnapApp')->plainTextToken;
 
             return response()->json([
                 'success' => true,
-                'message' => 'Profile updated successfully',
-                'user' => $user
-            ], 200);
-
+                'user'    => $user,
+                'token'   => $token,
+                'is_new'  => $isNew,
+            ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Profile update failed',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Google auth failed.', 'error' => $e->getMessage()], 500);
         }
+    }
+
+    // ── Legacy / profile ──────────────────────────────────────────
+
+    public function updateProfile(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
+
+        $request->validate([
+            'name'  => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|email|unique:users,email,' . $user->id,
+        ]);
+
+        if ($request->has('name'))  $user->name  = $request->name;
+        if ($request->has('email')) $user->email = $request->email;
+        $user->save();
+
+        return response()->json(['success' => true, 'user' => $user]);
     }
 
     public function logout(Request $request)
     {
         try {
-            // If using tokens, you might want to revoke them here
-            // For now, just return success response
-            return response()->json([
-                'success' => true,
-                'message' => 'Logged out successfully'
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Logout failed',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+            $request->user()?->currentAccessToken()?->delete();
+        } catch (\Exception $e) {}
+
+        return response()->json(['success' => true, 'message' => 'Logged out successfully']);
     }
 
     public function user(Request $request)
     {
-        try {
-            $user = Auth::user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not authenticated'
-                ], 401);
-            }
-
-            return response()->json([
-                'success' => true,
-                'user' => $user
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch user data',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        $user = Auth::user();
+        if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
+        return response()->json(['success' => true, 'user' => $user]);
     }
 }

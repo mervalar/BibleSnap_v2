@@ -44,11 +44,11 @@ export default function HomePage() {
           onJournalPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Journal'))}
           onBibleStudyPress={() => navigation.navigate('BibleStudy')}
         />
+        <WeeklyProgressChart />
         <TodayApplicationCard
           note={api.todayApplication}
-          onPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Journal'))}
+          onPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Journal', { section: 'application' }))}
         />
-        <WeeklyProgressChart />
         {api.isConnected && api.journeyStats.hasPlan && (
           <JourneySummaryCard
             variant="home"

@@ -1,9 +1,8 @@
-import { View, Text, ScrollView, StatusBar, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StatusBar, ActivityIndicator, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import useProfile from '../hooks/useProfile';
-import VideoBackground from '../components/bible/VideoBackground';
 import BottomNavBar from '../components/BottomNavBar';
 import ProfileCard from '../components/profile/ProfileCard';
 import ProfileStatsGrid from '../components/profile/ProfileStatsGrid';
@@ -45,7 +44,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <SafeAreaView style={layoutStyles.container} edges={['top', 'left', 'right']}>
-        <VideoBackground />
+        <ImageBackground source={require('../assets/bg.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
         <ProfileLoadingView />
       </SafeAreaView>
     );
@@ -54,7 +53,7 @@ export default function ProfilePage() {
   if (!user) {
     return (
       <SafeAreaView style={layoutStyles.container} edges={['top', 'left', 'right']}>
-        <VideoBackground />
+        <ImageBackground source={require('../assets/bg.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
         <ProfileErrorView onGoBack={() => navigation.goBack()} />
       </SafeAreaView>
     );
@@ -63,7 +62,7 @@ export default function ProfilePage() {
   return (
     <SafeAreaView style={layoutStyles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <VideoBackground />
+      <ImageBackground source={require('../assets/bg.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
 
       {updateLoading && (
         <View style={layoutStyles.loadingOverlay}>
@@ -77,11 +76,11 @@ export default function ProfilePage() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
+          <Ionicons name="arrow-back" size={20} color="#6A4424" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Profile</Text>
         <TouchableOpacity style={styles.headerBtn} onPress={openEditModal}>
-          <Ionicons name="create-outline" size={20} color="#fff" />
+          <Ionicons name="create-outline" size={20} color="#6A4424" />
         </TouchableOpacity>
       </View>
 
@@ -116,7 +115,7 @@ export default function ProfilePage() {
               <View key={i} style={styles.dayCol}>
                 <View style={[styles.dot, weeklyProgress[i] > 0 && styles.dotActive]}>
                   {weeklyProgress[i] > 0 && (
-                    <Ionicons name="checkmark" size={10} color="#fff" />
+                    <Ionicons name="checkmark" size={10} color="#6A4424" />
                   )}
                 </View>
                 <Text style={styles.dayLabel}>{day}</Text>
@@ -170,14 +169,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
+    fontWeight: '800',
+    color: '#6A4424',
     letterSpacing: 0.4,
   },
   scrollContent: {
@@ -186,15 +185,15 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   activityCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255, 249, 242, 0.96)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    elevation: 2,
   },
   activityTop: {
     flexDirection: 'row',
