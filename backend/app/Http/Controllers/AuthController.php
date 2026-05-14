@@ -30,11 +30,80 @@ class AuthController extends Controller
             'otp_expires_at' => Carbon::now()->addMinutes(10),
         ]);
 
+        $html = "
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+  <title>BibleSnap Verification</title>
+</head>
+<body style='margin:0;padding:0;background-color:#F5EFE6;font-family:Georgia,serif;'>
+  <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#F5EFE6;padding:40px 16px;'>
+    <tr>
+      <td align='center'>
+        <table width='100%' style='max-width:480px;background-color:#FFFDF9;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(139,93,51,0.10);'>
+
+          <!-- Header -->
+          <tr>
+            <td style='background-color:#8B5D33;padding:32px 40px;text-align:center;'>
+              <p style='margin:0 0 6px 0;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,249,242,0.75);font-family:Arial,sans-serif;'>Welcome to</p>
+              <h1 style='margin:0;font-size:30px;font-weight:bold;color:#FFF9F2;letter-spacing:1px;font-family:Georgia,serif;'>&#128218; BibleSnap</h1>
+              <p style='margin:10px 0 0 0;font-size:13px;color:rgba(255,249,242,0.7);font-family:Arial,sans-serif;font-style:italic;'>Grow in faith, one day at a time.</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style='padding:40px 40px 32px;text-align:center;'>
+              <h2 style='margin:0 0 8px 0;font-size:20px;color:#2D1A0E;font-family:Georgia,serif;'>Your verification code</h2>
+              <p style='margin:0 0 32px 0;font-size:14px;color:#9B8870;font-family:Arial,sans-serif;line-height:1.6;'>
+                Use the code below to sign in to your BibleSnap account.<br/>It expires in <strong style='color:#6A4424;'>10 minutes</strong>.
+              </p>
+
+              <!-- Code box -->
+              <div style='background-color:#FFF4E8;border:2px dashed #C9956A;border-radius:16px;padding:28px 20px;margin:0 0 32px 0;'>
+                <p style='margin:0 0 8px 0;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#9B8870;font-family:Arial,sans-serif;'>Verification code</p>
+                <p style='margin:0;font-size:42px;font-weight:bold;letter-spacing:10px;color:#6A4424;font-family:Courier,monospace;'>{$code}</p>
+              </div>
+
+              <p style='margin:0;font-size:13px;color:#B0A090;font-family:Arial,sans-serif;line-height:1.6;'>
+                If you didn't request this code, you can safely ignore this email.<br/>Someone may have entered your email address by mistake.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style='padding:0 40px;'>
+              <div style='height:1px;background-color:#EDE0D4;'></div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style='padding:24px 40px;text-align:center;'>
+              <p style='margin:0 0 4px 0;font-size:12px;color:#C4B5A5;font-family:Arial,sans-serif;'>
+                BibleSnap &mdash; Daily Bible study &amp; journaling
+              </p>
+              <p style='margin:0;font-size:11px;color:#D4C8BC;font-family:Arial,sans-serif;'>
+                biblesnap.bellatis.com
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+
         try {
-            Mail::raw(
-                "Your BibleSnap verification code is: {$code}\n\nThis code expires in 10 minutes.",
+            Mail::html(
+                $html,
                 function ($message) use ($email) {
-                    $message->to($email)->subject('Your BibleSnap login code');
+                    $message->to($email)->subject('Your BibleSnap verification code');
                 }
             );
         } catch (\Exception $e) {

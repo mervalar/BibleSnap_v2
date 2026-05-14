@@ -14,11 +14,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 const API = 'https://biblesnap.bellatis.com/api';
 
-// ── Replace these with your actual Google OAuth client IDs ──────
 const GOOGLE_CLIENT_IDS = {
   android: '689137632827-q0rr0i7jb5bdj18edmge8qcoqfugs43k.apps.googleusercontent.com',
-  ios:     'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
-  web:     'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+  web:     '689137632827-40a21olclonedpim1c1lf7h7041okaum.apps.googleusercontent.com',
 };
 
 const BROWN = '#A07553';
@@ -38,10 +36,9 @@ export default function AuthModal({ visible, onClose, navigation }) {
   const [loading, setLoading] = useState(false);
   const otpRefs               = useRef([]);
 
-  const [, , promptGoogle] = Google.useAuthRequest({
+  const [, , promptGoogle] = Google.useIdTokenAuthRequest({
     androidClientId: GOOGLE_CLIENT_IDS.android,
-    iosClientId:     GOOGLE_CLIENT_IDS.ios,
-    webClientId:     GOOGLE_CLIENT_IDS.web,
+    clientId:        GOOGLE_CLIENT_IDS.web,
   });
 
   // ── helpers ───────────────────────────────────────────────────
