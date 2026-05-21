@@ -4,11 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Progress;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class ProgressController extends Controller
 {
-    // Save daily score
     public function saveDailyScore(Request $request)
     {
         $request->validate([
@@ -17,10 +15,8 @@ class ProgressController extends Controller
         ]);
 
         try {
-            $userId = Auth::id(); // Get current user ID
-            
             $progress = Progress::saveDailyScore(
-                $userId,
+                $request->user()->id,
                 $request->challenge_id,
                 $request->score
             );
@@ -30,7 +26,6 @@ class ProgressController extends Controller
                 'message' => 'Daily score saved successfully!',
                 'data' => $progress
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -39,18 +34,15 @@ class ProgressController extends Controller
         }
     }
 
-    // Get today's progress
-    public function getTodayProgress()
+    public function getTodayProgress(Request $request)
     {
         try {
-            $userId = Auth::id();
-            $progress = Progress::getTodayProgress($userId);
+            $progress = Progress::getTodayProgress($request->user()->id);
 
             return response()->json([
                 'success' => true,
                 'data' => $progress
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -59,22 +51,18 @@ class ProgressController extends Controller
         }
     }
 
-    // Get user's score history
-    public function getScoreHistory()
+    public function getScoreHistory(Request $request)
     {
         try {
-            $userId = Auth::id();
-            
-            $history = Progress::where('user_id', $userId)
-                             ->orderBy('score_date', 'desc')
-                             ->take(30) // Last 30 days
-                             ->get();
+            $history = Progress::where('user_id', $request->user()->id)
+                ->orderBy('score_date', 'desc')
+                ->take(30)
+                ->get();
 
             return response()->json([
                 'success' => true,
                 'data' => $history
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
