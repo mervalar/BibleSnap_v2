@@ -64,7 +64,7 @@ class UserNoteController extends Controller
             $notes = UserNote::where('user_id', auth()->id())
                 ->with('noteCategorie', 'stark')
                 ->orderBy('created_at', 'desc')
-                ->paginate(30);
+                ->get();
 
             return response()->json($notes);
         } catch (\Exception $e) {
