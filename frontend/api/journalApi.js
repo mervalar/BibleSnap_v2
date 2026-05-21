@@ -80,6 +80,7 @@ export const createJournal = async (data) => {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (__DEV__) console.error('Server error detail:', err.error || err.errors || err);
       throw new Error(err.message || `${res.status}`);
     }
     return await res.json();
