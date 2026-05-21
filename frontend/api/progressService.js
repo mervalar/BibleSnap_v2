@@ -1,37 +1,37 @@
-const BASE_URL = 'https://biblesnap.bellatis.com:/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Helper function to get auth token
-const getAuthToken = () => {
-  return localStorage.getItem('auth_token');
+const BASE_URL = 'https://biblesnap.bellatis.com/api';
+
+const getAuthToken = async () => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    if (token) return token;
+    const userData = await AsyncStorage.getItem('user');
+    if (userData) return JSON.parse(userData)?.token || null;
+    return null;
+  } catch {
+    return null;
+  }
 };
 
-// Helper function to create headers
-const getHeaders = () => ({
+const getHeaders = async () => ({
   'Content-Type': 'application/json',
-  'Authorization': `Bearer ${getAuthToken()}`,
   'Accept': 'application/json',
+  'Authorization': `Bearer ${await getAuthToken()}`,
 });
 
 export const saveDailyScore = async (challengeId, score) => {
   try {
     const response = await fetch(`${BASE_URL}/progress/daily-score`, {
       method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({
-        challenge_id: challengeId,
-        score: score
-      })
+      headers: await getHeaders(),
+      body: JSON.stringify({ challenge_id: challengeId, score }),
     });
-
     const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to save score');
-    }
-
+    if (!response.ok) throw new Error(data.message || 'Failed to save score');
     return data;
   } catch (error) {
-    console.error('Error saving daily score:', error);
+    if (__DEV__) console.error('Error saving daily score:', error);
     throw error;
   }
 };
@@ -40,18 +40,13 @@ export const fetchTodayProgress = async () => {
   try {
     const response = await fetch(`${BASE_URL}/progress/today`, {
       method: 'GET',
-      headers: getHeaders()
+      headers: await getHeaders(),
     });
-
     const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to get progress');
-    }
-
+    if (!response.ok) throw new Error(data.message || 'Failed to get progress');
     return data;
   } catch (error) {
-    console.error('Error getting today progress:', error);
+    if (__DEV__) console.error('Error getting today progress:', error);
     throw error;
   }
 };
@@ -60,18 +55,13 @@ export const fetchScoreHistory = async () => {
   try {
     const response = await fetch(`${BASE_URL}/progress/history`, {
       method: 'GET',
-      headers: getHeaders()
+      headers: await getHeaders(),
     });
-
     const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to get history');
-    }
-
+    if (!response.ok) throw new Error(data.message || 'Failed to get history');
     return data;
   } catch (error) {
-    console.error('Error getting score history:', error);
+    if (__DEV__) console.error('Error getting score history:', error);
     throw error;
   }
 };

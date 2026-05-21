@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import LandingPage from './screens/LandingPage';
 import HomePage from './screens/HomePage';
 import BookContent from './screens/BookContentPage';
@@ -10,78 +11,41 @@ import BooksList from './screens/BooksListPage';
 import BibleStudy from './screens/BibleStudyPage';
 import BookChapters from './screens/ChapterListPage';
 import BibleStudyContent from './screens/BibleStudyContent';
-import SplashScreen from './components/SplashScreen'; 
-import  AuthScreen from './screens/AuthScreen';
+import SplashScreen from './components/SplashScreen';
+import AuthScreen from './screens/AuthScreen';
 import SavedVersesPage from './screens/SavedVersesPage';
 
 const Stack = createStackNavigator();
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const handleSplashFinish = () => {
-    setIsLoading(false);
-  };
+  useEffect(() => {
+    AsyncStorage.getItem('token')
+      .then((token) => setIsAuthenticated(!!token))
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
 
-  // Show splash screen while loading
   if (isLoading) {
-    return <SplashScreen onFinish={handleSplashFinish} duration={3000} />;
+    return <SplashScreen onFinish={() => {}} duration={1500} />;
   }
 
-  // Show main navigation after splash screen
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Home">
-        <Stack.Screen 
-          name="Landing" 
-          component={LandingPage} 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen 
-          name="Home" 
-          component={HomePage} 
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen 
-          name="AuthScreen" 
-          component={AuthScreen} 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen 
-          name="BooksList" 
-          component={BooksList} 
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen 
-          name="BibleStudy" 
-          component={BibleStudy} 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen 
-          name="Journal" 
-          component={Journal} 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen name="BookChapters" 
-        options={{ headerShown: false }} 
-        component={BookChapters} 
-        />
-        <Stack.Screen 
-          name="BookContent" 
-          component={BookContent}  
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen name="Profile" component={Profile}
-        options={{ headerShown: false }} 
-         />
-         <Stack.Screen 
-          name="SavedVerses" 
-          component={SavedVersesPage} 
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen name="BibleStudyContent" 
-        options={{ headerShown: false }} 
-        component={BibleStudyContent} />
+      <Stack.Navigator initialRouteName={isAuthenticated ? 'Home' : 'Landing'}>
+        <Stack.Screen name="Landing" component={LandingPage} options={{ headerShown: false }} />
+        <Stack.Screen name="AuthScreen" component={AuthScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Home" component={HomePage} options={{ headerShown: false }} />
+        <Stack.Screen name="Journal" component={Journal} options={{ headerShown: false }} />
+        <Stack.Screen name="Profile" component={Profile} options={{ headerShown: false }} />
+        <Stack.Screen name="BooksList" component={BooksList} options={{ headerShown: false }} />
+        <Stack.Screen name="BibleStudy" component={BibleStudy} options={{ headerShown: false }} />
+        <Stack.Screen name="BookChapters" component={BookChapters} options={{ headerShown: false }} />
+        <Stack.Screen name="BookContent" component={BookContent} options={{ headerShown: false }} />
+        <Stack.Screen name="SavedVerses" component={SavedVersesPage} options={{ headerShown: false }} />
+        <Stack.Screen name="BibleStudyContent" component={BibleStudyContent} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

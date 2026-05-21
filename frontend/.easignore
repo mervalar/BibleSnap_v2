@@ -1,0 +1,11 @@
+node_modules/
+.expo/
+dist/
+web-build/
+.git/
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+.metro-health-check*

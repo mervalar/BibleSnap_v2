@@ -3,23 +3,19 @@ import { Ionicons } from '@expo/vector-icons';
 
 const BROWN = '#A07553';
 
-const STATUS_CONFIG = {
-  not_started: { label: 'Not started', color: '#9E9E9E', bg: 'rgba(158,158,158,0.12)', icon: 'ellipse-outline' },
-  in_progress:  { label: 'In progress',  color: '#FF9800', bg: 'rgba(255,152,0,0.12)',  icon: 'time-outline' },
-  completed:    { label: 'Completed',    color: '#4CAF50', bg: 'rgba(76,175,80,0.12)',  icon: 'checkmark-circle' },
-};
-
-const NEXT_STATUS = { not_started: 'in_progress', in_progress: 'completed', completed: 'not_started' };
+const STATUSES = [
+  { key: 'not_started', label: 'Not yet',     color: '#9E9E9E', icon: 'ellipse-outline' },
+  { key: 'in_progress', label: 'In progress', color: '#FF9800', icon: 'time-outline' },
+  { key: 'completed',   label: 'Done',         color: '#4CAF50', icon: 'checkmark-circle' },
+];
 
 export default function ApplicationItemRow({ note, onStatusChange, onEdit, onDelete }) {
   const status = note.status || 'not_started';
-  const cfg = STATUS_CONFIG[status];
+
+  const activeColor = STATUSES.find((s) => s.key === status)?.color || '#9E9E9E';
 
   return (
-    <View style={styles.card}>
-      {/* Status indicator bar */}
-      <View style={[styles.statusBar, { backgroundColor: cfg.color }]} />
-
+    <View style={[styles.card, { borderLeftColor: activeColor }]}>
       <View style={styles.body}>
         {/* Title + actions */}
         <View style={styles.topRow}>
@@ -36,19 +32,25 @@ export default function ApplicationItemRow({ note, onStatusChange, onEdit, onDel
 
         {note.content ? <Text style={styles.notes} numberOfLines={2}>{note.content}</Text> : null}
 
-        {/* Status row */}
+        {/* Status buttons */}
         <View style={styles.statusRow}>
-          <TouchableOpacity
-            style={[styles.statusChip, { backgroundColor: cfg.bg, borderColor: cfg.color }]}
-            onPress={() => onStatusChange(NEXT_STATUS[status])}
-            activeOpacity={0.7}
-          >
-            <Ionicons name={cfg.icon} size={13} color={cfg.color} />
-            <Text style={[styles.statusLabel, { color: cfg.color }]}>{cfg.label}</Text>
-            <Ionicons name="chevron-forward" size={10} color={cfg.color} />
-          </TouchableOpacity>
-          <Text style={styles.date}>{note.date}</Text>
+          {STATUSES.map((s) => {
+            const active = status === s.key;
+            return (
+              <TouchableOpacity
+                key={s.key}
+                style={[styles.statusBtn, active && { backgroundColor: s.color, borderColor: s.color }]}
+                onPress={() => onStatusChange(s.key)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={s.icon} size={12} color={active ? '#fff' : '#bbb'} />
+                <Text style={[styles.statusLabel, active && styles.statusLabelActive]}>{s.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
+        <Text style={styles.date}>{note.date}</Text>
       </View>
     </View>
   );
@@ -56,22 +58,24 @@ export default function ApplicationItemRow({ note, onStatusChange, onEdit, onDel
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row', backgroundColor: '#fff', borderRadius: 14, marginBottom: 10,
-    overflow: 'hidden',
+    backgroundColor: '#fff', borderRadius: 14, marginBottom: 10,
+    borderLeftWidth: 3,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 5, elevation: 2,
   },
-  statusBar: { width: 4 },
   body: { flex: 1, padding: 14 },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
   title: { flex: 1, fontSize: 14, fontWeight: '700', color: '#1A1A1A', lineHeight: 20 },
   actions: { flexDirection: 'row', gap: 2 },
   iconBtn: { padding: 4 },
   notes: { fontSize: 12, color: '#888', marginBottom: 10, lineHeight: 18 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statusChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1,
+  statusRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
+  statusBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+    borderWidth: 1, borderColor: '#E0E0E0',
+    backgroundColor: 'rgba(0,0,0,0.03)',
   },
-  statusLabel: { fontSize: 11, fontWeight: '700' },
+  statusLabel: { fontSize: 11, fontWeight: '600', color: '#bbb' },
+  statusLabelActive: { color: '#fff' },
   date: { fontSize: 10, color: '#bbb' },
 });

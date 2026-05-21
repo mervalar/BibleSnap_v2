@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, ScrollView } from 'react-native';
+import { ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import styles from '../styles/HomePage.styles';
 import { useNavigation } from '@react-navigation/native';
 import AuthModal from '../components/AuthModal';
@@ -19,7 +20,7 @@ export default function HomePage() {
   if (api.authLoading) return <HomeLoadingView />;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <HomeHeader
         isConnected={api.isConnected}
         user={api.user}
@@ -67,6 +68,6 @@ export default function HomePage() {
         navigation={navigation}
         onAuthenticated={() => api.setShowAuthModal(false)}
       />
-    </View>
+    </SafeAreaView>
   );
 }

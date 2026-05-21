@@ -6,6 +6,8 @@ import * as Sharing from 'expo-sharing';
 import biblePreferences from '../api/biblePreferences';
 import { API_KEY, LANGUAGE_OPTIONS, stripHtml } from '../constants/bibleApi';
 
+const BIBLE_API = 'https://api.scripture.api.bible/v1/bibles';
+
 export default function useBookContent(props = {}) {
   const route = useRoute();
   const nav = useNavigation();
@@ -31,7 +33,7 @@ export default function useBookContent(props = {}) {
   const saveHighlights = async () => {
     try {
       if (book?.id) await AsyncStorage.setItem(`highlights_${book.id}`, JSON.stringify(highlightsRef.current));
-    } catch (e) {}
+    } catch (_) {}
   };
 
   const loadHighlights = async () => {
@@ -39,47 +41,96 @@ export default function useBookContent(props = {}) {
     try {
       const data = await AsyncStorage.getItem(`highlights_${book.id}`);
       setHighlights(data ? JSON.parse(data) : {});
-    } catch (e) {
+    } catch (_) {
       setHighlights({});
     }
   };
 
+  // ── fetchChapters: cached, single request ─────────────────────────────────
   const fetchChapters = async () => {
     if (!book?.id) return;
+    const cacheKey = `chapters_${bibleId}_${book.id}`;
+    try {
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        setChapters(JSON.parse(cached));
+        setLoading(false);
+        return;
+      }
+    } catch (_) {}
     try {
       setLoading(true);
-      const res = await fetch(`https://api.scripture.api.bible/v1/bibles/${bibleId}/books/${book.id}/chapters`, { headers: { 'api-key': API_KEY } });
+      const res = await fetch(`${BIBLE_API}/${bibleId}/books/${book.id}/chapters`, {
+        headers: { 'api-key': API_KEY },
+      });
       const data = await res.json();
-      setChapters(data.data || []);
-    } catch (e) {
+      const list = data.data || [];
+      setChapters(list);
+      AsyncStorage.setItem(cacheKey, JSON.stringify(list)).catch(() => {});
+    } catch (_) {
       Alert.alert('Error', 'Failed to load chapters. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  // ── fetchChapterContent: 2 parallel requests instead of N ─────────────────
   const fetchChapterContent = async (chapterNum) => {
     const chapter = chapters.find((c) => c.number === String(chapterNum));
     if (!chapter) return;
+
+    const cacheKey = `chapter_content_${bibleId}_${chapter.id}`;
+
+    // Serve from cache immediately — zero network wait on revisit
+    try {
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        setVerses(JSON.parse(cached));
+        if (book?.id) loadHighlights();
+        setLoading(false);
+        return;
+      }
+    } catch (_) {}
+
     try {
       setLoading(true);
-      const versesRes = await fetch(`https://api.scripture.api.bible/v1/bibles/${bibleId}/chapters/${chapter.id}/verses`, { headers: { 'api-key': API_KEY } });
+
+      // 2 parallel requests: verse list + full chapter text
+      const [versesRes, chapterRes] = await Promise.all([
+        fetch(`${BIBLE_API}/${bibleId}/chapters/${chapter.id}/verses`, {
+          headers: { 'api-key': API_KEY },
+        }),
+        fetch(
+          `${BIBLE_API}/${bibleId}/chapters/${chapter.id}` +
+            `?content-type=text&include-verse-numbers=true` +
+            `&include-verse-spans=false&include-notes=false&include-titles=false`,
+          { headers: { 'api-key': API_KEY } }
+        ),
+      ]);
+
       const versesData = await versesRes.json();
-      const chapterVerses = versesData.data || [];
-      const withText = await Promise.all(
-        chapterVerses.map(async (v) => {
-          try {
-            const r = await fetch(`https://api.scripture.api.bible/v1/bibles/${bibleId}/verses/${v.id}`, { headers: { 'api-key': API_KEY } });
-            const d = await r.json();
-            return { ...v, text: d.data?.content || '' };
-          } catch (err) {
-            return { ...v, text: '' };
-          }
-        })
-      );
+      const chapterData = await chapterRes.json();
+
+      const verseList = versesData.data || [];
+      const fullText = (chapterData.data?.content || '').trim();
+
+      // Parse "[N] verse text" pattern from the chapter content
+      const verseTextMap = {};
+      const regex = /\[(\d+)\]([\s\S]*?)(?=\[\d+\]|$)/g;
+      let m;
+      while ((m = regex.exec(fullText)) !== null) {
+        verseTextMap[parseInt(m[1], 10)] = m[2].replace(/\s+/g, ' ').trim();
+      }
+
+      const withText = verseList.map((v) => {
+        const num = parseInt(v.id.split('.').pop(), 10);
+        return { ...v, number: num, text: verseTextMap[num] || '' };
+      });
+
       setVerses(withText);
       if (book?.id) loadHighlights();
-    } catch (e) {
+      AsyncStorage.setItem(cacheKey, JSON.stringify(withText)).catch(() => {});
+    } catch (_) {
       Alert.alert('Error', `Failed to load chapter ${chapterNum}. Please try again.`);
     } finally {
       setLoading(false);
@@ -104,7 +155,9 @@ export default function useBookContent(props = {}) {
   }, [initialChapter, chapters]);
 
   useEffect(() => {
-    if (book?.id) AsyncStorage.setItem(`book_info_${book.id}`, JSON.stringify({ id: book.id, name: book.name })).catch(() => {});
+    if (book?.id) {
+      AsyncStorage.setItem(`book_info_${book.id}`, JSON.stringify({ id: book.id, name: book.name })).catch(() => {});
+    }
   }, [book]);
 
   useEffect(() => {
@@ -129,14 +182,11 @@ export default function useBookContent(props = {}) {
 
   const handleHighlight = async (color) => {
     if (!selectedVerse) return;
-    
-    // If color is null, remove the highlight
     if (color === null) {
       await removeHighlight(selectedVerse.id);
       setShowToolbox(false);
       return;
     }
-    
     const verseNumber = selectedVerse.number || parseInt(selectedVerse.id.split('.').pop(), 10) || 1;
     const highlightData = { color, text: stripHtml(selectedVerse.text), reference: `${currentChapter}:${verseNumber}` };
     setHighlights((prev) => ({ ...prev, [selectedVerse.id]: highlightData }));
@@ -147,7 +197,7 @@ export default function useBookContent(props = {}) {
       await AsyncStorage.setItem(key, JSON.stringify(merged));
       await AsyncStorage.setItem(`book_info_${book.id}`, JSON.stringify({ id: book.id, name: book.name }));
       setShowToolbox(false);
-    } catch (e) {
+    } catch (_) {
       Alert.alert('Error', 'Failed to save the highlighted verse');
     }
   };
@@ -158,7 +208,7 @@ export default function useBookContent(props = {}) {
       const key = `highlights_${book.id}`;
       const data = await AsyncStorage.getItem(key);
       if (data) { const o = JSON.parse(data); delete o[verseId]; await AsyncStorage.setItem(key, JSON.stringify(o)); }
-    } catch (e) {}
+    } catch (_) {}
   };
 
   const changeFontSize = (size) => {
@@ -175,11 +225,11 @@ export default function useBookContent(props = {}) {
           const uri = await shareRef.current?.capture();
           if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri);
           else Alert.alert('Sharing not available');
-        } catch (e) {
+        } catch (_) {
           Alert.alert('Error', 'Could not share the verse.');
         }
       }, 500);
-    } catch (e) {}
+    } catch (_) {}
   };
 
   return {

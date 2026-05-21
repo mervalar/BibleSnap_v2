@@ -68,6 +68,10 @@ export default function AuthModal({ visible, onClose, navigation }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
+      if (!res.ok && res.status >= 500) {
+        Alert.alert('Server error', 'The server is temporarily unavailable. Please try again later.');
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         setStep('otp');
@@ -75,7 +79,8 @@ export default function AuthModal({ visible, onClose, navigation }) {
         Alert.alert('Error', data.message || 'Could not send code.');
       }
     } catch (e) {
-      Alert.alert('Error', 'Network error. Please try again.');
+      console.error('[sendOtp]', e?.message, e);
+      Alert.alert('Error', 'Could not reach the server. Check your connection and try again.');
     } finally {
       setLoading(false);
     }

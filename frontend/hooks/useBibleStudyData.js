@@ -27,17 +27,36 @@ export default function useBibleStudyData(isAuthenticated) {
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
+    const CACHE_KEY = 'cache_bibleReadings';
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
     const load = async () => {
+      // Show cached data immediately if available
       try {
-        setLoading(true);
-        const readings = await fetchBibleReadings();
-        if (!cancelled) setBibleReadings(readings || []);
-        try {
-          const b = await fetchBooks();
-          if (!cancelled) setBooks(b || []);
-        } catch (e) {
-          console.error('Error fetching books (non-critical):', e);
-          if (!cancelled) setBooks([]);
+        const cached = await AsyncStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const { data, ts } = JSON.parse(cached);
+          if (!cancelled && data?.length) {
+            setBibleReadings(data);
+            setLoading(false);
+            // If cache is fresh enough, skip the network fetch
+            if (Date.now() - ts < CACHE_TTL) return;
+          }
+        }
+      } catch (_) {}
+
+      // Fetch from network (first load or cache expired)
+      try {
+        const [readings, b] = await Promise.all([
+          fetchBibleReadings().catch(() => null),
+          fetchBooks().catch(() => []),
+        ]);
+        if (!cancelled) {
+          if (readings?.length) {
+            setBibleReadings(readings);
+            AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ data: readings, ts: Date.now() }));
+          }
+          setBooks(b || []);
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -45,6 +64,7 @@ export default function useBibleStudyData(isAuthenticated) {
         if (!cancelled) setLoading(false);
       }
     };
+
     load();
     return () => { cancelled = true; };
   }, [isAuthenticated]);

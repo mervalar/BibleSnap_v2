@@ -86,7 +86,7 @@ export default function StudyContentBody({
                 <Text style={styles.upcomingDay}>Lesson {(reading?.day || 0) + 1}</Text>
                 <Text style={styles.upcomingTitle} numberOfLines={2}>{reading.next_title}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={dims.iconSize.medium} color={COLORS.text.light} />
+              <Ionicons name="chevron-forward" size={dims.iconSize.medium} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
         </View>

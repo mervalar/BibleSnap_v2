@@ -3,19 +3,19 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   Modal,
   ActivityIndicator,
   ImageBackground,
+  StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import BookContent from './BookContentPage';
 import BottomNavBar from '../components/BottomNavBar';
 import { createStyles, COLORS, getResponsiveDimensions } from '../styles/bIbleStudyContent.styles';
 import JourneySummaryCard from '../components/bible/JourneySummaryCard';
-import VideoBackground from '../components/bible/VideoBackground';
 import CelebrationOverlay from '../components/bible/CelebrationOverlay';
 import StudyContentBody from '../components/bible/StudyContentBody';
 import ViewShot from 'react-native-view-shot';
@@ -36,12 +36,12 @@ export default function BibleStudyContent() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <VideoBackground />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <ImageBackground source={require('../assets/bg.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
       <CelebrationOverlay visible={api.showCelebration} />
       <View style={styles.headerButtons}>
         <TouchableOpacity style={styles.shareButton} onPress={api.handleShare} disabled={api.isSharing}>
-          <Ionicons name="share-outline" size={dimensions.iconSize.small} color={COLORS.text.light} />
+          <Ionicons name="share-outline" size={dimensions.iconSize.small} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={dimensions.iconSize.large} color={COLORS.primary} />

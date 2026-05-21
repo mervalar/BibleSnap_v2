@@ -4,8 +4,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { fetchJournals, createJournal, updateJournal, deleteJournal } from '../api/journalApi';
 
-// ── notification helpers ──────────────────────────────────────────
-async function scheduleAppReminder(noteId, actionText) {
+// ── cancel one notification ───────────────────────────────────────
+async function cancelAppNotif(noteId) {
+  if (Platform.OS === 'web') return;
+  try {
+    const id = await AsyncStorage.getItem(`appNotif_${noteId}`);
+    if (id) {
+      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+      await AsyncStorage.removeItem(`appNotif_${noteId}`);
+    }
+  } catch (e) {}
+}
+
+// ── rebuild the full one-per-day notification schedule ────────────
+async function rescheduleAllAppNotifications(applications) {
   if (Platform.OS === 'web') return;
   try {
     const { status } = await Notifications.getPermissionsAsync();
@@ -13,29 +25,78 @@ async function scheduleAppReminder(noteId, actionText) {
       const { status: s } = await Notifications.requestPermissionsAsync();
       if (s !== 'granted') return;
     }
-    const existing = await AsyncStorage.getItem(`appNotif_${noteId}`);
-    if (existing) {
-      await Notifications.cancelScheduledNotificationAsync(existing).catch(() => {});
-    }
-    const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '✅ Daily Check-in',
-        body: `Did you do: "${actionText}"?`,
-        sound: true,
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: 9, minute: 0 },
-    });
-    await AsyncStorage.setItem(`appNotif_${noteId}`, id);
-  } catch (e) {}
-}
 
-async function cancelAppReminder(noteId) {
-  if (Platform.OS === 'web') return;
-  try {
-    const id = await AsyncStorage.getItem(`appNotif_${noteId}`);
-    if (id) {
-      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
-      await AsyncStorage.removeItem(`appNotif_${noteId}`);
+    // Cancel all existing app notifications
+    for (const note of applications) {
+      const existingId = await AsyncStorage.getItem(`appNotif_${note.id}`);
+      if (existingId) {
+        await Notifications.cancelScheduledNotificationAsync(existingId).catch(() => {});
+        await AsyncStorage.removeItem(`appNotif_${note.id}`);
+      }
+    }
+
+    const now = new Date();
+    const todayMidnight = new Date(now);
+    todayMidnight.setHours(0, 0, 0, 0);
+
+    // If already past 9 AM, earliest slot is tomorrow
+    const earliestSlot = new Date(todayMidnight);
+    if (now.getHours() >= 9) earliestSlot.setDate(earliestSlot.getDate() + 1);
+
+    // Build due items list
+    const dueItems = [];
+    for (const note of applications) {
+      const noteStatus = note.status || 'not_started';
+      if (noteStatus === 'completed') continue;
+
+      let dueDate = new Date(earliestSlot);
+      let isRecheck = false;
+
+      if (noteStatus === 'in_progress') {
+        isRecheck = true;
+        const since = await AsyncStorage.getItem(`appInProgressDate_${note.id}`);
+        if (since) {
+          const recheckDate = new Date(since);
+          recheckDate.setDate(recheckDate.getDate() + 14);
+          recheckDate.setHours(0, 0, 0, 0);
+          dueDate = recheckDate > earliestSlot ? recheckDate : new Date(earliestSlot);
+        }
+      }
+
+      dueItems.push({ note, dueDate, isRecheck });
+    }
+
+    // Sort by due date — earliest first
+    dueItems.sort((a, b) => a.dueDate - b.dueDate);
+
+    // Assign one slot per day
+    const usedDays = new Set();
+    for (const item of dueItems) {
+      let slotDate = new Date(item.dueDate);
+      slotDate.setHours(0, 0, 0, 0);
+
+      let dayKey = slotDate.toISOString().split('T')[0];
+      while (usedDays.has(dayKey)) {
+        slotDate.setDate(slotDate.getDate() + 1);
+        dayKey = slotDate.toISOString().split('T')[0];
+      }
+      usedDays.add(dayKey);
+
+      const fireDate = new Date(slotDate);
+      fireDate.setHours(9, 0, 0, 0);
+
+      if (fireDate <= now) continue;
+
+      const title = item.isRecheck ? '🔄 2-Week Check-in' : '✅ Daily Check-in';
+      const body = item.isRecheck
+        ? `Have you completed: "${item.note.title}"?`
+        : `Did you do: "${item.note.title}"?`;
+
+      const id = await Notifications.scheduleNotificationAsync({
+        content: { title, body, sound: true },
+        trigger: { date: fireDate },
+      });
+      await AsyncStorage.setItem(`appNotif_${item.note.id}`, id);
     }
   } catch (e) {}
 }
@@ -71,9 +132,9 @@ export default function useJournal() {
 
   useEffect(() => { loadJournals(); }, [loadJournals]);
 
-  const journeys      = journals.filter((j) => j.note_categorie_name === 'Journey');
-  const applications  = journals.filter((j) => j.note_categorie_name === 'Application');
-  const wishlists     = journals.filter((j) => j.note_categorie_name === 'Wishlist');
+  const journeys     = journals.filter((j) => j.note_categorie_name === 'Journey');
+  const applications = journals.filter((j) => j.note_categorie_name === 'Application');
+  const wishlists    = journals.filter((j) => j.note_categorie_name === 'Wishlist');
 
   // ── save journey (SOAP) ───────────────────────────────────────
   const saveJourney = async (data) => {
@@ -118,17 +179,19 @@ export default function useJournal() {
     };
     try {
       setLoading(true);
+      let newJournals;
       if (editingNote) {
         await updateJournal(editingNote.id, { ...payload, user_id: undefined });
-        setJournals((prev) => prev.map((j) => j.id === editingNote.id ? { ...j, ...payload, note_categorie_name: 'Application' } : j));
-        await scheduleAppReminder(editingNote.id, payload.title);
+        newJournals = journals.map((j) => j.id === editingNote.id ? { ...j, ...payload, note_categorie_name: 'Application' } : j);
       } else {
         const created = await createJournal(payload);
-        setJournals((prev) => [{ ...created, note_categorie_name: 'Application' }, ...prev]);
-        await scheduleAppReminder(created.id, payload.title);
+        newJournals = [{ ...created, note_categorie_name: 'Application' }, ...journals];
       }
+      setJournals(newJournals);
       setAppModalVisible(false);
       setEditingNote(null);
+      const allApps = newJournals.filter((j) => j.note_categorie_name === 'Application');
+      await rescheduleAllAppNotifications(allApps);
     } catch (e) {
       Alert.alert('Error', 'Failed to save application.');
     } finally {
@@ -146,12 +209,18 @@ export default function useJournal() {
         note_categorie_name: 'Application',
         status: newStatus,
       });
-      setJournals((prev) => prev.map((j) => j.id === note.id ? { ...j, status: newStatus } : j));
-      if (newStatus === 'completed') {
-        await cancelAppReminder(note.id);
+
+      // Track when note was set to in_progress
+      if (newStatus === 'in_progress') {
+        await AsyncStorage.setItem(`appInProgressDate_${note.id}`, new Date().toISOString().split('T')[0]);
       } else {
-        await scheduleAppReminder(note.id, note.title);
+        await AsyncStorage.removeItem(`appInProgressDate_${note.id}`);
       }
+
+      const newJournals = journals.map((j) => j.id === note.id ? { ...j, status: newStatus } : j);
+      setJournals(newJournals);
+      const allApps = newJournals.filter((j) => j.note_categorie_name === 'Application');
+      await rescheduleAllAppNotifications(allApps);
     } catch (e) {
       Alert.alert('Error', 'Failed to update status.');
     }
@@ -186,7 +255,7 @@ export default function useJournal() {
   };
 
   // ── mark wishlist as answered ─────────────────────────────────
-  const markWishlistAnswered = async (note, reason) => {
+  const markWishlistAnswered = async (note, reason, answeredDate) => {
     try {
       await updateJournal(note.id, {
         title: note.title,
@@ -194,15 +263,16 @@ export default function useJournal() {
         date: note.date,
         note_categorie_name: 'Wishlist',
         is_answered: true,
-        answer_reason: reason,
+        answer_reason: reason || '',
+        answered_date: answeredDate,
       });
-      setJournals((prev) => prev.map((j) => j.id === note.id ? { ...j, is_answered: true, answer_reason: reason } : j));
+      setJournals((prev) => prev.map((j) => j.id === note.id ? { ...j, is_answered: true, answer_reason: reason, answered_date: answeredDate } : j));
     } catch (e) {
       Alert.alert('Error', 'Failed to mark as answered.');
     }
   };
 
-  // ── save application from wishlist answer ─────────────────────
+  // ── save application from wishlist/journey ────────────────────
   const saveApplicationFromWishlist = async (actionText) => {
     try {
       const payload = {
@@ -214,8 +284,10 @@ export default function useJournal() {
         status: 'not_started',
       };
       const created = await createJournal(payload);
-      setJournals((prev) => [{ ...created, note_categorie_name: 'Application' }, ...prev]);
-      await scheduleAppReminder(created.id, actionText);
+      const newJournals = [{ ...created, note_categorie_name: 'Application' }, ...journals];
+      setJournals(newJournals);
+      const allApps = newJournals.filter((j) => j.note_categorie_name === 'Application');
+      await rescheduleAllAppNotifications(allApps);
     } catch (e) {
       Alert.alert('Error', 'Failed to save application.');
     }
@@ -232,8 +304,12 @@ export default function useJournal() {
           try {
             setLoading(true);
             await deleteJournal(noteId);
-            await cancelAppReminder(noteId);
-            setJournals((prev) => prev.filter((j) => j.id !== noteId));
+            await cancelAppNotif(noteId);
+            await AsyncStorage.removeItem(`appInProgressDate_${noteId}`);
+            const newJournals = journals.filter((j) => j.id !== noteId);
+            setJournals(newJournals);
+            const allApps = newJournals.filter((j) => j.note_categorie_name === 'Application');
+            await rescheduleAllAppNotifications(allApps);
           } catch {
             Alert.alert('Error', 'Failed to delete entry.');
           } finally {

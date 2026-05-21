@@ -1,0 +1,17 @@
+Options -Indexes
+RewriteEngine On
+RewriteBase /
+
+# Block direct access to data directory and PHP internals
+RewriteRule ^data/ - [F,L]
+RewriteRule ^db\.php$ - [F,L]
+RewriteRule ^config\.php$ - [F,L]
+
+# Clean URL: /admin → admin.php
+RewriteRule ^admin/?$ admin.php [L,QSA]
+
+# Clean URL: /export → export.php
+RewriteRule ^export/?$ export.php [L,QSA]
+
+# API stays at /api.php or /api/waitlist
+RewriteRule ^api/waitlist$ api.php?action=join [L,QSA]

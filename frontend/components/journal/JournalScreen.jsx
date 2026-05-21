@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, StyleSheet, ImageBackground } from 'react-native';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import BottomNavBar from '../BottomNavBar';
@@ -15,14 +15,41 @@ import useJournal from '../../hooks/useJournal';
 
 const BROWN = '#A07553';
 
+const WISHLIST_FILTERS = [
+  { key: 'all',        label: 'All' },
+  { key: 'unanswered', label: 'Unanswered' },
+  { key: 'answered',   label: 'Answered' },
+];
+
+const APP_FILTERS = [
+  { key: 'all',         label: 'All' },
+  { key: 'not_started', label: 'Not yet' },
+  { key: 'in_progress', label: 'In progress' },
+  { key: 'completed',   label: 'Done' },
+];
+
 export default function JournalScreen({ navigation, route }) {
   const j = useJournal();
+  const [wishlistFilter, setWishlistFilter] = useState('all');
+  const [appFilter, setAppFilter] = useState('all');
 
   useEffect(() => {
     if (route?.params?.section) {
       j.setActiveSection(route.params.section);
     }
   }, [route?.params?.section]);
+
+  const filteredApplications = j.applications.filter((n) =>
+    appFilter === 'all' ? true : (n.status || 'not_started') === appFilter
+  );
+
+  const filteredWishlists = [...j.wishlists]
+    .sort((a, b) => (a.is_answered === b.is_answered ? 0 : a.is_answered ? 1 : -1))
+    .filter((n) => {
+      if (wishlistFilter === 'unanswered') return !n.is_answered;
+      if (wishlistFilter === 'answered') return n.is_answered;
+      return true;
+    });
 
   const renderContent = () => {
     if (j.activeSection === 'journey') {
@@ -42,10 +69,10 @@ export default function JournalScreen({ navigation, route }) {
     }
 
     if (j.activeSection === 'application') {
-      return j.applications.length === 0 ? (
+      return filteredApplications.length === 0 ? (
         <EmptyState icon="checkmark-circle-outline" text={`No applications yet.\nSave an action from your Journey entries.`} />
       ) : (
-        j.applications.map((note) => (
+        filteredApplications.map((note) => (
           <ApplicationItemRow
             key={note.id}
             note={note}
@@ -57,15 +84,14 @@ export default function JournalScreen({ navigation, route }) {
       );
     }
 
-    return j.wishlists.length === 0 ? (
+    return filteredWishlists.length === 0 ? (
       <EmptyState icon="heart-outline" text={`No wishlist entries yet.\nRecord a testimony or faith goal.`} />
     ) : (
-      j.wishlists.map((note) => (
+      filteredWishlists.map((note) => (
         <WishlistItemCard
           key={note.id}
           note={note}
-          onMarkAnswered={(reason) => j.markWishlistAnswered(note, reason)}
-          onSaveToApplication={(text) => j.saveApplicationFromWishlist(text)}
+          onMarkAnswered={(reason, answeredDate) => j.markWishlistAnswered(note, reason, answeredDate)}
           onEdit={() => j.openEdit(note)}
           onDelete={() => j.handleDelete(note.id)}
         />
@@ -93,6 +119,47 @@ export default function JournalScreen({ navigation, route }) {
       />
 
       <JournalFilterTabs activeSection={j.activeSection} onSelect={j.setActiveSection} />
+
+      {j.activeSection === 'application' && (
+        <View style={styles.separator} />
+      )}
+      {j.activeSection === 'application' && (
+        <View style={styles.chipRow}>
+          {APP_FILTERS.map((f) => {
+            const active = appFilter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => setAppFilter(f.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+      {j.activeSection === 'wishlist' && (
+        <View style={styles.separator} />
+      )}
+      {j.activeSection === 'wishlist' && (
+        <View style={styles.chipRow}>
+          {WISHLIST_FILTERS.map((f) => {
+            const active = wishlistFilter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => setWishlistFilter(f.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {renderContent()}
@@ -143,6 +210,32 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(255,255,255,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 100,
   },
+  separator: {
+    height: 1,
+    backgroundColor: 'rgba(160,117,83,0.15)',
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(160,117,83,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  chipActive: {
+    backgroundColor: BROWN,
+    borderColor: BROWN,
+  },
+  chipText: { fontSize: 12, fontWeight: '600', color: BROWN },
+  chipTextActive: { color: '#fff' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 4 },
   fab: {

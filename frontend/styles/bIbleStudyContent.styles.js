@@ -41,7 +41,7 @@ export const getResponsiveDimensions = () => {
 export const createStyles = () => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: 'transparent',
   },
   videoBackground: {
     ...StyleSheet.absoluteFillObject,
@@ -377,7 +377,7 @@ export const createStyles = () => StyleSheet.create({
   },
   planProgressBar: {
     height: 6, // Reduced from 8
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(139, 93, 51, 0.12)',
     borderRadius: 6, // Reduced from 8
     overflow: 'hidden',
   },
@@ -397,7 +397,7 @@ export const createStyles = () => StyleSheet.create({
   },
   nodeWrapper: {
     alignItems: 'center',
-    width: 150,
+    width: screenWidth * 0.4,
     position: 'relative',
     marginVertical: 0,
   },
@@ -448,7 +448,7 @@ export const createStyles = () => StyleSheet.create({
   nodeLabelContainer: {
     marginTop: 16,
     alignItems: 'center',
-    width: 140,
+    width: screenWidth * 0.37,
   },
   nodeLabel: {
     fontSize: 15,
@@ -468,13 +468,13 @@ export const createStyles = () => StyleSheet.create({
   },
   emptyTitle: {
     fontWeight: '700',
-    color: COLORS.text.light,
+    color: COLORS.text.primary,
     marginTop: 16,
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyText: {
-    color: 'rgba(247, 240, 227, 0.8)',
+    color: COLORS.text.secondary,
     textAlign: 'center',
   },
   modalOverlay: {
@@ -644,14 +644,14 @@ export const createStyles = () => StyleSheet.create({
     borderColor: 'rgba(74, 103, 65, 0.4)',
   },
   lessonsPerDayText: {
-    color: COLORS.text.light,
+    color: '#6A4424',
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   encouragementBanner: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
+    top: 10,
     left: 16,
     right: 16,
     flexDirection: 'row',
@@ -914,7 +914,7 @@ export const createStyles = () => StyleSheet.create({
   // BibleStudyContent specific styles
   headerButtons: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
+    top: 10,
     right: 16,
     zIndex: 100,
     flexDirection: 'row',
@@ -935,8 +935,8 @@ export const createStyles = () => StyleSheet.create({
   },
   contentContainer: {
     padding: 24,
-    paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom:60,
+    paddingTop: 16,
+    paddingBottom: 60,
   },
   titleSection: {
     alignItems: 'center',
@@ -945,15 +945,15 @@ export const createStyles = () => StyleSheet.create({
   mainTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: COLORS.text.light,
+    color: '#2D1A0E',
     marginBottom: 8,
     letterSpacing: 1,
   },
   dayLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text.light,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    color: '#6A4424',
+    backgroundColor: 'rgba(139, 93, 51, 0.1)',
     paddingHorizontal: 16,
     paddingVertical: 4,
     borderRadius: 20,
@@ -1049,14 +1049,14 @@ export const createStyles = () => StyleSheet.create({
   upcomingSectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text.light,
+    color: '#2D1A0E',
     marginBottom: 16,
   },
   upcomingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 249, 242, 0.95)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(139, 93, 51, 0.15)',
   },
   upcomingContent: {
     flexDirection: 'row',
@@ -1078,13 +1078,13 @@ export const createStyles = () => StyleSheet.create({
   upcomingDay: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.text.light,
+    color: '#9B8870',
     marginBottom: 4,
   },
   upcomingTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text.light,
+    color: '#2D1A0E',
   },
   noteButton: {
     flexDirection: 'row',
@@ -1138,7 +1138,7 @@ export const createStyles = () => StyleSheet.create({
   },
   modalCloseButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
+    top: 10,
     right: 16,
     zIndex: 9999,
   },

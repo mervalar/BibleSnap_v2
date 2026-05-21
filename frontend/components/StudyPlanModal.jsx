@@ -10,15 +10,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { createStyles, COLORS } from '../styles/bIbleStudyContent.styles';
 
 let DateTimePicker;
-try {
-  if (Platform.OS !== 'web') {
-    const moduleName = '@react-native-community/datetimepicker';
-    DateTimePicker = eval('require')(moduleName).default;
-  } else {
-    DateTimePicker = ({ value, onChange }) => null;
+if (Platform.OS !== 'web') {
+  try {
+    DateTimePicker = require('@react-native-community/datetimepicker').default;
+  } catch (e) {
+    DateTimePicker = () => null;
   }
-} catch (e) {
-  DateTimePicker = ({ value, onChange }) => null;
+} else {
+  DateTimePicker = () => null;
 }
 
 const styles = createStyles();

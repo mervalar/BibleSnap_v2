@@ -14,7 +14,6 @@ class UserNoteController extends Controller
     {
         try {
             $request->validate([
-                'user_id'              => 'required|exists:users,id',
                 'note_categorie_id'    => 'nullable|exists:note_categorie,id',
                 'note_categorie_name'  => 'nullable|string|max:100',
                 'title'                => 'required|string|max:255',
@@ -28,6 +27,7 @@ class UserNoteController extends Controller
                 'status'               => 'nullable|in:not_started,in_progress,completed',
                 'is_answered'          => 'nullable|boolean',
                 'answer_reason'        => 'nullable|string',
+                'answered_date'        => 'nullable|date',
             ]);
 
             $categoryId = $request->input('note_categorie_id');
@@ -40,10 +40,11 @@ class UserNoteController extends Controller
             }
 
             $validated = $request->only([
-                'user_id', 'title', 'content', 'date', 'stark_id',
+                'title', 'content', 'date', 'stark_id',
                 'soap_scripture', 'soap_observation', 'soap_application', 'soap_prayer',
-                'status', 'is_answered', 'answer_reason',
+                'status', 'is_answered', 'answer_reason', 'answered_date',
             ]);
+            $validated['user_id']           = auth()->id();
             $validated['note_categorie_id'] = $categoryId;
 
             $note = UserNote::create($validated);
@@ -60,15 +61,10 @@ class UserNoteController extends Controller
     public function index(Request $request)
     {
         try {
-            $userId = $request->query('user_id');
-            if (!$userId) {
-                return response()->json(['message' => 'User ID is required'], 400);
-            }
-
-            $notes = UserNote::where('user_id', $userId)
+            $notes = UserNote::where('user_id', auth()->id())
                 ->with('noteCategorie', 'stark')
                 ->orderBy('created_at', 'desc')
-                ->get();
+                ->paginate(30);
 
             return response()->json($notes);
         } catch (\Exception $e) {
@@ -83,6 +79,9 @@ class UserNoteController extends Controller
             if (!$note) {
                 return response()->json(['message' => 'Note not found'], 404);
             }
+            if ($note->user_id !== auth()->id()) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
             return response()->json($note);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Failed to fetch note', 'error' => $e->getMessage()], 500);
@@ -92,6 +91,14 @@ class UserNoteController extends Controller
     public function update(Request $request, $id)
     {
         try {
+            $note = UserNote::find($id);
+            if (!$note) {
+                return response()->json(['message' => 'Note not found'], 404);
+            }
+            if ($note->user_id !== auth()->id()) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
             $request->validate([
                 'title'               => 'required|string|max:255',
                 'content'             => 'nullable|string|max:2000',
@@ -106,12 +113,8 @@ class UserNoteController extends Controller
                 'status'              => 'nullable|in:not_started,in_progress,completed',
                 'is_answered'         => 'nullable|boolean',
                 'answer_reason'       => 'nullable|string',
+                'answered_date'       => 'nullable|date',
             ]);
-
-            $note = UserNote::find($id);
-            if (!$note) {
-                return response()->json(['message' => 'Note not found'], 404);
-            }
 
             $categoryId = $request->input('note_categorie_id') ?? $note->note_categorie_id;
             if (!$categoryId && $request->input('note_categorie_name')) {
@@ -122,7 +125,7 @@ class UserNoteController extends Controller
             $data = $request->only([
                 'title', 'content', 'date', 'stark_id',
                 'soap_scripture', 'soap_observation', 'soap_application', 'soap_prayer',
-                'status', 'is_answered', 'answer_reason',
+                'status', 'is_answered', 'answer_reason', 'answered_date',
             ]);
             $data['note_categorie_id'] = $categoryId;
 
@@ -144,6 +147,9 @@ class UserNoteController extends Controller
             if (!$note) {
                 return response()->json(['message' => 'Note not found'], 404);
             }
+            if ($note->user_id !== auth()->id()) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
             $note->delete();
             return response()->json(['message' => 'Note deleted successfully'], 200);
         } catch (\Exception $e) {
@@ -154,12 +160,8 @@ class UserNoteController extends Controller
     public function countMyNotes()
     {
         try {
-            $user = auth()->user();
-            if (!$user) {
-                return response()->json(['message' => 'Unauthorized'], 401);
-            }
-            $count = UserNote::where('user_id', $user->id)->count();
-            return response()->json(['user_id' => $user->id, 'note_count' => $count]);
+            $count = UserNote::where('user_id', auth()->id())->count();
+            return response()->json(['user_id' => auth()->id(), 'note_count' => $count]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Failed to count notes', 'error' => $e->getMessage()], 500);
         }
@@ -168,11 +170,10 @@ class UserNoteController extends Controller
     public function getNotesByCategory(Request $request, $categoryId)
     {
         try {
-            $notes = UserNote::where('note_categorie_id', $categoryId)
-                ->with('noteCategorie', 'stark')->get();
-            if ($notes->isEmpty()) {
-                return response()->json(['message' => 'No notes found for this category'], 404);
-            }
+            $notes = UserNote::where('user_id', auth()->id())
+                ->where('note_categorie_id', $categoryId)
+                ->with('noteCategorie', 'stark')
+                ->get();
             return response()->json($notes);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Failed to fetch notes', 'error' => $e->getMessage()], 500);
@@ -182,11 +183,10 @@ class UserNoteController extends Controller
     public function getNotesByStark(Request $request, $starkId)
     {
         try {
-            $notes = UserNote::where('stark_id', $starkId)
-                ->with('noteCategorie', 'stark')->get();
-            if ($notes->isEmpty()) {
-                return response()->json(['message' => 'No notes found for this verse'], 404);
-            }
+            $notes = UserNote::where('user_id', auth()->id())
+                ->where('stark_id', $starkId)
+                ->with('noteCategorie', 'stark')
+                ->get();
             return response()->json($notes);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Failed to fetch notes', 'error' => $e->getMessage()], 500);
@@ -196,11 +196,10 @@ class UserNoteController extends Controller
     public function getNotesByDate(Request $request, $date)
     {
         try {
-            $notes = UserNote::whereDate('date', $date)
-                ->with('noteCategorie', 'stark')->get();
-            if ($notes->isEmpty()) {
-                return response()->json(['message' => 'No notes found for this date'], 404);
-            }
+            $notes = UserNote::where('user_id', auth()->id())
+                ->whereDate('date', $date)
+                ->with('noteCategorie', 'stark')
+                ->get();
             return response()->json($notes);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Failed to fetch notes', 'error' => $e->getMessage()], 500);

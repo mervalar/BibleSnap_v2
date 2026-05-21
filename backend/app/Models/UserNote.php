@@ -22,6 +22,7 @@ class UserNote extends Model
         'status',
         'is_answered',
         'answer_reason',
+        'answered_date',
     ];
 
     protected $casts = [
