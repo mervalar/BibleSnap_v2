@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const getAuthToken = async () => {
   try {
+    const token = await AsyncStorage.getItem('token');
+    if (token) return token;
     const userData = await AsyncStorage.getItem('user');
     return userData ? JSON.parse(userData)?.token : null;
   } catch {
@@ -77,12 +79,12 @@ export const createJournal = async (data) => {
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `${res.status}`);
     }
     return await res.json();
   } catch (e) {
-    console.error('Error creating journal:', e);
+    if (__DEV__) console.error('Error creating journal:', e);
     throw e;
   }
 };
