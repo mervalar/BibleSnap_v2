@@ -38,6 +38,26 @@ export default function BookPickerList({ books = [], bookPlans = {}, onSelectBoo
 
   const { totalRead, pct, chaptersPerDay, estimatedDate } = computeStats(bookPlans, studyPlan);
 
+  const progressFooter = totalRead > 0 ? (
+    <View style={styles.progressCard}>
+      <View style={styles.progressCardRow}>
+        <View>
+          <Text style={styles.progressCardTitle}>Bible Progress</Text>
+          <Text style={styles.progressCardSub}>
+            {totalRead}/{TOTAL_BIBLE_CHAPTERS} chapters
+            {estimatedDate ? ` · Est. ${estimatedDate}` : ''}
+          </Text>
+        </View>
+        <View style={styles.pctBadge}>
+          <Text style={styles.pctText}>{pct}%</Text>
+        </View>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${Math.min(pct, 100)}%` }]} />
+      </View>
+    </View>
+  ) : null;
+
   return (
     <View style={{ flex: 1 }}>
       {chaptersPerDay !== null && (
@@ -53,27 +73,12 @@ export default function BookPickerList({ books = [], bookPlans = {}, onSelectBoo
         </View>
       )}
 
-      <BookGameMap books={filtered} bookPlans={bookPlans} onSelectBook={onSelectBook} />
-
-      {totalRead > 0 && (
-        <View style={styles.progressCard}>
-          <View style={styles.progressCardRow}>
-            <View>
-              <Text style={styles.progressCardTitle}>Bible Progress</Text>
-              <Text style={styles.progressCardSub}>
-                {totalRead}/{TOTAL_BIBLE_CHAPTERS} chapters
-                {estimatedDate ? ` · Est. ${estimatedDate}` : ''}
-              </Text>
-            </View>
-            <View style={styles.pctBadge}>
-              <Text style={styles.pctText}>{pct}%</Text>
-            </View>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${Math.min(pct, 100)}%` }]} />
-          </View>
-        </View>
-      )}
+      <BookGameMap
+        books={filtered}
+        bookPlans={bookPlans}
+        onSelectBook={onSelectBook}
+        footer={progressFooter}
+      />
     </View>
   );
 }
