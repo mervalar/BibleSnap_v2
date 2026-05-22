@@ -70,13 +70,13 @@ export default function BookGameMap({ books = [], bookPlans = {}, onSelectBook }
     const rotation = getNodeRotation(index);
     const extraMargin = index % 3 === 2 ? 20 : 8;
 
-    let nodeColor = 'rgba(255,255,255,0.22)';
+    let nodeColor = COLORS.locked;
     let iconName = 'book-outline';
     if (isCompleted) { nodeColor = COLORS.semantic.success; iconName = 'checkmark'; }
     else if (isInProgress) { nodeColor = COLORS.primary; iconName = 'book'; }
 
-    const labelColor = isCompleted || isInProgress ? COLORS.text.light : COLORS.text.tertiary;
-    const subtitleColor = isCompleted || isInProgress ? 'rgba(247,240,227,0.75)' : COLORS.text.tertiary;
+    const labelColor = isCompleted || isInProgress ? COLORS.text.primary : COLORS.text.tertiary;
+    const subtitleColor = isCompleted || isInProgress ? COLORS.text.secondary : COLORS.text.tertiary;
 
     return (
       <View style={[styles.nodeWrapper, positionStyle, { marginVertical: extraMargin }]}>

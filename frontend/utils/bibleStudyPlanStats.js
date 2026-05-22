@@ -22,7 +22,7 @@ export function computePlanStats(studyPlan, bibleReadings, completedIds) {
   } else {
     percent = totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
   }
-  const daysRemaining = Math.max(0, totalLessons - completedLessons);
+  const daysRemaining = Math.max(0, studyPlan.days - elapsedDays);
   const finishDate = new Date(start.getTime() + (studyPlan.days - 1) * 24 * 60 * 60 * 1000);
   
   // Calculate estimated date based on remaining lessons (dynamic)
@@ -59,16 +59,15 @@ export function getTodaysReadingIds(studyPlan, bibleReadings) {
 }
 
 /** Compute encouragement message from stats. Returns { type, emoji, text } or null. */
-export function computeEncouragementMessage(lessonsAhead, consistency, streak, planJustChanged, consistencyShownToday) {
+export function computeEncouragementMessage(lessonsAhead, consistency, streak, planJustChanged, shownToday) {
   if (planJustChanged) return null;
+  if (shownToday) return null;
   if (lessonsAhead >= 1) {
     return { type: 'happy', emoji: '🎉', text: `Amazing! You're ${lessonsAhead} lesson${lessonsAhead > 1 ? 's' : ''} ahead of schedule! Keep it up!` };
   }
   if (streak >= 7) return { type: 'happy', emoji: '🔥', text: `Incredible ${streak}-day streak! You're on fire!` };
-  if (!consistencyShownToday) {
-    if (consistency < 30) return { type: 'sad', emoji: '😔', text: `You've been a bit inconsistent. Read more today to achieve your goal!` };
-    if (consistency < 60) return { type: 'neutral', emoji: '📖', text: `Keep going! You're making progress.` };
-    if (consistency >= 80) return { type: 'happy', emoji: '✨', text: `Great consistency! You're doing amazing!` };
-  }
+  if (consistency < 30) return { type: 'sad', emoji: '😔', text: `You've been a bit inconsistent. Read more today to achieve your goal!` };
+  if (consistency < 60) return { type: 'neutral', emoji: '📖', text: `Keep going! You're making progress.` };
+  if (consistency >= 80) return { type: 'happy', emoji: '✨', text: `Great consistency! You're doing amazing!` };
   return null;
 }
