@@ -36,7 +36,7 @@ function getNodeRotation(index) {
   return posInRow === 0 ? '8deg' : posInRow === 1 ? '0deg' : '-8deg';
 }
 
-export default function BookGameMap({ books = [], bookPlans = {}, onSelectBook, footer = null }) {
+export default function BookGameMap({ books = [], bookPlans = {}, onSelectBook }) {
   const dimensions = getResponsiveDimensions();
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const popAnim = useRef(new Animated.Value(1)).current;
@@ -131,7 +131,7 @@ export default function BookGameMap({ books = [], bookPlans = {}, onSelectBook, 
         maxToRenderPerBatch={12}
         windowSize={7}
         removeClippedSubviews
-        ListFooterComponent={footer ?? <View style={{ height: 120 }} />}
+        ListFooterComponent={<View style={{ height: 120 }} />}
       />
     </View>
   );

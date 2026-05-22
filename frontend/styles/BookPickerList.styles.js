@@ -23,9 +23,10 @@ export default StyleSheet.create({
   },
 
   progressCard: {
-    marginHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 12,
+    position: 'absolute',
+    bottom: 70,
+    left: 16,
+    right: 16,
     padding: 12,
     backgroundColor: 'rgba(255, 248, 240, 0.92)',
     borderRadius: 14,
