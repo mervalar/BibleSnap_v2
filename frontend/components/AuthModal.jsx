@@ -30,10 +30,11 @@ async function storeSession(user, token) {
 }
 
 export default function AuthModal({ visible, onClose, navigation }) {
-  const [step, setStep]       = useState('email');   // 'email' | 'otp'
-  const [email, setEmail]     = useState('');
-  const [otp, setOtp]         = useState(['', '', '', '', '', '']);
-  const [loading, setLoading] = useState(false);
+  const [step, setStep]           = useState('email');   // 'email' | 'otp'
+  const [email, setEmail]         = useState('');
+  const [otp, setOtp]             = useState(['', '', '', '', '', '']);
+  const [loading, setLoading]     = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const otpRefs               = useRef([]);
 
   const [, , promptGoogle] = Google.useIdTokenAuthRequest({
@@ -46,6 +47,7 @@ export default function AuthModal({ visible, onClose, navigation }) {
     setStep('email');
     setEmail('');
     setOtp(['', '', '', '', '', '']);
+    setAgreedToTerms(false);
     onClose();
   };
 
@@ -153,7 +155,7 @@ export default function AuthModal({ visible, onClose, navigation }) {
   // ── render ────────────────────────────────────────────────────
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={resetAndClose}>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={styles.overlay} behavior="padding">
         <View style={styles.sheet}>
           {/* Close */}
           <TouchableOpacity onPress={resetAndClose} style={styles.closeBtn}>
@@ -180,14 +182,30 @@ export default function AuthModal({ visible, onClose, navigation }) {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoFocus
                 onSubmitEditing={handleSendOtp}
               />
 
+              {/* Terms & Conditions */}
+              <TouchableOpacity style={styles.checkboxRow} onPress={() => setAgreedToTerms(!agreedToTerms)} activeOpacity={0.7}>
+                <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                  {agreedToTerms && <Ionicons name="checkmark" size={13} color="#fff" />}
+                </View>
+                <Text style={styles.checkboxText}>
+                  I accept the{' '}
+                  <Text style={styles.checkboxLink} onPress={() => Linking.openURL('http://biblesnapweb.bellatis.com/')}>
+                    Terms of Service
+                  </Text>
+                  {' & '}
+                  <Text style={styles.checkboxLink} onPress={() => Linking.openURL('http://biblesnapweb.bellatis.com/')}>
+                    Privacy Policy
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
-                style={[styles.primaryBtn, (!email.trim() || loading) && styles.btnDisabled]}
+                style={[styles.primaryBtn, (!email.trim() || loading || !agreedToTerms) && styles.btnDisabled]}
                 onPress={handleSendOtp}
-                disabled={!email.trim() || loading}
+                disabled={!email.trim() || loading || !agreedToTerms}
                 activeOpacity={0.85}
               >
                 {loading ? <ActivityIndicator color="#fff" /> : (
@@ -204,7 +222,7 @@ export default function AuthModal({ visible, onClose, navigation }) {
                 <View style={styles.dividerLine} />
               </View>
 
-              <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleSignIn} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity style={[styles.googleBtn, (!agreedToTerms || loading) && styles.btnDisabled]} onPress={handleGoogleSignIn} disabled={loading || !agreedToTerms} activeOpacity={0.85}>
                 <Text style={styles.googleG}>G</Text>
                 <Text style={styles.googleBtnText}>Continue with Google</Text>
               </TouchableOpacity>
@@ -309,4 +327,35 @@ const styles = StyleSheet.create({
   resendRow: { alignItems: 'center', paddingVertical: 8 },
   resendText: { fontSize: 13, color: '#888' },
   resendLink: { color: BROWN, fontWeight: '700' },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#DDD',
+    backgroundColor: BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  checkboxChecked: {
+    backgroundColor: BROWN,
+    borderColor: BROWN,
+  },
+  checkboxText: {
+    fontSize: 12,
+    color: '#888',
+    flex: 1,
+    lineHeight: 18,
+  },
+  checkboxLink: {
+    color: BROWN,
+    fontWeight: '600',
+  },
 });

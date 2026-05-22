@@ -1,7 +1,5 @@
-import { StyleSheet, Dimensions } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { COLORS } from './bIbleStudyContent.styles';
-
-const { width: W } = Dimensions.get('window');
 
 export default StyleSheet.create({
   overlay: {
@@ -40,53 +38,47 @@ export default StyleSheet.create({
   title: { color: COLORS.text.primary, fontSize: 20, fontWeight: '800' },
   subtitle: { color: COLORS.text.tertiary, fontSize: 13, marginBottom: 20 },
 
-  // AM / PM toggle
-  ampmRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  ampmBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.border.light,
+  tabRow: {
+    flexDirection: 'row',
     backgroundColor: COLORS.surface,
-    alignItems: 'center',
-  },
-  ampmBtnActive: { borderColor: COLORS.primary, backgroundColor: 'rgba(139,93,51,0.1)' },
-  ampmText: { color: COLORS.text.tertiary, fontSize: 15, fontWeight: '700' },
-  ampmTextActive: { color: COLORS.primary },
-
-  // Section labels
-  sectionLabel: { color: COLORS.text.secondary, fontSize: 12, fontWeight: '700', marginBottom: 10, letterSpacing: 0.8, textTransform: 'uppercase' },
-
-  // Hour grid
-  hourGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  hourChip: {
-    width: (W - 40 - 48 - 32) / 6 - 2,
-    paddingVertical: 9,
     borderRadius: 12,
-    borderWidth: 1.5,
+    padding: 3,
+    marginBottom: 16,
+    borderWidth: 1,
     borderColor: COLORS.border.light,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
   },
-  hourChipActive: { borderColor: COLORS.primary, backgroundColor: 'rgba(139,93,51,0.1)' },
-  hourText: { color: COLORS.text.tertiary, fontSize: 14, fontWeight: '600' },
-  hourTextActive: { color: COLORS.primary, fontWeight: '700' },
-
-  // Minute row
-  minuteRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
-  minuteChip: {
+  tab: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: COLORS.border.light,
-    backgroundColor: COLORS.surface,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
-  minuteChipActive: { borderColor: COLORS.primary, backgroundColor: 'rgba(139,93,51,0.1)' },
-  minuteText: { color: COLORS.text.tertiary, fontSize: 14, fontWeight: '600' },
-  minuteTextActive: { color: COLORS.primary, fontWeight: '700' },
+  tabActive: { backgroundColor: COLORS.primary },
+  tabText: { fontSize: 13, fontWeight: '600', color: COLORS.text.tertiary },
+  tabTextActive: { color: '#fff' },
+
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  pickerColon: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
 
   // Preview
   preview: {

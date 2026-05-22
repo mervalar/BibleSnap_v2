@@ -28,7 +28,7 @@ import BibleStudyEmptyState from '../components/bible/BibleStudyEmptyState';
 import BookPickerList from '../components/bible/BookPickerList';
 import BookPlanSheet from '../components/bible/BookPlanSheet';
 import ReminderModal from '../components/ReminderModal';
-import { getSavedReminder } from '../utils/notificationService';
+import { getSavedReminder, getSavedJournalReminder } from '../utils/notificationService';
 import useBibleStudyAuth from '../hooks/useBibleStudyAuth';
 import useBibleStudyData from '../hooks/useBibleStudyData';
 import useBibleStudyPlan from '../hooks/useBibleStudyPlan';
@@ -50,12 +50,14 @@ export default function BibleStudyPage() {
   const [selectedBook, setSelectedBook] = useState(null);
   const [reminderModalVisible, setReminderModalVisible] = useState(false);
   const [reminder, setReminder] = useState(null);
+  const [journalReminder, setJournalReminder] = useState(null);
 
   useEffect(() => {
     AsyncStorage.getItem('bibleStudySelectedType').then((t) => {
       if (t) setSelectedType(t);
     });
     getSavedReminder().then((r) => { if (r) setReminder(r); });
+    getSavedJournalReminder().then((r) => { if (r) setJournalReminder(r); });
   }, []);
 
   useEffect(() => {
@@ -212,6 +214,8 @@ export default function BibleStudyPage() {
         onClose={() => setReminderModalVisible(false)}
         currentReminder={reminder}
         onReminderChange={setReminder}
+        currentJournalReminder={journalReminder}
+        onJournalReminderChange={setJournalReminder}
       />
       <AuthModal visible={auth.showAuthModal} onClose={handleAuthClose} navigation={navigation} />
       <BookPlanSheet

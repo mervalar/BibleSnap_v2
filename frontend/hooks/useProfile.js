@@ -140,6 +140,37 @@ export default function useProfile(navigation) {
     }
   }, [editName, editEmail, userToken]);
 
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all your data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await fetch('https://biblesnap.bellatis.com/api/user', {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+              });
+              const data = await res.json();
+              if (data.success) {
+                await AsyncStorage.multiRemove(['user', 'isAuthenticated', 'token']);
+                navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+              } else {
+                Alert.alert('Error', data.message || 'Failed to delete account');
+              }
+            } catch (e) {
+              Alert.alert('Error', 'Network error. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  }, [userToken, navigation]);
+
   const handleLogout = useCallback(() => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
@@ -195,6 +226,7 @@ export default function useProfile(navigation) {
     openEditModal,
     handleSaveEdit,
     handleLogout,
+    handleDeleteAccount,
     openDayDetail,
   };
 }

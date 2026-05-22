@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StatusBar, ActivityIndicator, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -11,6 +12,8 @@ import ProfileMenu from '../components/profile/ProfileMenu';
 import ProfileEditModal from '../components/profile/ProfileEditModal';
 import ProfileLoadingView from '../components/profile/ProfileLoadingView';
 import ProfileErrorView from '../components/profile/ProfileErrorView';
+import ReminderModal from '../components/ReminderModal';
+import { getSavedReminder, getSavedJournalReminder } from '../utils/notificationService';
 import { COLORS } from '../styles/theme';
 import layoutStyles from '../styles/profile/ProfileLayout.styles';
 
@@ -38,7 +41,17 @@ export default function ProfilePage() {
     openEditModal,
     handleSaveEdit,
     handleLogout,
+    handleDeleteAccount,
   } = useProfile(navigation);
+
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminder, setReminder] = useState(null);
+  const [journalReminder, setJournalReminder] = useState(null);
+
+  useEffect(() => {
+    getSavedReminder().then((r) => { if (r) setReminder(r); });
+    getSavedJournalReminder().then((r) => { if (r) setJournalReminder(r); });
+  }, []);
 
 
   if (loading) {
@@ -115,7 +128,7 @@ export default function ProfilePage() {
               <View key={i} style={styles.dayCol}>
                 <View style={[styles.dot, weeklyProgress[i] > 0 && styles.dotActive]}>
                   {weeklyProgress[i] > 0 && (
-                    <Ionicons name="checkmark" size={10} color="#6A4424" />
+                    <Ionicons name="checkmark" size={10} color="#fff" />
                   )}
                 </View>
                 <Text style={styles.dayLabel}>{day}</Text>
@@ -138,6 +151,8 @@ export default function ProfilePage() {
           onSavedVerses={() => navigation.navigate('SavedVerses')}
           onPlan={() => navigation.navigate('BibleStudy')}
           onLogout={handleLogout}
+          onReminderPress={() => setShowReminderModal(true)}
+          onDeleteAccount={handleDeleteAccount}
         />
       </ScrollView>
 
@@ -150,6 +165,15 @@ export default function ProfilePage() {
         setEditEmail={setEditEmail}
         updateLoading={updateLoading}
         onSave={handleSaveEdit}
+      />
+
+      <ReminderModal
+        visible={showReminderModal}
+        onClose={() => setShowReminderModal(false)}
+        currentReminder={reminder}
+        onReminderChange={setReminder}
+        currentJournalReminder={journalReminder}
+        onJournalReminderChange={setJournalReminder}
       />
 
       <BottomNavBar />

@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Linking, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const BROWN = '#8B5D33';
@@ -35,7 +35,7 @@ function Section({ title, items }) {
   );
 }
 
-export default function ProfileMenu({ journalCount, savedVersesCount, onJournal, onSavedVerses, onPlan, onLogout }) {
+export default function ProfileMenu({ journalCount, savedVersesCount, onJournal, onSavedVerses, onPlan, onLogout, onReminderPress, onDeleteAccount }) {
   const mySpace = [
     {
       icon: 'journal-outline',
@@ -69,8 +69,8 @@ export default function ProfileMenu({ journalCount, savedVersesCount, onJournal,
       color: '#E07B39',
       bg: 'rgba(224,123,57,0.1)',
       label: 'Reminders',
-      sub: 'Daily study notifications',
-      onPress: () => Alert.alert('Reminders', 'Manage your daily reminders from the Bible Study screen.'),
+      sub: 'Daily study & journal notifications',
+      onPress: onReminderPress,
     },
   ];
 
@@ -105,6 +105,17 @@ export default function ProfileMenu({ journalCount, savedVersesCount, onJournal,
           'Q: How do I track my reading?\nA: Complete lessons in BibleStudy — they count toward your weekly progress.\n\nQ: What is SOAP journaling?\nA: Scripture · Observation · Application · Prayer — a method to go deeper in your study.',
         ),
     },
+    {
+      icon: 'share-social-outline',
+      color: '#7B5EA7',
+      bg: 'rgba(123,94,167,0.1)',
+      label: 'Refer a Friend',
+      sub: 'Share BibleSnap with someone',
+      onPress: () => Share.share({
+        message: '📖 I\'ve been using BibleSnap to study the Bible daily and it\'s amazing! Come join me 👇',
+        url: 'http://biblesnapweb.bellatis.com/',
+      }),
+    },
   ];
 
   const account = [
@@ -115,6 +126,14 @@ export default function ProfileMenu({ journalCount, savedVersesCount, onJournal,
       label: 'Logout',
       danger: true,
       onPress: onLogout,
+    },
+    {
+      icon: 'trash-outline',
+      color: '#F44336',
+      bg: 'rgba(244,67,54,0.1)',
+      label: 'Delete Account',
+      danger: true,
+      onPress: onDeleteAccount,
     },
   ];
 

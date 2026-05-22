@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Asset } from 'expo-asset';
 import LandingPage from './screens/LandingPage';
 import HomePage from './screens/HomePage';
 import BookContent from './screens/BookContentPage';
@@ -22,9 +23,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem('token')
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
+    Promise.all([
+      AsyncStorage.getItem('token').catch(() => null),
+      Asset.loadAsync(require('./assets/bg.png')).catch(() => {}),
+    ]).finally(() => setIsLoading(false));
   }, []);
 
   if (isLoading) {

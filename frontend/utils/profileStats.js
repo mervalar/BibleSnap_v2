@@ -94,7 +94,9 @@ export async function loadStudyPlanSummaryFromStorage() {
     totalLessons = readings.length;
     completedLessons = readings.filter((r) => (progressMap[r.id] || 0) === 100 || completedSet.has(r.id)).length;
   }
-  if (totalLessons === 0) return null;
+  if (totalLessons === 0) {
+    return { days: plan.days, percent: 0, daysRemaining: plan.days, finishDate: null, startDate: plan.startDate, totalLessons: 0, completedLessons: 0, lessonsAhead: 0, consistency: 0, streak: 0 };
+  }
 
   const percent = Math.min(100, Math.round((completedLessons / totalLessons) * 100));
   const remainingLessons = Math.max(0, totalLessons - completedLessons);

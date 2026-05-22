@@ -20,6 +20,7 @@ Route::post('/logout',          [AuthController::class, 'logout']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user',        [AuthController::class, 'user']);
     Route::put('/user/update', [AuthController::class, 'updateProfile']);
+    Route::delete('/user',     [AuthController::class, 'deleteAccount']);
 });
 
 // ── Public: read-only reference data ─────────────────────────────────────────

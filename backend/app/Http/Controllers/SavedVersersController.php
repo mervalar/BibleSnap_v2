@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\SavedVerse;
 use Illuminate\Http\Request;
 
-class SavedVerseController extends Controller
+class SavedVersersController extends Controller
 {
     /**
      * Get all saved verses for the user
