@@ -24,7 +24,6 @@ export default StyleSheet.create({
 
   progressCard: {
     position: 'absolute',
-    bottom: 70,
     left: 16,
     right: 16,
     padding: 12,

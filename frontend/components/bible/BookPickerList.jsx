@@ -1,5 +1,6 @@
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../styles/bIbleStudyContent.styles';
 import { BIBLE_CHAPTER_COUNTS } from '../../utils/bibleChapterCounts';
 import BookGameMap from './BookGameMap';
@@ -32,6 +33,9 @@ function computeStats(bookPlans, studyPlan) {
 }
 
 export default function BookPickerList({ books = [], bookPlans = {}, onSelectBook, searchQuery = '', studyPlan }) {
+  const insets = useSafeAreaInsets();
+  const cardBottom = 62 + Math.max(insets.bottom, 6);
+
   const filtered = books.filter(
     (b) => !searchQuery || b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -56,7 +60,7 @@ export default function BookPickerList({ books = [], bookPlans = {}, onSelectBoo
       <BookGameMap books={filtered} bookPlans={bookPlans} onSelectBook={onSelectBook} />
 
       {totalRead > 0 && (
-        <View style={styles.progressCard}>
+        <View style={[styles.progressCard, { bottom: cardBottom }]}>
           <View style={styles.progressCardRow}>
             <View>
               <Text style={styles.progressCardTitle}>Bible Progress</Text>
