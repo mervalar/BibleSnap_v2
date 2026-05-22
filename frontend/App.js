@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,11 +20,9 @@ const Stack = createStackNavigator();
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('token')
-      .then((token) => setIsAuthenticated(!!token))
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, []);
@@ -34,7 +33,7 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName={isAuthenticated ? 'Home' : 'Landing'}>
+      <Stack.Navigator initialRouteName="Home">
         <Stack.Screen name="Landing" component={LandingPage} options={{ headerShown: false }} />
         <Stack.Screen name="AuthScreen" component={AuthScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Home" component={HomePage} options={{ headerShown: false }} />

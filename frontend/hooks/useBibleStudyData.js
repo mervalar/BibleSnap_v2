@@ -30,6 +30,12 @@ export default function useBibleStudyData(isAuthenticated) {
     const CACHE_KEY = 'cache_bibleReadings';
     const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
+    // Books are always fetched independently — they are not cached so they
+    // would silently stay empty whenever the readings cache short-circuits.
+    fetchBooks().catch(() => []).then((b) => {
+      if (!cancelled) setBooks(b || []);
+    });
+
     const load = async () => {
       // Show cached data immediately if available
       try {
@@ -47,16 +53,12 @@ export default function useBibleStudyData(isAuthenticated) {
 
       // Fetch from network (first load or cache expired)
       try {
-        const [readings, b] = await Promise.all([
-          fetchBibleReadings().catch(() => null),
-          fetchBooks().catch(() => []),
-        ]);
+        const readings = await fetchBibleReadings().catch(() => null);
         if (!cancelled) {
           if (readings?.length) {
             setBibleReadings(readings);
             AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ data: readings, ts: Date.now() }));
           }
-          setBooks(b || []);
         }
       } catch (error) {
         console.error('Error loading data:', error);
