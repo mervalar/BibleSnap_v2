@@ -34,7 +34,7 @@ function computeStats(bookPlans, studyPlan) {
 
 export default function BookPickerList({ books = [], bookPlans = {}, onSelectBook, searchQuery = '', studyPlan }) {
   const insets = useSafeAreaInsets();
-  const cardBottom = 62 + Math.max(insets.bottom, 6);
+  const cardBottom = 12 + Math.max(insets.bottom, 6);
 
   const filtered = books.filter(
     (b) => !searchQuery || b.name.toLowerCase().includes(searchQuery.toLowerCase())
