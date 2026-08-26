@@ -17,30 +17,6 @@ const authHeaders = async () => {
   return { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) };
 };
 
-export const fetchNoteCategories = async () => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/note-categories`);
-    if (!res.ok) return [];
-    return await res.json();
-  } catch {
-    return [];
-  }
-};
-
-export const createNoteCategory = async (name) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/note-categories`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-};
-
 export const fetchJournals = async (userId) => {
   try {
     const res = await fetch(`${API_BASE_URL}/user-notes?user_id=${userId}`, {
@@ -61,6 +37,7 @@ export const fetchJournals = async (userId) => {
       soap_application: j.soap_application,
       soap_prayer: j.soap_prayer,
       status: j.status,
+      progress_percent: j.progress_percent,
       is_answered: j.is_answered,
       answer_reason: j.answer_reason,
       created_at: j.created_at,

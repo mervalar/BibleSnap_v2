@@ -35,7 +35,7 @@ function Section({ title, items }) {
   );
 }
 
-export default function ProfileMenu({ journalCount, savedVersesCount, onJournal, onSavedVerses, onPlan, onLogout, onReminderPress, onDeleteAccount }) {
+export default function ProfileMenu({ journalCount, savedVersesCount, onJournal, onSavedVerses, onWishlist, onPlan, onLogout, onReminderPress, onDeleteAccount }) {
   const mySpace = [
     {
       icon: 'journal-outline',
@@ -52,6 +52,13 @@ export default function ProfileMenu({ journalCount, savedVersesCount, onJournal,
       label: 'Saved Verses',
       sub: `${savedVersesCount} verse${savedVersesCount === 1 ? '' : 's'}`,
       onPress: onSavedVerses,
+    },
+    {
+      icon: 'heart-outline',
+      color: '#C2185B',
+      bg: 'rgba(194,24,91,0.1)',
+      label: 'Wishlist',
+      onPress: onWishlist,
     },
   ];
 
@@ -79,11 +86,11 @@ export default function ProfileMenu({ journalCount, savedVersesCount, onJournal,
       icon: 'information-circle-outline',
       color: '#2196F3',
       bg: 'rgba(33,150,243,0.1)',
-      label: 'About BibleSnap',
+      label: 'About BiblePause',
       onPress: () =>
         Alert.alert(
-          'About BibleSnap',
-          'BibleSnap helps you study the Bible daily through structured lessons, journaling, and verse saving.\n\nVersion 1.0.3',
+          'About BiblePause',
+          'BiblePause helps you study the Bible daily through structured lessons, journaling, and verse saving.\n\nVersion 1.0.3',
         ),
     },
     {
@@ -110,9 +117,10 @@ export default function ProfileMenu({ journalCount, savedVersesCount, onJournal,
       color: '#7B5EA7',
       bg: 'rgba(123,94,167,0.1)',
       label: 'Refer a Friend',
-      sub: 'Share BibleSnap with someone',
+      sub: 'Share BiblePause with someone',
       onPress: () => Share.share({
-        message: '📖 I\'ve been using BibleSnap to study the Bible daily and it\'s amazing! Come join me 👇',
+        message:
+          '📖 I\'ve been growing closer to God every day with BiblePause — daily Bible reading, guided studies, and journaling, all in one place.\n\nCome join me! 👇\nhttp://biblesnapweb.bellatis.com/',
         url: 'http://biblesnapweb.bellatis.com/',
       }),
     },
@@ -143,7 +151,7 @@ export default function ProfileMenu({ journalCount, savedVersesCount, onJournal,
       <Section title="Study" items={study} />
       <Section title="Learn More" items={appInfo} />
       <Section title="Account" items={account} />
-      <Text style={styles.version}>BibleSnap v1.0.3 · Made with ♥</Text>
+      <Text style={styles.version}>BiblePause v1.0.3 · Made with ♥</Text>
     </View>
   );
 }

@@ -477,6 +477,18 @@ export const createStyles = () => StyleSheet.create({
     color: COLORS.text.secondary,
     textAlign: 'center',
   },
+  emptyRetryButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 14,
+    marginTop: 16,
+  },
+  emptyRetryButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -935,7 +947,7 @@ export const createStyles = () => StyleSheet.create({
   },
   contentContainer: {
     padding: 24,
-    paddingTop: 16,
+    paddingTop: 70,
     paddingBottom: 60,
   },
   titleSection: {
@@ -1136,7 +1148,7 @@ export const createStyles = () => StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  modalCloseButton: {
+  bookModalCloseButton: {
     position: 'absolute',
     top: 10,
     right: 16,

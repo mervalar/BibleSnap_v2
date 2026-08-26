@@ -162,13 +162,22 @@ export default function BibleStudyPage() {
       />
       <View style={styles.mainContent}>
         {selectedType === 'pickupbook' ? (
-          <BookPickerList
-            books={data.books}
-            bookPlans={data.bookPlans}
-            onSelectBook={setSelectedBook}
-            searchQuery={searchQuery}
-            studyPlan={data.studyPlan}
-          />
+          data.books.length === 0 && !data.loading ? (
+            <BibleStudyEmptyState
+              selectedType={selectedType}
+              dimensions={dimensions}
+              technicalError={data.booksError}
+              onRetry={data.retryBooks}
+            />
+          ) : (
+            <BookPickerList
+              books={data.books}
+              bookPlans={data.bookPlans}
+              onSelectBook={setSelectedBook}
+              searchQuery={searchQuery}
+              studyPlan={data.studyPlan}
+            />
+          )
         ) : displayItems.length === 0 ? (
           <BibleStudyEmptyState selectedType={selectedType} dimensions={dimensions} />
         ) : (

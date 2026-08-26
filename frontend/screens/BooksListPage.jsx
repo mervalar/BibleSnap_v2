@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import SplashScreen from '../components/SplashScreen';
-import CustomPicker from '../components/CustomPicker';
 import BottomNavBar from '../components/BottomNavBar';
+import BibleControlBar from '../components/bible/BibleControlBar';
 import biblePreferences from '../api/biblePreferences';
 import { styles, COLORS, dimensions } from '../styles/BooksListPage.styles';
 
@@ -130,10 +129,9 @@ const BooksListPage = () => {
 
   if (loading && books.length === 0) {
     return (
-      <SplashScreen 
-        onFinish={() => {}}
-        duration={2000} 
-      />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#A07553" />
+      </View>
     );
   }
 
@@ -167,28 +165,12 @@ const BooksListPage = () => {
           Bible
         </Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={[styles.headerActionButton, showSearch && styles.headerActionButtonActive]} 
-            onPress={() => setShowSearch(!showSearch)}
-          >
-            <Ionicons 
-              name="search" 
-              size={dimensions.iconSize.medium} 
-              color={showSearch ? COLORS.background : COLORS.primary} 
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerActionButton}
-            onPress={() => navigation.navigate('SavedVerses')}
-          >
-            <Ionicons name="bookmark-outline" size={dimensions.iconSize.medium} color={COLORS.primary} />
-          </TouchableOpacity>
-          <CustomPicker
-            options={LANGUAGE_OPTIONS}
-            selectedValue={language}
-            onValueChange={handleLanguageChange}
-            containerStyle={styles.languagePickerContainer}
-            colors={COLORS}
+          <BibleControlBar
+            onSavedVerses={() => navigation.navigate('SavedVerses')}
+            language={language}
+            onLanguageChange={handleLanguageChange}
+            onSearch={() => setShowSearch(!showSearch)}
+            isSearchActive={showSearch}
           />
         </View>
       </View>

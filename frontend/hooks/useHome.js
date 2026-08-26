@@ -5,9 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import SharedPreferences from 'react-native-shared-preferences';
-import { fetchJournals } from '../api/journalApi';
-
-const defaultJourneyStats = { hasPlan: false, percent: 0, daysRemaining: 0, estimatedDate: null };
+import { getTodaysStudyReadings } from '../utils/bibleStudyPlanStats';
 
 export default function useHome() {
   const verseCardRef = useRef(null);
@@ -18,70 +16,26 @@ export default function useHome() {
   const [isConnected, setIsConnected] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
-  const [journeyStats, setJourneyStats] = useState(defaultJourneyStats);
-  const [todayApplication, setTodayApplication] = useState(null);
+  const [todaysStudy, setTodaysStudy] = useState(null);
 
-  const loadTodayApplication = useCallback(async () => {
-    try {
-      const raw = await AsyncStorage.getItem('user');
-      if (!raw) return;
-      const userId = JSON.parse(raw).id;
-      const notes = await fetchJournals(userId);
-      const active = notes.find(
-        (n) => n.note_categorie_name === 'Application' && n.status !== 'completed'
-      );
-      setTodayApplication(active ?? null);
-    } catch (e) {}
-  }, []);
-
-  const calculateOverallProgress = useCallback(async () => {
-    try {
-      const readingsStr = await AsyncStorage.getItem('bibleReadings');
-      const completedData = await AsyncStorage.getItem('completedStudies');
-      if (!readingsStr) return 0;
-      const allReadings = JSON.parse(readingsStr);
-      if (allReadings.length === 0) return 0;
-      const completedIds = completedData ? JSON.parse(completedData) : [];
-      return Math.min(100, Math.round((completedIds.length / allReadings.length) * 100));
-    } catch (e) {
-      return 0;
-    }
-  }, []);
-
-  const loadJourneyStats = useCallback(async () => {
+  const loadTodaysStudy = useCallback(async () => {
     try {
       const studyPlanStr = await AsyncStorage.getItem('studyPlan');
-      if (!studyPlanStr) {
-        setJourneyStats(defaultJourneyStats);
+      const cacheStr = await AsyncStorage.getItem('cache_bibleReadings');
+      if (!studyPlanStr || !cacheStr) {
+        setTodaysStudy(null);
         return;
       }
       const studyPlan = JSON.parse(studyPlanStr);
-      const readingsStr = await AsyncStorage.getItem('bibleReadings');
+      const { data: allReadings } = JSON.parse(cacheStr);
       const completedData = await AsyncStorage.getItem('completedStudies');
-      
-      if (!readingsStr) {
-        setJourneyStats(defaultJourneyStats);
-        return;
-      }
-      
-      const allReadings = JSON.parse(readingsStr);
       const completedIds = completedData ? JSON.parse(completedData) : [];
-      const overallPercent = Math.min(100, Math.round((completedIds.length / allReadings.length) * 100));
-      
-      let daysRemaining = 0;
-      let estimatedDate = null;
-      if (studyPlan?.startDate && studyPlan?.days) {
-        // Calculate remaining days dynamically based on total lessons and completed lessons
-        const totalLessons = allReadings.length;
-        daysRemaining = Math.max(0, totalLessons - completedIds.length);
-        
-        // Calculate estimated completion date based on remaining days
-        estimatedDate = new Date();
-        estimatedDate.setDate(estimatedDate.getDate() + daysRemaining);
-      }
-      setJourneyStats({ hasPlan: true, percent: overallPercent, daysRemaining, estimatedDate });
+
+      const dueToday = getTodaysStudyReadings(studyPlan, allReadings);
+      const nextReading = dueToday.find((r) => !completedIds.includes(r.id)) || null;
+      setTodaysStudy(nextReading ? { reading: nextReading, allReadings } : null);
     } catch (e) {
-      setJourneyStats(defaultJourneyStats);
+      setTodaysStudy(null);
     }
   }, []);
 
@@ -114,17 +68,15 @@ export default function useHome() {
         SharedPreferences.setItem('verseOfTheDay', JSON.stringify(data.verse.details));
       })
       .catch(() => setLoading(false));
-    loadJourneyStats();
     checkUserAuth();
-    loadTodayApplication();
+    loadTodaysStudy();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       checkUserAuth();
-      loadJourneyStats();
-      loadTodayApplication();
-    }, [checkUserAuth, loadJourneyStats, loadTodayApplication])
+      loadTodaysStudy();
+    }, [checkUserAuth, loadTodaysStudy])
   );
 
   const handleCopyVerse = useCallback(() => {
@@ -166,8 +118,7 @@ export default function useHome() {
     showAuthModal,
     setShowAuthModal,
     authLoading,
-    journeyStats,
-    todayApplication,
+    todaysStudy,
     handleCopyVerse,
     handleShareVerse,
     checkUserAuth,

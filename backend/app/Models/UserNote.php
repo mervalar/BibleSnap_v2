@@ -3,8 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Models\note_categorie;
-use App\Models\starks;
 
 class UserNote extends Model
 {
@@ -20,6 +18,7 @@ class UserNote extends Model
         'soap_application',
         'soap_prayer',
         'status',
+        'progress_percent',
         'is_answered',
         'answer_reason',
         'answered_date',
@@ -27,6 +26,7 @@ class UserNote extends Model
 
     protected $casts = [
         'is_answered' => 'boolean',
+        'progress_percent' => 'integer',
     ];
 
     public function noteCategorie()

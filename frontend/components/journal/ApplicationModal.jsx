@@ -6,22 +6,27 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 const BROWN = '#A07553';
+const PERCENT_OPTIONS = [0, 25, 50, 75, 100];
 
 export default function ApplicationModal({ visible, onClose, onSave, initialNote }) {
   const [title, setTitle] = useState('');
+  const [verse, setVerse] = useState('');
   const [notes, setNotes] = useState('');
+  const [percent, setPercent] = useState(0);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     setTitle(initialNote?.title || '');
+    setVerse(initialNote?.soap_scripture || '');
     setNotes(initialNote?.content || '');
+    setPercent(initialNote?.progress_percent ?? 0);
   }, [visible, initialNote]);
 
   const handleSave = async () => {
     if (!title.trim()) return;
     setSaving(true);
-    await onSave({ title: title.trim(), notes: notes.trim() });
+    await onSave({ title: title.trim(), verse: verse.trim(), notes: notes.trim(), percent });
     setSaving(false);
   };
 
@@ -56,7 +61,16 @@ export default function ApplicationModal({ visible, onClose, onSave, initialNote
             maxLength={200}
           />
 
-          <Text style={styles.fieldLabel}>Notes (optional)</Text>
+          <Text style={styles.fieldLabel}>Verse (optional)</Text>
+          <TextInput
+            style={styles.mainInput}
+            placeholder="e.g. James 1:19"
+            placeholderTextColor="#bbb"
+            value={verse}
+            onChangeText={setVerse}
+          />
+
+          <Text style={styles.fieldLabel}>Message (optional)</Text>
           <TextInput
             style={[styles.mainInput, { minHeight: 80 }]}
             placeholder="Additional context or details…"
@@ -66,6 +80,23 @@ export default function ApplicationModal({ visible, onClose, onSave, initialNote
             multiline
             textAlignVertical="top"
           />
+
+          <Text style={styles.fieldLabel}>Progress</Text>
+          <View style={styles.percentRow}>
+            {PERCENT_OPTIONS.map((p) => {
+              const active = percent === p;
+              return (
+                <TouchableOpacity
+                  key={p}
+                  style={[styles.percentBtn, active && styles.percentBtnActive]}
+                  onPress={() => setPercent(p)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.percentBtnText, active && styles.percentBtnTextActive]}>{p}%</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -90,4 +121,12 @@ const styles = StyleSheet.create({
   infoText: { flex: 1, fontSize: 13, color: BROWN, lineHeight: 20 },
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8, marginTop: 4 },
   mainInput: { backgroundColor: '#fff', borderRadius: 12, padding: 14, fontSize: 15, color: '#1A1A1A', minHeight: 56, borderWidth: 1, borderColor: '#EEE', marginBottom: 16, lineHeight: 22 },
+  percentRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  percentBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12,
+    borderWidth: 1, borderColor: '#EEE', backgroundColor: '#fff', alignItems: 'center',
+  },
+  percentBtnActive: { backgroundColor: BROWN, borderColor: BROWN },
+  percentBtnText: { fontSize: 13, fontWeight: '700', color: '#888' },
+  percentBtnTextActive: { color: '#fff' },
 });

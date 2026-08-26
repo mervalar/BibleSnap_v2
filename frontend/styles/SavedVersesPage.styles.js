@@ -16,7 +16,7 @@ export const COLORS = {
 export const createStyles = () =>
   StyleSheet.create({
     container: { flex: 1, width: '100%', backgroundColor: COLORS.overlay },
-    backgroundVideo: {
+    backgroundImage: {
       position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1,
     },
     contentOverlay: { flex: 1, backgroundColor: COLORS.overlay, zIndex: 2 },

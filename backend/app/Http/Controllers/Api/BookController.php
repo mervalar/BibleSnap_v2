@@ -1,8 +1,8 @@
 <?php
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 
 class BookController extends Controller
@@ -14,21 +14,21 @@ class BookController extends Controller
     {
         try {
             $jsonPath = base_path('JsonBible/bookpicker.json');
-            
-            if (!File::exists($jsonPath)) {
+
+            if (! File::exists($jsonPath)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Books data file not found'
+                    'message' => 'Books data file not found',
                 ], 404);
             }
 
             $jsonData = File::get($jsonPath);
             $data = json_decode($jsonData, true);
 
-            if (!isset($data['books'])) {
+            if (! isset($data['books'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid data format'
+                    'message' => 'Invalid data format',
                 ], 500);
             }
 
@@ -37,135 +37,20 @@ class BookController extends Controller
                 return array_merge($book, [
                     'id' => $index + 1,
                     'testament' => $this->getTestament($book['name']),
-                    'category' => $this->getCategory($book['name'])
+                    'category' => $this->getCategory($book['name']),
                 ]);
             });
 
             return response()->json([
                 'success' => true,
                 'data' => $books->values(),
-                'total' => $books->count()
+                'total' => $books->count(),
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error loading books: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Get a specific book by ID or name
-     */
-    public function show($identifier)
-    {
-        try {
-            $jsonPath = base_path('JsonBible/bookpicker.json');
-            $jsonData = File::get($jsonPath);
-            $data = json_decode($jsonData, true);
-
-            $books = collect($data['books'])->map(function ($book, $index) {
-                return array_merge($book, [
-                    'id' => $index + 1,
-                    'testament' => $this->getTestament($book['name']),
-                    'category' => $this->getCategory($book['name'])
-                ]);
-            });
-
-            // Search by ID or name
-            $book = is_numeric($identifier) 
-                ? $books->firstWhere('id', (int)$identifier)
-                : $books->firstWhere('name', $identifier);
-
-            if (!$book) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Book not found'
-                ], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $book
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error loading book: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Get books by testament
-     */
-    public function getByTestament($testament)
-    {
-        try {
-            $jsonPath = base_path('JsonBible/bookpicker.json');
-            $jsonData = File::get($jsonPath);
-            $data = json_decode($jsonData, true);
-
-            $books = collect($data['books'])->map(function ($book, $index) {
-                return array_merge($book, [
-                    'id' => $index + 1,
-                    'testament' => $this->getTestament($book['name']),
-                    'category' => $this->getCategory($book['name'])
-                ]);
-            });
-
-            $filteredBooks = $books->filter(function ($book) use ($testament) {
-                return strtolower($book['testament']) === strtolower($testament);
-            });
-
-            return response()->json([
-                'success' => true,
-                'data' => $filteredBooks->values(),
-                'total' => $filteredBooks->count()
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error loading books: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Get books by category
-     */
-    public function getByCategory($category)
-    {
-        try {
-            $jsonPath = base_path('JsonBible/bookpicker.json');
-            $jsonData = File::get($jsonPath);
-            $data = json_decode($jsonData, true);
-
-            $books = collect($data['books'])->map(function ($book, $index) {
-                return array_merge($book, [
-                    'id' => $index + 1,
-                    'testament' => $this->getTestament($book['name']),
-                    'category' => $this->getCategory($book['name'])
-                ]);
-            });
-
-            $filteredBooks = $books->filter(function ($book) use ($category) {
-                return strtolower($book['category']) === strtolower($category);
-            });
-
-            return response()->json([
-                'success' => true,
-                'data' => $filteredBooks->values(),
-                'total' => $filteredBooks->count()
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error loading books: ' . $e->getMessage()
+                'message' => 'Error loading books: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -183,7 +68,7 @@ class BookController extends Controller
             'Ecclesiastes', 'Song of Solomon', 'Isaiah', 'Jeremiah',
             'Lamentations', 'Ezekiel', 'Daniel', 'Hosea', 'Joel', 'Amos',
             'Obadiah', 'Jonah', 'Micah', 'Nahum', 'Habakkuk', 'Zephaniah',
-            'Haggai', 'Zechariah', 'Malachi'
+            'Haggai', 'Zechariah', 'Malachi',
         ];
 
         return in_array($bookName, $oldTestament) ? 'Old Testament' : 'New Testament';
@@ -204,7 +89,7 @@ class BookController extends Controller
             'History (NT)' => ['Acts'],
             'Pauline Epistles' => ['Romans', '1 Corinthians', '2 Corinthians', 'Galatians', 'Ephesians', 'Philippians', 'Colossians', '1 Thessalonians', '2 Thessalonians', '1 Timothy', '2 Timothy', 'Titus', 'Philemon'],
             'General Epistles' => ['Hebrews', 'James', '1 Peter', '2 Peter', '1 John', '2 John', '3 John', 'Jude'],
-            'Prophecy' => ['Revelation']
+            'Prophecy' => ['Revelation'],
         ];
 
         foreach ($categories as $category => $books) {

@@ -7,6 +7,7 @@ export default function useBibleStudyData(isAuthenticated) {
   const [loading, setLoading] = useState(true);
   const [bibleReadings, setBibleReadings] = useState([]);
   const [books, setBooks] = useState([]);
+  const [booksError, setBooksError] = useState(false);
   const [progressMap, setProgressMap] = useState({});
   const [completedStudies, setCompletedStudies] = useState(new Set());
   const [studyPlan, setStudyPlan] = useState(null);
@@ -24,6 +25,13 @@ export default function useBibleStudyData(isAuthenticated) {
     AsyncStorage.setItem('bookPlans', JSON.stringify(bookPlans));
   }, [bookPlans]);
 
+  const loadBooks = useCallback(() => {
+    setBooksError(false);
+    return fetchBooks()
+      .then((b) => { setBooks(b || []); return b; })
+      .catch(() => { setBooks([]); setBooksError(true); });
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
@@ -32,9 +40,7 @@ export default function useBibleStudyData(isAuthenticated) {
 
     // Books are always fetched independently — they are not cached so they
     // would silently stay empty whenever the readings cache short-circuits.
-    fetchBooks().catch(() => []).then((b) => {
-      if (!cancelled) setBooks(b || []);
-    });
+    loadBooks();
 
     const load = async () => {
       // Show cached data immediately if available
@@ -129,6 +135,8 @@ export default function useBibleStudyData(isAuthenticated) {
     loading,
     bibleReadings,
     books,
+    booksError,
+    retryBooks: loadBooks,
     progressMap,
     setProgressMap,
     completedStudies,

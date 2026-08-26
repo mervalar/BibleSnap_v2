@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
-use Carbon\Carbon;
+use Illuminate\Support\HtmlString;
 
 class AuthController extends Controller
 {
@@ -18,7 +18,7 @@ class AuthController extends Controller
         $request->validate(['email' => 'required|email']);
 
         $email = strtolower(trim($request->email));
-        $code  = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
         $user = User::firstOrCreate(
             ['email' => $email],
@@ -26,7 +26,7 @@ class AuthController extends Controller
         );
 
         $user->update([
-            'otp_code'       => $code,
+            'otp_code' => $code,
             'otp_expires_at' => Carbon::now()->addMinutes(10),
         ]);
 
@@ -36,19 +36,24 @@ class AuthController extends Controller
 <head>
   <meta charset='UTF-8' />
   <meta name='viewport' content='width=device-width, initial-scale=1.0' />
-  <title>BibleSnap Verification</title>
+  <meta name='color-scheme' content='light' />
+  <meta name='supported-color-schemes' content='light' />
+  <title>BiblePause Verification</title>
+  <style>
+    :root { color-scheme: light; supported-color-schemes: light; }
+  </style>
 </head>
-<body style='margin:0;padding:0;background-color:#F5EFE6;font-family:Georgia,serif;'>
-  <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#F5EFE6;padding:40px 16px;'>
+<body style='margin:0;padding:0;background-color:#F5EFE6;font-family:Georgia,serif;' bgcolor='#F5EFE6'>
+  <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#F5EFE6;padding:40px 16px;' bgcolor='#F5EFE6'>
     <tr>
       <td align='center'>
-        <table width='100%' style='max-width:480px;background-color:#FFFDF9;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(139,93,51,0.10);'>
+        <table width='100%' style='max-width:480px;background-color:#FFFDF9;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(139,93,51,0.10);' bgcolor='#FFFDF9'>
 
           <!-- Header -->
           <tr>
-            <td style='background-color:#8B5D33;padding:32px 40px;text-align:center;'>
+            <td style='background-color:#8B5D33;padding:32px 40px;text-align:center;' bgcolor='#8B5D33'>
               <p style='margin:0 0 6px 0;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,249,242,0.75);font-family:Arial,sans-serif;'>Welcome to</p>
-              <h1 style='margin:0;font-size:30px;font-weight:bold;color:#FFF9F2;letter-spacing:1px;font-family:Georgia,serif;'>&#128218; BibleSnap</h1>
+              <h1 style='margin:0;font-size:30px;font-weight:bold;color:#FFF9F2;letter-spacing:1px;font-family:Georgia,serif;'>&#128218; BiblePause</h1>
               <p style='margin:10px 0 0 0;font-size:13px;color:rgba(255,249,242,0.7);font-family:Arial,sans-serif;font-style:italic;'>Grow in faith, one day at a time.</p>
             </td>
           </tr>
@@ -58,7 +63,7 @@ class AuthController extends Controller
             <td style='padding:40px 40px 32px;text-align:center;'>
               <h2 style='margin:0 0 8px 0;font-size:20px;color:#2D1A0E;font-family:Georgia,serif;'>Your verification code</h2>
               <p style='margin:0 0 32px 0;font-size:14px;color:#9B8870;font-family:Arial,sans-serif;line-height:1.6;'>
-                Use the code below to sign in to your BibleSnap account.<br/>It expires in <strong style='color:#6A4424;'>10 minutes</strong>.
+                Use the code below to sign in to your BiblePause account.<br/>It expires in <strong style='color:#6A4424;'>10 minutes</strong>.
               </p>
 
               <!-- Code box -->
@@ -84,7 +89,7 @@ class AuthController extends Controller
           <tr>
             <td style='padding:24px 40px;text-align:center;'>
               <p style='margin:0 0 4px 0;font-size:12px;color:#C4B5A5;font-family:Arial,sans-serif;'>
-                BibleSnap &mdash; Daily Bible study &amp; journaling
+                BiblePause &mdash; Daily Bible study &amp; journaling
               </p>
               <p style='margin:0;font-size:11px;color:#D4C8BC;font-family:Arial,sans-serif;'>
                 biblesnap.bellatis.com
@@ -99,31 +104,36 @@ class AuthController extends Controller
 </body>
 </html>";
 
+        $text = "Your BiblePause verification code is: {$code}\n\n"
+            ."It expires in 10 minutes.\n\n"
+            ."If you didn't request this code, you can safely ignore this email.";
+
         try {
-            Mail::html(
-                $html,
+            Mail::send(
+                ['html' => new HtmlString($html), 'text' => new HtmlString($text)],
+                [],
                 function ($message) use ($email) {
-                    $message->to($email)->subject('Your BibleSnap verification code');
+                    $message->to($email)->subject('Your BiblePause verification code');
                 }
             );
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to send email. Check mail configuration.'], 500);
         }
 
-        return response()->json(['success' => true, 'message' => 'Code sent to ' . $email]);
+        return response()->json(['success' => true, 'message' => 'Code sent to '.$email]);
     }
 
     public function verifyOtp(Request $request)
     {
         $request->validate([
             'email' => 'required|email',
-            'code'  => 'required|string|size:6',
+            'code' => 'required|string|size:6',
         ]);
 
         $email = strtolower(trim($request->email));
-        $user  = User::where('email', $email)->first();
+        $user = User::where('email', $email)->first();
 
-        if (!$user || !$user->otp_code || !$user->otp_expires_at) {
+        if (! $user || ! $user->otp_code || ! $user->otp_expires_at) {
             return response()->json(['success' => false, 'message' => 'No code sent for this email.'], 400);
         }
 
@@ -137,13 +147,13 @@ class AuthController extends Controller
 
         $user->update(['otp_code' => null, 'otp_expires_at' => null, 'email_verified_at' => Carbon::now()]);
 
-        $token = $user->createToken('BibleSnapApp')->plainTextToken;
+        $token = $user->createToken('BiblePauseApp')->plainTextToken;
 
         return response()->json([
             'success' => true,
-            'user'    => $user,
-            'token'   => $token,
-            'is_new'  => $user->wasRecentlyCreated,
+            'user' => $user,
+            'token' => $token,
+            'is_new' => $user->wasRecentlyCreated,
         ]);
     }
 
@@ -155,19 +165,19 @@ class AuthController extends Controller
 
         try {
             $response = file_get_contents(
-                'https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($request->id_token)
+                'https://oauth2.googleapis.com/tokeninfo?id_token='.urlencode($request->id_token)
             );
             $payload = json_decode($response, true);
 
-            if (!$payload || isset($payload['error'])) {
+            if (! $payload || isset($payload['error'])) {
                 return response()->json(['success' => false, 'message' => 'Invalid Google token.'], 401);
             }
 
             $googleId = $payload['sub'];
-            $email    = $payload['email'] ?? null;
-            $name     = $payload['name'] ?? ($email ? explode('@', $email)[0] : 'User');
+            $email = $payload['email'] ?? null;
+            $name = $payload['name'] ?? ($email ? explode('@', $email)[0] : 'User');
 
-            if (!$email) {
+            if (! $email) {
                 return response()->json(['success' => false, 'message' => 'Google account has no email.'], 400);
             }
 
@@ -176,20 +186,22 @@ class AuthController extends Controller
                 ->first();
 
             $isNew = false;
-            if (!$user) {
-                $user  = User::create(['name' => $name, 'email' => strtolower($email), 'google_id' => $googleId, 'password' => null, 'email_verified_at' => now()]);
+            if (! $user) {
+                $user = User::create(['name' => $name, 'email' => strtolower($email), 'google_id' => $googleId, 'password' => null, 'email_verified_at' => now()]);
                 $isNew = true;
             } else {
-                if (!$user->google_id) $user->update(['google_id' => $googleId]);
+                if (! $user->google_id) {
+                    $user->update(['google_id' => $googleId]);
+                }
             }
 
-            $token = $user->createToken('BibleSnapApp')->plainTextToken;
+            $token = $user->createToken('BiblePauseApp')->plainTextToken;
 
             return response()->json([
                 'success' => true,
-                'user'    => $user,
-                'token'   => $token,
-                'is_new'  => $isNew,
+                'user' => $user,
+                'token' => $token,
+                'is_new' => $isNew,
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Google auth failed.', 'error' => $e->getMessage()], 500);
@@ -201,15 +213,21 @@ class AuthController extends Controller
     public function updateProfile(Request $request)
     {
         $user = Auth::user();
-        if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
+        if (! $user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
+        }
 
         $request->validate([
-            'name'  => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|unique:users,email,' . $user->id,
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|email|unique:users,email,'.$user->id,
         ]);
 
-        if ($request->has('name'))  $user->name  = $request->name;
-        if ($request->has('email')) $user->email = $request->email;
+        if ($request->has('name')) {
+            $user->name = $request->name;
+        }
+        if ($request->has('email')) {
+            $user->email = $request->email;
+        }
         $user->save();
 
         return response()->json(['success' => true, 'user' => $user]);
@@ -219,30 +237,15 @@ class AuthController extends Controller
     {
         try {
             $user = $request->user();
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
             }
             $user->tokens()->delete();
             $user->delete();
+
             return response()->json(['success' => true, 'message' => 'Account deleted successfully']);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to delete account', 'error' => $e->getMessage()], 500);
         }
-    }
-
-    public function logout(Request $request)
-    {
-        try {
-            $request->user()?->currentAccessToken()?->delete();
-        } catch (\Exception $e) {}
-
-        return response()->json(['success' => true, 'message' => 'Logged out successfully']);
-    }
-
-    public function user(Request $request)
-    {
-        $user = Auth::user();
-        if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
-        return response()->json(['success' => true, 'user' => $user]);
     }
 }

@@ -58,6 +58,27 @@ export function getTodaysReadingIds(studyPlan, bibleReadings) {
   return todayIds;
 }
 
+/** Get the actual reading(s) scheduled for today, for both 365-day (one lesson
+ * per calendar day) and shorter plans (batched via studyPlan.schedule). */
+export function getTodaysStudyReadings(studyPlan, bibleReadings) {
+  if (!studyPlan?.startDate || !bibleReadings?.length) return [];
+  const start = new Date(studyPlan.startDate);
+  const now = new Date();
+  const diff = Math.floor(
+    (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+      Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) /
+      (1000 * 60 * 60 * 24)
+  );
+  if (studyPlan.days === 365) {
+    const dayNumber = Math.max(1, Math.min(365, diff + 1));
+    return bibleReadings.filter((r) => r.day === dayNumber);
+  }
+  if (!studyPlan.schedule?.length) return [];
+  const dayIndex = Math.max(0, Math.min(studyPlan.days - 1, diff));
+  const todayDayIds = studyPlan.schedule[dayIndex] || [];
+  return bibleReadings.filter((r) => todayDayIds.includes(r.day));
+}
+
 /** Compute encouragement message from stats. Returns { type, emoji, text } or null. */
 export function computeEncouragementMessage(lessonsAhead, consistency, streak, planJustChanged, shownToday) {
   if (planJustChanged) return null;

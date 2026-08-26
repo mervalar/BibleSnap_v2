@@ -5,20 +5,17 @@ import { createStyles, COLORS } from '../../styles/JournalPage.styles';
 
 const styles = createStyles();
 
-export default function JournalHeader({ dimensions, showSearch, setShowSearch, searchQuery, setSearchQuery, onBack, onAdd }) {
+export default function JournalHeader({ dimensions, showSearch, setShowSearch, searchQuery, setSearchQuery, onBack, title = 'My Journals' }) {
   return (
     <>
       <View style={[styles.header, { height: dimensions.headerHeight }]}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Ionicons name="arrow-back" size={dimensions.iconSize.medium} color={COLORS.primary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}>My Journals</Text>
+        <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}>{title}</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={[styles.headerActionButton, showSearch && styles.headerActionButtonActive]} onPress={() => setShowSearch(!showSearch)}>
             <Ionicons name="search" size={dimensions.iconSize.medium} color={showSearch ? COLORS.background : COLORS.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addButton} onPress={onAdd}>
-            <Ionicons name="add" size={dimensions.iconSize.medium} color={COLORS.background} />
           </TouchableOpacity>
         </View>
       </View>

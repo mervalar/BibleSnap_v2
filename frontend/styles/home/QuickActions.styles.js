@@ -2,41 +2,34 @@ import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
   quickActionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
     marginBottom: 16,
   },
-  quickActionCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 16,
+  quickActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  quickActionItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  quickActionIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 80,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  prayerCard: {
-    backgroundColor: '#9E795D',
-  },
-  studyCard: {
-    backgroundColor: '#A07553',
-  },
-  assistantCard: {
-    backgroundColor: '#9E795D',
-  },
-  quickActionIcon: {
-    fontSize: 24,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   quickActionTitle: {
-    color: '#EEDED2',
-    fontWeight: 'bold',
-    fontSize: 12,
+    color: '#2D2417',
+    fontWeight: '700',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  quickActionSubtitle: {
+    color: '#9B8870',
+    fontWeight: '500',
+    fontSize: 11,
     textAlign: 'center',
   },
 });

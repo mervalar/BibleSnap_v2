@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import AuthModal from './AuthModal';
 
 const COLORS = {
   primary: '#8B5D33',
@@ -23,12 +25,23 @@ const BottomNavBar = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
+  const [isConnected, setIsConnected] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  const checkAuth = useCallback(() => {
+    AsyncStorage.getItem('isAuthenticated').then((v) => setIsConnected(v === 'true'));
+  }, []);
+
+  useFocusEffect(useCallback(() => { checkAuth(); }, [checkAuth]));
 
   // Map route names to nav items
   const getCurrentRoute = () => {
     const routeName = route.name;
     // Handle nested routes
     if (routeName === 'Home' || routeName === 'HomePage') return 'home';
+    if (routeName === 'BooksList' || routeName === 'BooksListPage') return 'bible';
+    if (routeName === 'BookChapters' || routeName === 'ChapterListPage') return 'bible';
+    if (routeName === 'BookContent' || routeName === 'BookContentPage') return 'bible';
     if (routeName === 'BibleStudy' || routeName === 'BibleStudyPage') return 'study';
     if (routeName === 'Journal' || routeName === 'JournalPage') return 'journal';
     if (routeName === 'Profile' || routeName === 'ProfilePage') return 'profile';
@@ -47,10 +60,17 @@ const BottomNavBar = () => {
       route: 'Home',
     },
     {
-      id: 'study',
-      label: 'Study',
+      id: 'bible',
+      label: 'Bible',
       icon: 'book-outline',
       activeIcon: 'book',
+      route: 'BooksList',
+    },
+    {
+      id: 'study',
+      label: 'Study',
+      icon: 'school-outline',
+      activeIcon: 'school',
       route: 'BibleStudy',
     },
     {
@@ -69,10 +89,13 @@ const BottomNavBar = () => {
     },
   ];
 
-  const handleNavigate = (routeName) => {
-    if (currentRoute !== routeName.toLowerCase()) {
-      navigation.navigate(routeName);
+  const handleNavigate = (item) => {
+    if (currentRoute === item.id) return;
+    if (item.id !== 'home' && !isConnected) {
+      setShowAuthModal(true);
+      return;
     }
+    navigation.navigate(item.route);
   };
 
   return (
@@ -84,7 +107,7 @@ const BottomNavBar = () => {
             <TouchableOpacity
               key={item.id}
               style={styles.navItem}
-              onPress={() => handleNavigate(item.route)}
+              onPress={() => handleNavigate(item)}
               activeOpacity={0.6}
             >
               <View style={[
@@ -110,6 +133,11 @@ const BottomNavBar = () => {
           );
         })}
       </View>
+      <AuthModal
+        visible={showAuthModal}
+        onClose={() => { setShowAuthModal(false); checkAuth(); }}
+        navigation={navigation}
+      />
     </View>
   );
 };

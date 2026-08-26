@@ -1,8 +1,8 @@
-# BibleSnap v2 — Claude Guide
+# BiblePause v2 — Claude Guide
 
 ## Project Overview
 
-BibleSnap is a Bible study and spiritual development app with a Laravel REST API backend and a React Native (Expo) mobile frontend. Users can read the Bible across multiple books and translations, write journal notes, track daily study progress, save and highlight favourite verses, and view weekly consistency charts.
+BiblePause (formerly BibleSnap; the app name changed because "BibleSnap" was already taken — the repo/folder name and API domain remain unchanged) is a Bible study and spiritual development app with a Laravel REST API backend and a React Native (Expo) mobile frontend. Users can read the Bible across multiple books and translations, write journal notes, track daily study progress, save and highlight favourite verses, and view weekly consistency charts.
 
 Production API base URL: `https://biblesnap.bellatis.com/api`
 
@@ -181,6 +181,7 @@ const [error, setError] = useState(null);
 - Add indexes on columns used in `WHERE` clauses (especially `user_id`, `score_date`)
 - Unique constraints on natural keys (e.g. `user_id + book + chapter + verse + translation` for saved verses)
 - Bible book metadata lives in `JsonBible/bookpicker.json`, not in a database table — do not move it without a clear reason
+- `user_notes.status` (the old `not_started|in_progress|completed` enum) is retired for the Application feature — progress is now tracked via `user_notes.progress_percent` (0-100). The `status` column is left in place (unused) rather than dropped, to avoid a destructive migration on production data
 
 ---
 

@@ -64,7 +64,6 @@ export const createStyles = () => {
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: d.spacing.sm },
     headerActionButton: { width: 44, height: 44, backgroundColor: COLORS.surface, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border.light },
     headerActionButtonActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-    addButton: { width: 44, height: 44, backgroundColor: COLORS.primary, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
     searchContainer: { backgroundColor: 'transparent', paddingHorizontal: horizontalPadding, paddingVertical: d.spacing.md, borderBottomWidth: 0 },
     searchInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: 12, paddingHorizontal: d.spacing.md, paddingVertical: d.spacing.sm, borderWidth: 1, borderColor: COLORS.border.light, minHeight: 48 },
     searchInput: { flex: 1, marginLeft: d.spacing.sm, color: COLORS.text.primary, fontWeight: '400' },

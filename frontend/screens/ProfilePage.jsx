@@ -12,13 +12,12 @@ import ProfileMenu from '../components/profile/ProfileMenu';
 import ProfileEditModal from '../components/profile/ProfileEditModal';
 import ProfileLoadingView from '../components/profile/ProfileLoadingView';
 import ProfileErrorView from '../components/profile/ProfileErrorView';
+import ProfileActivityGraph from '../components/profile/ProfileActivityGraph';
 import ReminderModal from '../components/ReminderModal';
 import { getSavedReminder, getSavedJournalReminder } from '../utils/notificationService';
 import { COLORS } from '../styles/theme';
 import layoutStyles from '../styles/profile/ProfileLayout.styles';
 
-const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const BROWN = '#8B5D33';
 
 export default function ProfilePage() {
   const navigation = useNavigation();
@@ -35,9 +34,6 @@ export default function ProfilePage() {
     journalCount,
     savedVersesCount,
     studyPlanSummary,
-    weeklyProgress,
-    currentStreak,
-    weekTotal,
     openEditModal,
     handleSaveEdit,
     handleLogout,
@@ -112,33 +108,8 @@ export default function ProfilePage() {
           studyPlanSummary={studyPlanSummary}
         />
 
-        {/* 7-day activity strip */}
-        <View style={styles.activityCard}>
-          <View style={styles.activityTop}>
-            <Text style={styles.activityTitle}>This week</Text>
-            {currentStreak > 0 && (
-              <View style={styles.streakPill}>
-                <Ionicons name="flame" size={12} color="#FF6B35" />
-                <Text style={styles.streakText}>{currentStreak} day streak</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.dotsRow}>
-            {DAY_LABELS.map((day, i) => (
-              <View key={i} style={styles.dayCol}>
-                <View style={[styles.dot, weeklyProgress[i] > 0 && styles.dotActive]}>
-                  {weeklyProgress[i] > 0 && (
-                    <Ionicons name="checkmark" size={10} color="#fff" />
-                  )}
-                </View>
-                <Text style={styles.dayLabel}>{day}</Text>
-              </View>
-            ))}
-          </View>
-          <Text style={styles.activitySummary}>
-            {weekTotal} session{weekTotal !== 1 ? 's' : ''} completed this week
-          </Text>
-        </View>
+        {/* Activity heatmap */}
+        <ProfileActivityGraph />
 
         {/* Reading plan */}
         <ProfilePlanCard studyPlanSummary={studyPlanSummary} />
@@ -149,6 +120,7 @@ export default function ProfilePage() {
           savedVersesCount={savedVersesCount}
           onJournal={() => navigation.navigate('Journal')}
           onSavedVerses={() => navigation.navigate('SavedVerses')}
+          onWishlist={() => navigation.navigate('Wishlist')}
           onPlan={() => navigation.navigate('BibleStudy')}
           onLogout={handleLogout}
           onReminderPress={() => setShowReminderModal(true)}
@@ -207,74 +179,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 120,
-  },
-  activityCard: {
-    backgroundColor: 'rgba(255, 249, 242, 0.96)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  activityTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  activityTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  streakPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,107,53,0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  streakText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FF6B35',
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  dayCol: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  dot: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 2,
-    borderColor: '#EEE',
-    backgroundColor: '#FAFAFA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dotActive: {
-    backgroundColor: BROWN,
-    borderColor: BROWN,
-  },
-  dayLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#AAA',
-  },
-  activitySummary: {
-    fontSize: 12,
-    color: '#BBB',
-    textAlign: 'center',
   },
 });

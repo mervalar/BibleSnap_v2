@@ -75,21 +75,6 @@ export async function getSavedReminder() {
   return raw ? JSON.parse(raw) : null;
 }
 
-export async function testReminder() {
-  const granted = await requestPermission();
-  if (!granted) return false;
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: '📖 Bible reading time!',
-      body: 'This is your test reminder. Daily notifications are working! 🙏',
-      sound: true,
-      ...(Platform.OS === 'android' && { channelId: 'bible-reminder' }),
-    },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 10, repeats: false },
-  });
-  return true;
-}
-
 export async function scheduleJournalReminder(hour24, minute) {
   const granted = await requestPermission();
   if (!granted) return false;

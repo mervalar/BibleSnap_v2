@@ -1,104 +1,129 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text, Dimensions } from 'react-native';
-import Svg, { Path, Circle, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
-import styles from '../../styles/home/WeeklyProgressChart.styles';
+import { useCallback, useState, useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { loadWeeklyProgressFromStorage } from '../../utils/profileStats';
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const LINE_COLOR = '#A07553';
-const CHART_H = 80;
-const PAD_H = 10;
-const DOT_R = 4;
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const BROWN = '#8B5D33';
 
 export default function WeeklyProgressChart() {
   const [weeklyProgress, setWeeklyProgress] = useState([0, 0, 0, 0, 0, 0, 0]);
-  const [stats, setStats] = useState({ daysActive: 0, total: 0, average: 0, completionRate: 0 });
-  const [chartWidth, setChartWidth] = useState(Dimensions.get('window').width - 64);
+  const [streak, setStreak] = useState(0);
+  const [weekTotal, setWeekTotal] = useState(0);
 
-  const loadWeeklyData = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const { weekData, total, average } = await loadWeeklyProgressFromStorage();
+      const { weekData, streak: s, total } = await loadWeeklyProgressFromStorage();
       setWeeklyProgress(weekData);
-      const daysActive = weekData.filter((d) => d > 0).length;
-      setStats({ daysActive, total, average, completionRate: Math.round((daysActive / 7) * 100) });
-    } catch (e) {}
+      setStreak(s);
+      setWeekTotal(total);
+    } catch (_) {}
   }, []);
 
-  useEffect(() => { loadWeeklyData(); }, [loadWeeklyData]);
-
-  const maxVal = Math.max(...weeklyProgress, 1);
-  const stepX = (chartWidth - PAD_H * 2) / 6;
-
-  const points = weeklyProgress.map((val, i) => ({
-    x: PAD_H + i * stepX,
-    y: CHART_H - DOT_R - (val / maxVal) * (CHART_H - DOT_R * 2 - 10),
-  }));
-
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-  const fillPath = `${linePath} L${points[6].x},${CHART_H} L${points[0].x},${CHART_H} Z`;
+  useEffect(() => { load(); }, [load]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Weekly Activity</Text>
+    <View style={styles.card}>
+      <View style={styles.top}>
+        <Text style={styles.title}>This week</Text>
+        {streak > 0 && (
+          <View style={styles.streakPill}>
+            <Ionicons name="flame" size={12} color="#FF6B35" />
+            <Text style={styles.streakText}>{streak} day streak</Text>
+          </View>
+        )}
       </View>
 
-      <View onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
-        <Svg width={chartWidth} height={CHART_H + 24}>
-          <Defs>
-            <LinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={LINE_COLOR} stopOpacity="0.3" />
-              <Stop offset="1" stopColor={LINE_COLOR} stopOpacity="0" />
-            </LinearGradient>
-          </Defs>
-
-          <Path d={fillPath} fill="url(#grad)" />
-          <Path d={linePath} fill="none" stroke={LINE_COLOR} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-
-          {points.map((p, i) => (
-            <Circle
-              key={i}
-              cx={p.x}
-              cy={p.y}
-              r={DOT_R}
-              fill={weeklyProgress[i] > 0 ? LINE_COLOR : '#E0D4CC'}
-              stroke="#fff"
-              strokeWidth="1.5"
-            />
-          ))}
-
-          {points.map((p, i) =>
-            weeklyProgress[i] > 0 ? (
-              <SvgText key={i} x={p.x} y={p.y - 8} textAnchor="middle" fontSize="8" fill={LINE_COLOR} fontWeight="600">
-                {Math.round(weeklyProgress[i])}
-              </SvgText>
-            ) : null
-          )}
-
-          {points.map((p, i) => (
-            <SvgText key={`d${i}`} x={p.x} y={CHART_H + 16} textAnchor="middle" fontSize="9" fill="#888" fontWeight="600">
-              {DAYS[i]}
-            </SvgText>
-          ))}
-        </Svg>
+      <View style={styles.dotsRow}>
+        {DAY_LABELS.map((day, i) => (
+          <View key={i} style={styles.dayCol}>
+            <View style={[styles.dot, weeklyProgress[i] > 0 && styles.dotActive]}>
+              {weeklyProgress[i] > 0 && (
+                <Ionicons name="checkmark" size={10} color="#fff" />
+              )}
+            </View>
+            <Text style={styles.dayLabel}>{day}</Text>
+          </View>
+        ))}
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.daysActive}</Text>
-          <Text style={styles.statLabel}>Days</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{Math.round(stats.average)}</Text>
-          <Text style={styles.statLabel}>Avg</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.completionRate}%</Text>
-          <Text style={styles.statLabel}>Rate</Text>
-        </View>
-      </View>
+      <Text style={styles.summary}>
+        {weekTotal} session{weekTotal !== 1 ? 's' : ''} completed this week
+      </Text>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: 'rgba(255, 249, 242, 0.96)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(139,93,51,0.08)',
+  },
+  top: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  streakPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,107,53,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  streakText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FF6B35',
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  dayCol: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: '#EEE',
+    backgroundColor: '#FAFAFA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotActive: {
+    backgroundColor: BROWN,
+    borderColor: BROWN,
+  },
+  dayLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#AAA',
+  },
+  summary: {
+    fontSize: 12,
+    color: '#BBB',
+    textAlign: 'center',
+  },
+});

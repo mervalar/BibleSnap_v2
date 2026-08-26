@@ -79,14 +79,11 @@ export default function SoapJourneyModal({ visible, onClose, onSave, initialNote
                 <View style={[styles.soapBadge, idx === 0 && styles.badge0, idx === 1 && styles.badge1, idx === 2 && styles.badge2, idx === 3 && styles.badge3]}>
                   <Text style={styles.soapLetter}>{f.label[0]}</Text>
                 </View>
-                <View>
-                  <Text style={styles.soapLabel}>{f.label}</Text>
-                  <Text style={styles.soapHint}>{f.hint}</Text>
-                </View>
+                <Text style={styles.soapLabel}>{f.label}</Text>
               </View>
               <TextInput
                 style={styles.soapInput}
-                placeholder={f.placeholder}
+                placeholder={f.hint}
                 placeholderTextColor="#bbb"
                 value={soap[f.key]}
                 onChangeText={(v) => setSoap((p) => ({ ...p, [f.key]: v }))}
@@ -135,7 +132,6 @@ const styles = StyleSheet.create({
   badge3: { backgroundColor: '#4A9B6F' },
   soapLetter: { color: '#fff', fontWeight: '800', fontSize: 16 },
   soapLabel: { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
-  soapHint: { fontSize: 11, color: '#999', marginTop: 1 },
   soapInput: { fontSize: 14, color: '#333', lineHeight: 22, minHeight: 80, backgroundColor: '#FAF7F4', borderRadius: 10, padding: 12 },
   appHint: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 16, marginTop: 12, backgroundColor: 'rgba(160,117,83,0.08)', padding: 12, borderRadius: 10 },
   appHintText: { flex: 1, fontSize: 12, color: BROWN, lineHeight: 18 },

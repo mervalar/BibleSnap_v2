@@ -4,13 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import styles from '../styles/HomePage.styles';
 import { useNavigation } from '@react-navigation/native';
 import AuthModal from '../components/AuthModal';
+import BottomNavBar from '../components/BottomNavBar';
 import HomeHeader from '../components/home/HomeHeader';
 import HomeLoadingView from '../components/home/HomeLoadingView';
 import VerseOfTheDayCard from '../components/home/VerseOfTheDayCard';
 import QuickActions from '../components/home/QuickActions';
 import WeeklyProgressChart from '../components/home/WeeklyProgressChart';
-import JourneySummaryCard from '../components/bible/JourneySummaryCard';
-import TodayApplicationCard from '../components/home/TodayApplicationCard';
+import TodayStudyCard from '../components/home/TodayStudyCard';
 import useHome from '../hooks/useHome';
 
 export default function HomePage() {
@@ -27,8 +27,8 @@ export default function HomePage() {
         onProfilePress={() => navigation.navigate('Profile')}
         onLoginPress={() => api.setShowAuthModal(true)}
       />
-      <ScrollView 
-        style={styles.mainContent} 
+      <ScrollView
+        style={styles.mainContent}
         contentContainerStyle={styles.mainContentContainer}
         showsVerticalScrollIndicator={false}
       >
@@ -41,26 +41,18 @@ export default function HomePage() {
           onShareVerse={api.handleShareVerse}
         />
         <QuickActions
-          onReadBible={() => navigation.navigate('BooksList')}
+          onStudyPress={() => navigation.navigate('BibleStudy')}
           onJournalPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Journal'))}
-          onBibleStudyPress={() => navigation.navigate('BibleStudy')}
+          onApplicationPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Application'))}
         />
         <WeeklyProgressChart />
-        <TodayApplicationCard
-          note={api.todayApplication}
-          onPress={() => api.handleAuthenticatedAction(() => navigation.navigate('Journal', { section: 'application' }))}
+        <TodayStudyCard
+          study={api.todaysStudy}
+          onPress={() => api.handleAuthenticatedAction(() => navigation.navigate('BibleStudyContent', {
+            bibleReading: api.todaysStudy.reading,
+            allReadings: api.todaysStudy.allReadings,
+          }))}
         />
-        {api.isConnected && api.journeyStats.hasPlan && (
-          <JourneySummaryCard
-            variant="home"
-            title="Your Journey"
-            hasPlan={api.journeyStats.hasPlan}
-            daysRemaining={api.journeyStats.daysRemaining}
-            percent={api.journeyStats.percent}
-            estimatedDate={api.journeyStats.estimatedDate}
-            onPress={() => navigation.navigate('BibleStudy')}
-          />
-        )}
       </ScrollView>
       <AuthModal
         visible={api.showAuthModal}
@@ -68,6 +60,7 @@ export default function HomePage() {
         navigation={navigation}
         onAuthenticated={() => api.setShowAuthModal(false)}
       />
+      <BottomNavBar />
     </SafeAreaView>
   );
 }

@@ -23,5 +23,6 @@ export default StyleSheet.create({
   },
   mainContentContainer: {
     justifyContent: 'flex-start',
+    paddingBottom: 90,
   },
 });

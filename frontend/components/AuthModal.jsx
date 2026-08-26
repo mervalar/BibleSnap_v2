@@ -29,9 +29,12 @@ async function storeSession(user, token) {
   if (token) await AsyncStorage.setItem('token', token);
 }
 
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
 export default function AuthModal({ visible, onClose, navigation }) {
   const [step, setStep]           = useState('email');   // 'email' | 'otp'
   const [email, setEmail]         = useState('');
+  const [emailError, setEmailError] = useState('');
   const [otp, setOtp]             = useState(['', '', '', '', '', '']);
   const [loading, setLoading]     = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -46,6 +49,7 @@ export default function AuthModal({ visible, onClose, navigation }) {
   const resetAndClose = () => {
     setStep('email');
     setEmail('');
+    setEmailError('');
     setOtp(['', '', '', '', '', '']);
     setAgreedToTerms(false);
     onClose();
@@ -62,27 +66,35 @@ export default function AuthModal({ visible, onClose, navigation }) {
 
   // ── Step 1: send OTP ──────────────────────────────────────────
   const handleSendOtp = async () => {
-    if (!email.trim()) return;
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) return;
+
+    if (!isValidEmail(trimmedEmail)) {
+      setEmailError('Please enter a complete, valid email address.');
+      return;
+    }
+
+    setEmailError('');
     setLoading(true);
     try {
       const res = await fetch(`${API}/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({ email: trimmedEmail.toLowerCase() }),
       });
       if (!res.ok && res.status >= 500) {
-        Alert.alert('Server error', 'The server is temporarily unavailable. Please try again later.');
+        setEmailError('The server is temporarily unavailable. Please try again later.');
         return;
       }
       const data = await res.json();
       if (data.success) {
         setStep('otp');
       } else {
-        Alert.alert('Error', data.message || 'Could not send code.');
+        setEmailError(data.errors?.email?.[0] || data.message || 'Could not send code.');
       }
     } catch (e) {
       console.error('[sendOtp]', e?.message, e);
-      Alert.alert('Error', 'Could not reach the server. Check your connection and try again.');
+      setEmailError('Could not reach the server. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -140,10 +152,22 @@ export default function AuthModal({ visible, onClose, navigation }) {
 
   // ── OTP input handling ────────────────────────────────────────
   const handleOtpChange = (val, idx) => {
+    const digits = val.replace(/\D/g, '');
+
+    // Pasted (or autofilled) code: distribute across all boxes
+    if (digits.length > 1) {
+      const pasted = digits.slice(0, 6).split('');
+      const updated = ['', '', '', '', '', ''];
+      pasted.forEach((d, i) => { updated[i] = d; });
+      setOtp(updated);
+      otpRefs.current[Math.min(pasted.length, 5)]?.focus();
+      return;
+    }
+
     const updated = [...otp];
-    updated[idx] = val.slice(-1);
+    updated[idx] = digits;
     setOtp(updated);
-    if (val && idx < 5) otpRefs.current[idx + 1]?.focus();
+    if (digits && idx < 5) otpRefs.current[idx + 1]?.focus();
   };
 
   const handleOtpKeyPress = (e, idx) => {
@@ -157,48 +181,43 @@ export default function AuthModal({ visible, onClose, navigation }) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={resetAndClose}>
       <KeyboardAvoidingView style={styles.overlay} behavior="padding">
         <View style={styles.sheet}>
-          {/* Close */}
+          <View style={styles.handle} />
+
           <TouchableOpacity onPress={resetAndClose} style={styles.closeBtn}>
-            <Ionicons name="close" size={20} color="#888" />
+            <Ionicons name="close" size={18} color="#AAA" />
           </TouchableOpacity>
 
-          {/* Logo / title */}
           <View style={styles.logoRow}>
-            <Ionicons name="book" size={28} color={BROWN} />
-            <Text style={styles.appName}>BibleSnap</Text>
+            <Ionicons name="book" size={20} color={BROWN} />
+            <Text style={styles.appName}>BiblePause</Text>
           </View>
 
           {step === 'email' ? (
             <>
-              <Text style={styles.title}>Welcome</Text>
-              <Text style={styles.subtitle}>Enter your email to continue. We'll send you a code.</Text>
+              <Text style={styles.title}>Sign in</Text>
 
               <TextInput
-                style={styles.input}
+                style={[styles.input, emailError && styles.inputError]}
                 placeholder="your@email.com"
-                placeholderTextColor="#bbb"
+                placeholderTextColor="#C4B5A5"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(v) => { setEmail(v); if (emailError) setEmailError(''); }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 onSubmitEditing={handleSendOtp}
               />
+              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
-              {/* Terms & Conditions */}
               <TouchableOpacity style={styles.checkboxRow} onPress={() => setAgreedToTerms(!agreedToTerms)} activeOpacity={0.7}>
                 <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
-                  {agreedToTerms && <Ionicons name="checkmark" size={13} color="#fff" />}
+                  {agreedToTerms && <Ionicons name="checkmark" size={11} color="#fff" />}
                 </View>
                 <Text style={styles.checkboxText}>
-                  I accept the{' '}
-                  <Text style={styles.checkboxLink} onPress={() => Linking.openURL('http://biblesnapweb.bellatis.com/')}>
-                    Terms of Service
-                  </Text>
+                  I agree to the{' '}
+                  <Text style={styles.checkboxLink}>Terms of Service</Text>
                   {' & '}
-                  <Text style={styles.checkboxLink} onPress={() => Linking.openURL('http://biblesnapweb.bellatis.com/')}>
-                    Privacy Policy
-                  </Text>
+                  <Text style={styles.checkboxLink}>Privacy Policy</Text>
                 </Text>
               </TouchableOpacity>
 
@@ -208,9 +227,9 @@ export default function AuthModal({ visible, onClose, navigation }) {
                 disabled={!email.trim() || loading || !agreedToTerms}
                 activeOpacity={0.85}
               >
-                {loading ? <ActivityIndicator color="#fff" /> : (
+                {loading ? <ActivityIndicator color="#fff" size="small" /> : (
                   <>
-                    <Ionicons name="mail-outline" size={16} color="#fff" />
+                    <Ionicons name="mail-outline" size={15} color="#fff" />
                     <Text style={styles.primaryBtnText}>Continue with Email</Text>
                   </>
                 )}
@@ -222,26 +241,26 @@ export default function AuthModal({ visible, onClose, navigation }) {
                 <View style={styles.dividerLine} />
               </View>
 
-              <TouchableOpacity style={[styles.googleBtn, (!agreedToTerms || loading) && styles.btnDisabled]} onPress={handleGoogleSignIn} disabled={loading || !agreedToTerms} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[styles.googleBtn, (!agreedToTerms || loading) && styles.btnDisabled]}
+                onPress={handleGoogleSignIn}
+                disabled={loading || !agreedToTerms}
+                activeOpacity={0.85}
+              >
                 <Text style={styles.googleG}>G</Text>
                 <Text style={styles.googleBtnText}>Continue with Google</Text>
               </TouchableOpacity>
-
-              <Text style={styles.legalText}>
-                By continuing, you agree to our Terms of Service and Privacy Policy.
-              </Text>
             </>
           ) : (
             <>
               <TouchableOpacity onPress={() => setStep('email')} style={styles.backRow}>
-                <Ionicons name="arrow-back" size={16} color={BROWN} />
+                <Ionicons name="arrow-back" size={14} color={BROWN} />
                 <Text style={styles.backText}>Change email</Text>
               </TouchableOpacity>
 
               <Text style={styles.title}>Check your inbox</Text>
-              <Text style={styles.subtitle}>We sent a 6-digit code to{'\n'}<Text style={styles.emailHighlight}>{email}</Text></Text>
+              <Text style={styles.subtitle}>Code sent to <Text style={styles.emailHighlight}>{email}</Text></Text>
 
-              {/* 6-digit code boxes */}
               <View style={styles.otpRow}>
                 {otp.map((digit, idx) => (
                   <TextInput
@@ -252,8 +271,9 @@ export default function AuthModal({ visible, onClose, navigation }) {
                     onChangeText={(v) => handleOtpChange(v, idx)}
                     onKeyPress={(e) => handleOtpKeyPress(e, idx)}
                     keyboardType="number-pad"
-                    maxLength={1}
+                    maxLength={6}
                     selectTextOnFocus
+                    textContentType="oneTimeCode"
                   />
                 ))}
               </View>
@@ -264,16 +284,16 @@ export default function AuthModal({ visible, onClose, navigation }) {
                 disabled={otp.join('').length < 6 || loading}
                 activeOpacity={0.85}
               >
-                {loading ? <ActivityIndicator color="#fff" /> : (
+                {loading ? <ActivityIndicator color="#fff" size="small" /> : (
                   <>
-                    <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+                    <Ionicons name="checkmark-circle-outline" size={15} color="#fff" />
                     <Text style={styles.primaryBtnText}>Verify code</Text>
                   </>
                 )}
               </TouchableOpacity>
 
               <TouchableOpacity onPress={handleSendOtp} disabled={loading} style={styles.resendRow}>
-                <Text style={styles.resendText}>Didn't receive it? <Text style={styles.resendLink}>Resend code</Text></Text>
+                <Text style={styles.resendText}>Didn't receive it? <Text style={styles.resendLink}>Resend</Text></Text>
               </TouchableOpacity>
             </>
           )}
@@ -284,78 +304,65 @@ export default function AuthModal({ visible, onClose, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' },
   sheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+    backgroundColor: '#FDFBF9',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 8,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 38 : 24,
   },
-  closeBtn: { position: 'absolute', top: 16, right: 16, padding: 8, zIndex: 10 },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
-  appName: { fontSize: 20, fontWeight: '800', color: BROWN },
-  title: { fontSize: 24, fontWeight: '800', color: '#1A1A1A', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#888', lineHeight: 20, marginBottom: 24 },
+  handle: {
+    width: 36, height: 4, backgroundColor: '#E0D4CC', borderRadius: 2,
+    alignSelf: 'center', marginBottom: 14,
+  },
+  closeBtn: { position: 'absolute', top: 14, right: 14, padding: 6, zIndex: 10 },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  appName: { fontSize: 16, fontWeight: '800', color: BROWN, letterSpacing: 0.3 },
+  title: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', marginBottom: 14 },
+  subtitle: { fontSize: 12, color: '#A09080', lineHeight: 18, marginBottom: 14 },
   emailHighlight: { fontWeight: '700', color: '#1A1A1A' },
   input: {
-    backgroundColor: BG, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 16, color: '#1A1A1A', borderWidth: 1.5, borderColor: '#EEE', marginBottom: 14,
+    backgroundColor: '#F5EFE8', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
+    fontSize: 15, color: '#1A1A1A', borderWidth: 1, borderColor: 'rgba(139,93,51,0.15)', marginBottom: 12,
   },
+  inputError: { borderColor: '#F44336' },
+  errorText: { color: '#F44336', fontSize: 12, fontWeight: '600', marginTop: -6, marginBottom: 10 },
   primaryBtn: {
-    backgroundColor: BROWN, borderRadius: 14, paddingVertical: 15,
+    backgroundColor: BROWN, borderRadius: 12, paddingVertical: 12,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, marginBottom: 16,
+    gap: 7, marginBottom: 12,
   },
-  btnDisabled: { opacity: 0.45 },
-  primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#EEE' },
-  dividerText: { color: '#bbb', fontSize: 12 },
+  btnDisabled: { opacity: 0.4 },
+  primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(139,93,51,0.12)' },
+  dividerText: { color: '#C4B5A5', fontSize: 11 },
   googleBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    borderWidth: 1.5, borderColor: '#DDD', borderRadius: 14, paddingVertical: 14, marginBottom: 20,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1, borderColor: 'rgba(139,93,51,0.2)', borderRadius: 12, paddingVertical: 11,
   },
-  googleG: { fontSize: 18, fontWeight: '800', color: '#4285F4' },
-  googleBtnText: { fontSize: 15, fontWeight: '600', color: '#1A1A1A' },
-  legalText: { fontSize: 11, color: '#bbb', textAlign: 'center', lineHeight: 16 },
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
-  backText: { fontSize: 13, color: BROWN, fontWeight: '600' },
-  otpRow: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 24 },
+  googleG: { fontSize: 16, fontWeight: '800', color: '#4285F4' },
+  googleBtnText: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 12 },
+  backText: { fontSize: 12, color: BROWN, fontWeight: '600' },
+  otpRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 18 },
   otpBox: {
-    width: 46, height: 56, borderRadius: 12, borderWidth: 1.5, borderColor: '#DDD',
-    textAlign: 'center', fontSize: 22, fontWeight: '700', color: '#1A1A1A', backgroundColor: BG,
+    width: 44, height: 52, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(139,93,51,0.2)',
+    textAlign: 'center', fontSize: 20, fontWeight: '700', color: '#1A1A1A', backgroundColor: '#F5EFE8',
   },
   otpBoxFilled: { borderColor: BROWN, backgroundColor: 'rgba(160,117,83,0.08)' },
   resendRow: { alignItems: 'center', paddingVertical: 8 },
-  resendText: { fontSize: 13, color: '#888' },
+  resendText: { fontSize: 12, color: '#A09080' },
   resendLink: { color: BROWN, fontWeight: '700' },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-  },
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: '#DDD',
-    backgroundColor: BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    width: 18, height: 18, borderRadius: 5, borderWidth: 1.5,
+    borderColor: 'rgba(139,93,51,0.3)', backgroundColor: '#F5EFE8',
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  checkboxChecked: {
-    backgroundColor: BROWN,
-    borderColor: BROWN,
-  },
-  checkboxText: {
-    fontSize: 12,
-    color: '#888',
-    flex: 1,
-    lineHeight: 18,
-  },
-  checkboxLink: {
-    color: BROWN,
-    fontWeight: '600',
-  },
+  checkboxChecked: { backgroundColor: BROWN, borderColor: BROWN },
+  checkboxText: { fontSize: 11, color: '#A09080', flex: 1, lineHeight: 17 },
+  checkboxLink: { color: BROWN, fontWeight: '600' },
 });

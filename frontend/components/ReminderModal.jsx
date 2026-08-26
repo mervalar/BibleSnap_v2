@@ -127,7 +127,7 @@ export default function ReminderModal({ visible, onClose, currentReminder, onRem
     } else {
       Alert.alert(
         'Permission required',
-        'Please enable notifications in your device settings so BibleSnap can remind you.',
+        'Please enable notifications in your device settings so BiblePause can remind you.',
         [{ text: 'OK' }]
       );
     }

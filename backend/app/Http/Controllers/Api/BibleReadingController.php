@@ -3,18 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\BibleReading;
-    
+
 class BibleReadingController extends Controller
 {
     public function index()
     {
         return BibleReading::all();
-    }
-
-    public function getRandomStudy()
-    {
-        return BibleReading::inRandomOrder()->first();
     }
 }

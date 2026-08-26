@@ -1,13 +1,10 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import ViewShot from 'react-native-view-shot';
-import CustomPicker from '../CustomPicker';
-import SplashScreen from '../SplashScreen';
-import BottomNavBar from '../BottomNavBar';
 import HighlightToolbox from './HighlightToolbox';
 import FontSizeOptions from './FontSizeOptions';
+import BibleControlBar from '../bible/BibleControlBar';
 import { styles, screenWidth } from '../../styles/BookContentPage.styles';
 import useBookContent from '../../hooks/useBookContent';
 
@@ -28,7 +25,6 @@ const BookContent = (props) => {
     setShowFontSizeOptions,
     navigation,
     stripHtml,
-    LANGUAGE_OPTIONS,
     goToPrevChapter,
     goToNextChapter,
     handleLanguageChange,
@@ -40,7 +36,11 @@ const BookContent = (props) => {
     setSelectedVerse,
   } = api;
 
-  if (loading && verses.length === 0) return <SplashScreen onFinish={() => {}} duration={2000} />;
+  if (loading && verses.length === 0) return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+      <ActivityIndicator size="large" color="#A07553" />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -57,15 +57,12 @@ const BookContent = (props) => {
           <TouchableOpacity style={[styles.chapterNavButton, currentChapter === 1 && styles.disabledButton]} onPress={goToPrevChapter} disabled={currentChapter === 1}>
             <Ionicons name="chevron-back" size={20} color={currentChapter === 1 ? '#CCCCCC' : '#A07553'} />
           </TouchableOpacity>
-          <View style={styles.chapterControls}>
-            <TouchableOpacity style={styles.controlIconButton} onPress={() => navigation.navigate('SavedVerses')}>
-              <Ionicons name="bookmark-outline" size={20} color="#A07553" />
-            </TouchableOpacity>
-            <CustomPicker options={LANGUAGE_OPTIONS} selectedValue={api.language} onValueChange={handleLanguageChange} containerStyle={styles.compactPickerContainer} compact icon={<Ionicons name="language-outline" size={20} color="#A07553" />} colors={{ primary: '#A07553', background: 'rgba(255, 255, 255, 0.95)', text: { primary: '#333333', secondary: '#666666' }, border: { light: 'rgba(160, 117, 83, 0.2)' } }} />
-            <TouchableOpacity style={styles.controlIconButton} onPress={() => { setShowFontSizeOptions(!showFontSizeOptions); setShowToolbox(false); }}>
-              <Ionicons name="text-outline" size={20} color="#A07553" />
-            </TouchableOpacity>
-          </View>
+          <BibleControlBar
+            onSavedVerses={() => navigation.navigate('SavedVerses')}
+            language={api.language}
+            onLanguageChange={handleLanguageChange}
+            onFontSize={() => { setShowFontSizeOptions(!showFontSizeOptions); setShowToolbox(false); }}
+          />
           <TouchableOpacity style={[styles.chapterNavButton, currentChapter === chapters.length && styles.disabledButton]} onPress={goToNextChapter} disabled={currentChapter === chapters.length}>
             <Ionicons name="chevron-forward" size={20} color={currentChapter === chapters.length ? '#CCCCCC' : '#A07553'} />
           </TouchableOpacity>
@@ -97,11 +94,10 @@ const BookContent = (props) => {
           <View style={{ width: '100%', alignItems: 'center' }}>
             <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold', marginBottom: 12 }}>{book.name} {currentChapter}:{selectedVerse.number}</Text>
             <Text style={{ color: '#fff', fontSize: 10, textAlign: 'center', marginBottom: 8 }}>"{stripHtml(selectedVerse.text)}"</Text>
-            <Text style={{ color: '#fff', fontSize: 6, opacity: 0.7 }}>BibleSnap</Text>
+            <Text style={{ color: '#fff', fontSize: 6, opacity: 0.7 }}>BiblePause</Text>
           </View>
         )}
       </ViewShot>
-      <BottomNavBar />
     </View>
   );
 };

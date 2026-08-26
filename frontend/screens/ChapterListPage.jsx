@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,22 +10,34 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import SplashScreen from '../components/SplashScreen';
 import BottomNavBar from '../components/BottomNavBar';
+import BibleControlBar from '../components/bible/BibleControlBar';
+import biblePreferences from '../api/biblePreferences';
+import { LANGUAGE_OPTIONS } from '../constants/bibleApi';
 import { styles, COLORS, dimensions } from '../styles/ChapterListPage.styles';
 
 const ChaptersListPage = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { book, bibleId, language } = route.params;
-  
+  const { book, bibleId: initialBibleId } = route.params;
+
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [language, setLanguage] = useState(route.params?.language || 'english');
+  const [bibleId, setBibleId] = useState(initialBibleId || 'de4e12af7f28f599-01');
+
+  const handleLanguageChange = (langValue) => {
+    setLanguage(langValue);
+    const selected = LANGUAGE_OPTIONS.find(opt => opt.value === langValue);
+    if (selected) {
+      setBibleId(selected.bibleId);
+      biblePreferences.storeLanguagePreference(langValue, selected.bibleId);
+    }
+  };
 
   // Bible API configuration
   const API_KEY = 'e6cf9d533a33b82907ee2ba5d94a6e3b';
-  // Use bibleId from route.params or fall back to default
-  const BIBLE_ID = bibleId || 'de4e12af7f28f599-01';
+  const BIBLE_ID = initialBibleId || 'de4e12af7f28f599-01';
   const API_URL = `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/books/${book.id}/chapters`;
 
   useEffect(() => {
@@ -46,7 +58,7 @@ const ChaptersListPage = () => {
       }
 
       const data = await response.json();
-      setChapters(data.data || []);
+      setChapters((data.data || []).filter(c => c.number !== 'intro'));
     } catch (error) {
       Alert.alert(
         'Error', 
@@ -65,12 +77,17 @@ const ChaptersListPage = () => {
     navigation.navigate('BookContent', { book, chapter, bibleId, language });
   };
 
+
   const handleBackPress = () => {
     navigation.goBack();
   };
 
   if (loading && chapters.length === 0) {
-    return <SplashScreen onFinish={() => {}} duration={2000} />;
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#A07553" />
+      </View>
+    );
   }
 
   return (
@@ -95,6 +112,11 @@ const ChaptersListPage = () => {
         <Text style={[styles.headerTitle, { fontSize: dimensions.fontSize.title }]}>
           {book.name}
         </Text>
+        <BibleControlBar
+          onSavedVerses={() => navigation.navigate('SavedVerses')}
+          language={language}
+          onLanguageChange={handleLanguageChange}
+        />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>

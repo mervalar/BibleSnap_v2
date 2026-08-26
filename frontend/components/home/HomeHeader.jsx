@@ -19,7 +19,7 @@ const HomeHeader = ({ isConnected, user, onProfilePress, onLoginPress }) => {
             </View>
           </>
         ) : (
-          <Text style={styles.greeting}>Welcome to BibleSnap</Text>
+          <Text style={styles.greeting}>Welcome to BiblePause</Text>
         )}
       </View>
 

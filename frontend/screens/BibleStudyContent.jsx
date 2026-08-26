@@ -9,13 +9,12 @@ import {
   ImageBackground,
   StyleSheet,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import BookContent from './BookContentPage';
 import BottomNavBar from '../components/BottomNavBar';
 import { createStyles, COLORS, getResponsiveDimensions } from '../styles/bIbleStudyContent.styles';
-import JourneySummaryCard from '../components/bible/JourneySummaryCard';
 import CelebrationOverlay from '../components/bible/CelebrationOverlay';
 import StudyContentBody from '../components/bible/StudyContentBody';
 import ViewShot from 'react-native-view-shot';
@@ -27,6 +26,7 @@ export default function BibleStudyContent() {
   const navigation = useNavigation();
   const dimensions = getResponsiveDimensions();
   const api = useBibleStudyContent();
+  const insets = useSafeAreaInsets();
 
   const handleNextPress = () => {
     if (api.nextReading) {
@@ -39,7 +39,7 @@ export default function BibleStudyContent() {
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       <ImageBackground source={require('../assets/bg.png')} style={StyleSheet.absoluteFill} resizeMode="cover" />
       <CelebrationOverlay visible={api.showCelebration} />
-      <View style={styles.headerButtons}>
+      <View style={[styles.headerButtons, { top: insets.top + 10 }]}>
         <TouchableOpacity style={styles.shareButton} onPress={api.handleShare} disabled={api.isSharing}>
           <Ionicons name="share-outline" size={dimensions.iconSize.small} color="#fff" />
         </TouchableOpacity>
@@ -83,14 +83,14 @@ export default function BibleStudyContent() {
               {api.getVerseReference() && <Text style={styles.shareableReference}>{api.getVerseReference()}</Text>}
             </View>
             <View style={styles.shareableBottomSection}>
-              <Text style={styles.shareableFooterText}>BibleSnap</Text>
+              <Text style={styles.shareableFooterText}>BiblePause</Text>
             </View>
           </ImageBackground>
         </ViewShot>
       </View>
       <Modal visible={api.showBookModal} animationType="slide" transparent={false} onRequestClose={() => api.setShowBookModal(false)}>
         <View style={styles.modalContainer}>
-          <TouchableOpacity style={styles.modalCloseButton} onPress={() => api.setShowBookModal(false)}>
+          <TouchableOpacity style={[styles.bookModalCloseButton, { top: insets.top + 10 }]} onPress={() => api.setShowBookModal(false)}>
             <View style={styles.modalCloseButtonInner}>
               <Ionicons name="close" size={28} color="#FFFFFF" />
             </View>
@@ -105,16 +105,11 @@ export default function BibleStudyContent() {
           ) : (
             <BookContent
               route={{ params: { book: api.bookInfo.book, chapter: api.bookInfo.chapter, bibleId: api.bibleId, language: api.language } }}
-              navigation={navigation}
+              navigation={{ ...navigation, goBack: () => api.setShowBookModal(false) }}
             />
           )}
         </View>
       </Modal>
-      {api.allReadings?.length > 0 && (
-        <View style={{ paddingBottom: 20, paddingHorizontal: 16 }}>
-          <JourneySummaryCard hasPlan daysRemaining={api.planStats.daysRemaining} percent={api.planStats.percent} estimatedDate={api.planStats.estimatedDate} />
-        </View>
-      )}
       <BottomNavBar />
     </SafeAreaView>
   );

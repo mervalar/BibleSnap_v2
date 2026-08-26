@@ -109,6 +109,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text.primary,
     letterSpacing: -0.5,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
   },
   headerActions: {
     flexDirection: 'row',

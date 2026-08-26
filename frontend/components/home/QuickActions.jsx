@@ -3,35 +3,35 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import styles from '../../styles/home/QuickActions.styles';
 
-const QuickActions = ({ onReadBible, onJournalPress, onBibleStudyPress }) => {
+const ACTIONS = [
+  { key: 'study',   icon: 'book-outline',   label: 'Study', sub: 'the Word',    color: '#8B5D33', bg: 'rgba(139,93,51,0.1)' },
+  { key: 'reflect', icon: 'create-outline', label: 'Reflect', sub: 'and journal', color: '#4A4A4A', bg: 'rgba(74,74,74,0.08)' },
+  { key: 'apply',   icon: 'leaf-outline',   label: 'Apply', sub: 'in real life', color: '#4A7742', bg: 'rgba(74,119,66,0.1)' },
+];
+
+const QuickActions = ({ onStudyPress, onJournalPress, onApplicationPress }) => {
+  const handlers = { study: onStudyPress, reflect: onJournalPress, apply: onApplicationPress };
+
   return (
     <View style={styles.quickActionsContainer}>
-      <TouchableOpacity
-        style={[styles.quickActionCard, styles.prayerCard]}
-        onPress={onReadBible}
-      >
-        <Ionicons name="book-outline" size={32} color="#fff" style={styles.quickActionIcon} />
-        <Text style={styles.quickActionTitle}>Read Bible</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.quickActionCard, styles.studyCard]}
-        onPress={onJournalPress}
-      >
-        <Ionicons name="create-outline" size={32} color="#fff" style={styles.quickActionIcon} />
-        <Text style={styles.quickActionTitle}>Notes</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.quickActionCard, styles.assistantCard]}
-        onPress={onBibleStudyPress}
-      >
-        <Ionicons name="school-outline" size={32} color="#fff" style={styles.quickActionIcon} />
-        <Text style={styles.quickActionTitle}>Bible study</Text>
-      </TouchableOpacity>
+      <View style={styles.quickActionsRow}>
+        {ACTIONS.map((action) => (
+          <TouchableOpacity
+            key={action.key}
+            style={styles.quickActionItem}
+            onPress={handlers[action.key]}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickActionIconCircle, { backgroundColor: action.bg }]}>
+              <Ionicons name={action.icon} size={26} color={action.color} />
+            </View>
+            <Text style={styles.quickActionTitle}>{action.label}</Text>
+            <Text style={styles.quickActionSubtitle}>{action.sub}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 };
 
 export default QuickActions;
-
